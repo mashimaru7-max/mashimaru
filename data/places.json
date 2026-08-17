@@ -1210,7 +1210,7 @@
     "family": true
   },
   {
-    "id": "gangwon_yangyang",
+    "id": "gangwon_hajodae",
     "name": "하조대",
     "province": "강원특별자치도",
     "city": "양양군",
@@ -1646,6 +1646,138 @@
     "category": "nature",
     "lat": 33.245,
     "lng": 126.554,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_museum_san",
+    "name": "뮤지엄산",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.41862,
+    "lng": 127.823088,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_history_museum",
+    "name": "원주역사박물관",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.342807,
+    "lng": 127.967191,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_hanji_theme",
+    "name": "원주한지테마파크",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "landmark",
+    "lat": 37.334411,
+    "lng": 127.935551,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_park_kyungri",
+    "name": "박경리문학공원",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "park",
+    "lat": 37.322229,
+    "lng": 127.959606,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_gangwon_gamyeong",
+    "name": "강원감영",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.3487,
+    "lng": 127.949962,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_guryongsa",
+    "name": "치악산 구룡사",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.412275,
+    "lng": 128.049445,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_chiak_forest",
+    "name": "치악산자연휴양림",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "park",
+    "lat": 37.258363,
+    "lng": 128.032335,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_print_museum",
+    "name": "고판화박물관",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.256251,
+    "lng": 128.128608,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_bangyeri",
+    "name": "원주 반계리 은행나무",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "nature",
+    "lat": 37.294188,
+    "lng": 127.788793,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_oakvalley",
+    "name": "오크밸리",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "landmark",
+    "lat": 37.406941,
+    "lng": 127.801781,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_education",
+    "name": "원주얼교육관",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "history",
+    "lat": 37.357137,
+    "lng": 128.012872,
+    "access": "A",
+    "family": true
+  },
+  {
+    "id": "wonju_media_art",
+    "name": "소금산미디어아트센터",
+    "province": "강원특별자치도",
+    "city": "원주시",
+    "category": "landmark",
+    "lat": 37.36287,
+    "lng": 127.834711,
     "access": "A",
     "family": true
   }
