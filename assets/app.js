@@ -67,7 +67,8 @@
     const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.05;
     source.connect(gain).connect(bgmGain); source.start(when);
   }
-  function updateBgmVolume() { bgmVolume = Number($("#bgmVolume").value) / 100 * 4; if (bgmGain) bgmGain.gain.value = bgmVolume; $("#bgmVolumeValue").textContent = `${Math.round(bgmVolume * 100)}%`; }\n  function toggleBgm() {
+  function updateBgmVolume() { bgmVolume = Number($("#bgmVolume").value) / 100 * 4; if (bgmGain) bgmGain.gain.value = bgmVolume; $("#bgmVolumeValue").textContent = `${Math.round(bgmVolume * 100)}%`; }
+  function toggleBgm() {
     const button = $("#bgmToggle");
     if (bgmOn) { clearInterval(bgmTimer); bgmOn = false; button.textContent = "♫ BGM 켜기"; button.setAttribute("aria-pressed", "false"); return; }
     audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); bgmGain ||= (() => { const gain = audioContext.createGain(), compressor = audioContext.createDynamicsCompressor(); compressor.threshold.value = -18; compressor.knee.value = 24; compressor.ratio.value = 12; compressor.attack.value = 0.003; compressor.release.value = 0.25; gain.connect(compressor).connect(audioContext.destination); return gain; })(); bgmGain.gain.value = bgmVolume; audioContext.resume();
