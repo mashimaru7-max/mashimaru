@@ -58,13 +58,13 @@
   function playKick(when) {
     const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
     oscillator.type = "sine"; oscillator.frequency.setValueAtTime(160, when); oscillator.frequency.exponentialRampToValueAtTime(52, when + 0.12);
-    gain.gain.setValueAtTime(0.09, when); gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
+    gain.gain.setValueAtTime(0.18, when); gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
     oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + 0.15);
   }
   function playClap(when) {
     const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.045, audioContext.sampleRate), data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.025;
+    const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.05;
     source.connect(gain).connect(audioContext.destination); source.start(when);
   }
   function toggleBgm() {
@@ -75,9 +75,9 @@
       const start = audioContext.currentTime + 0.04, step = 0.18;
       for (let i = 0; i < 8; i++) {
         const time = start + i * step, note = BGM_MELODY[bgmStep++ % BGM_MELODY.length];
-        playTone(note, time, 0.14, 0.038, "square"); playTone(note / 2, time, 0.11, 0.018, "triangle");
+        playTone(note, time, 0.14, 0.076, "square"); playTone(note / 2, time, 0.11, 0.036, "triangle");
         if (i % 2 === 0) playKick(time); else playClap(time);
-        if (i === 0 || i === 4) playTone(BGM_BASS[(bgmStep / 2 | 0) % BGM_BASS.length], time, 0.30, 0.055, "sawtooth");
+        if (i === 0 || i === 4) playTone(BGM_BASS[(bgmStep / 2 | 0) % BGM_BASS.length], time, 0.30, 0.11, "sawtooth");
       }
     };
     playPhrase(); bgmTimer = setInterval(playPhrase, 1440); bgmOn = true; button.textContent = "♫ BGM 끄기"; button.setAttribute("aria-pressed", "true");
