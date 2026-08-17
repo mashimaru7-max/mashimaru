@@ -3,7 +3,7 @@
   const categoryName = { landmark: "명소", place: "지명·마을", nature: "자연", history: "역사·문화", park: "공원·휴양" };
   let places = [], provinces = [], selectedProvinces = new Set(), selectedCities = new Set();
   let finalMarker, tempMarkers = [], busy = false;
-  let audioContext, bgmTimer, bgmStep = 0, bgmOn = false;
+  let audioContext, bgmGain, bgmTimer, bgmStep = 0, bgmOn = false, bgmVolume = 1;
 
   const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([36.35, 127.75], 7);
   const tileUrls = ["https://tile.openstreetmap.org/{z}/{x}/{y}.png", "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"];
@@ -53,24 +53,24 @@
     oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, when);
     gain.gain.setValueAtTime(0.0001, when); gain.gain.exponentialRampToValueAtTime(volume, when + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-    oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + duration + 0.03);
+    oscillator.connect(gain).connect(bgmGain); oscillator.start(when); oscillator.stop(when + duration + 0.03);
   }
   function playKick(when) {
     const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
     oscillator.type = "sine"; oscillator.frequency.setValueAtTime(160, when); oscillator.frequency.exponentialRampToValueAtTime(52, when + 0.12);
     gain.gain.setValueAtTime(0.18, when); gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
-    oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + 0.15);
+    oscillator.connect(gain).connect(bgmGain); oscillator.start(when); oscillator.stop(when + 0.15);
   }
   function playClap(when) {
     const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.045, audioContext.sampleRate), data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
     const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.05;
-    source.connect(gain).connect(audioContext.destination); source.start(when);
+    source.connect(gain).connect(bgmGain); source.start(when);
   }
-  function toggleBgm() {
+  function updateBgmVolume() { bgmVolume = Number($("#bgmVolume").value) / 100; if (bgmGain) bgmGain.gain.value = bgmVolume; $("#bgmVolumeValue").textContent = `${Math.round(bgmVolume * 100)}%`; }\n  function toggleBgm() {
     const button = $("#bgmToggle");
     if (bgmOn) { clearInterval(bgmTimer); bgmOn = false; button.textContent = "♫ BGM 켜기"; button.setAttribute("aria-pressed", "false"); return; }
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); audioContext.resume();
+    audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); bgmGain ||= (() => { const gain = audioContext.createGain(); gain.connect(audioContext.destination); return gain; })(); bgmGain.gain.value = bgmVolume; audioContext.resume();
     const playPhrase = () => {
       const start = audioContext.currentTime + 0.04, step = 0.18;
       for (let i = 0; i < 8; i++) {
@@ -101,7 +101,7 @@
   }
   $("#selectAll").onclick = () => { selectedProvinces = new Set(provinces); updateProvinceUI(); syncCities(true); }; $("#clearAll").onclick = () => { selectedProvinces.clear(); updateProvinceUI(); syncCities(); };
   $("#selectAllCities").onclick = () => { selectedCities = new Set(availableCities()); updateCityUI(); }; $("#clearCities").onclick = () => { selectedCities.clear(); updateCityUI(); };
-  $("#bgmToggle").onclick = toggleBgm; $("#drawBtn").onclick = draw; $("#fitBtn").onclick = fit; $("#reloadMapBtn").onclick = () => { $("#mapMessage").hidden = false; tiles.redraw(); resize(); };
+  $("#bgmToggle").onclick = toggleBgm; $("#bgmVolume").oninput = updateBgmVolume; $("#drawBtn").onclick = draw; $("#fitBtn").onclick = fit; $("#reloadMapBtn").onclick = () => { $("#mapMessage").hidden = false; tiles.redraw(); resize(); };
   [0,200,700].forEach(ms => setTimeout(resize, ms)); window.addEventListener("resize", resize); window.addEventListener("orientationchange", () => setTimeout(resize, 300)); document.addEventListener("visibilitychange", () => !document.hidden && setTimeout(resize, 120)); init();
 })();
 
