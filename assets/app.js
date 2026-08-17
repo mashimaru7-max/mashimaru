@@ -108,7 +108,7 @@
   function fit() { const list = pool(); if (list.length) map.fitBounds(L.latLngBounds(list.map(p => [p.lat,p.lng])), {padding:[36,36], maxZoom:9}); }
   function resize() { map.invalidateSize({animate:false}); }
   async function init() {
-    try { const response = await fetch("data/places.json?v=1.0.06"); if (!response.ok) throw new Error(); places = (await response.json()).filter(isValid); if (!places.length) throw new Error(); provinces = [...new Set(places.map(p => p.province))]; selectedProvinces = new Set(provinces); updateProvinceUI(); syncCities(); $("#dbStatus").textContent = `여행 후보 ${places.length}곳`; }
+    try { const response = await fetch("data/places.json?v=1.0.07"); if (!response.ok) throw new Error(); places = (await response.json()).filter(isValid); if (!places.length) throw new Error(); provinces = [...new Set(places.map(p => p.province))]; selectedProvinces = new Set(provinces); updateProvinceUI(); syncCities(); $("#dbStatus").textContent = `여행 후보 ${places.length}곳`; }
     catch { $("#dbStatus").textContent = "데이터를 불러오지 못했습니다"; $("#result").classList.remove("empty"); $("#result").textContent = "GitHub Pages 주소에서 다시 열어주세요. 파일을 직접 열면 데이터 요청이 차단될 수 있습니다."; }
   }
   $("#selectAll").onclick = () => { selectedProvinces = new Set(provinces); updateProvinceUI(); syncCities(true); }; $("#clearAll").onclick = () => { selectedProvinces.clear(); updateProvinceUI(); syncCities(); };
