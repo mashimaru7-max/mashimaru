@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#183153">
-  <title>라온&amp;다온이와 함께 떠나는 랜덤 여행지 · v1.0.01</title>
+  <title>라온&amp;다온이와 함께 떠나는 랜덤 여행지 · v1.0.02</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <main class="app">
-    <header><div><p class="eyebrow">WEEKEND TRIP FINDER <span class="version">v1.0.01</span></p><h1>🇰🇷 라온&amp;다온이와 함께 떠나는 랜덤 여행지</h1><p class="subtitle">조건을 고르면, 오늘 떠날 한 곳을 찾아드려요.</p></div><div class="header-actions"><button id="bgmToggle" class="sound-button" type="button" aria-pressed="false">♫ BGM 켜기</button><span id="dbStatus" class="status">장소 데이터 불러오는 중</span></div></header>
+    <header><div><p class="eyebrow">WEEKEND TRIP FINDER <span class="version">v1.0.02</span></p><h1>🇰🇷 라온&amp;다온이와 함께 떠나는 랜덤 여행지</h1><p class="subtitle">조건을 고르면, 오늘 떠날 한 곳을 찾아드려요.</p></div><div class="header-actions"><button id="bgmToggle" class="sound-button" type="button" aria-pressed="false">♫ BGM 켜기</button><span id="dbStatus" class="status">장소 데이터 불러오는 중</span></div></header>
     <section class="panel controls" aria-label="여행지 조건">
       <div class="control-grid">
         <div class="field region-field"><label>광역시·도 <span id="provinceCount"></span></label><details id="provincePicker"><summary id="provinceSummary">대한민국 전체</summary><div class="picker-actions"><button type="button" id="selectAll">전체 선택</button><button type="button" id="clearAll">전체 해제</button></div><div id="provinceList" class="checks"></div></details></div>
