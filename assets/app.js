@@ -3,6 +3,7 @@
   const categoryName = { landmark: "명소", place: "지명·마을", nature: "자연", history: "역사·문화", park: "공원·휴양" };
   let places = [], provinces = [], selectedProvinces = new Set(), selectedCities = new Set();
   let finalMarker, tempMarkers = [], busy = false;
+  let audioContext, bgmTimer, bgmStep = 0, bgmOn = false;
 
   const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([36.35, 127.75], 7);
   const tileUrls = ["https://tile.openstreetmap.org/{z}/{x}/{y}.png", "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"];
@@ -45,13 +46,28 @@
   function icon() { return L.divIcon({ className: "", html: '<div class="marker"></div>', iconSize: [23,23], iconAnchor: [12,12] }); }
   function clearTemps() { tempMarkers.forEach(m => map.removeLayer(m)); tempMarkers = []; }
   const wait = ms => new Promise(r => setTimeout(r, ms));
+  const BGM_NOTES = [523.25, 659.25, 783.99, 659.25, 587.33, 659.25, 880, 783.99, 659.25, 587.33, 523.25, 587.33];
+  function playTone(frequency, when, duration, volume = 0.035) {
+    const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+    oscillator.type = "triangle"; oscillator.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when); gain.gain.exponentialRampToValueAtTime(volume, when + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+    oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + duration + 0.03);
+  }
+  function toggleBgm() {
+    const button = $("#bgmToggle");
+    if (bgmOn) { clearInterval(bgmTimer); bgmOn = false; button.textContent = "♫ BGM 켜기"; button.setAttribute("aria-pressed", "false"); return; }
+    audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); audioContext.resume();
+    const playBar = () => { const start = audioContext.currentTime + 0.04; for (let i = 0; i < 4; i++) { playTone(BGM_NOTES[bgmStep++ % BGM_NOTES.length], start + i * 0.28, 0.22); if (i % 2 === 0) playTone(BGM_NOTES[(bgmStep + 5) % BGM_NOTES.length] / 2, start + i * 0.28, 0.18, 0.018); } };
+    playBar(); bgmTimer = setInterval(playBar, 1120); bgmOn = true; button.textContent = "♫ BGM 끄기"; button.setAttribute("aria-pressed", "true");
+  }
   async function animateDraw(final, list) {
     $("#searching").hidden = false; clearTemps();
     // 현재 조건에 맞는 후보의 절반을 실제로 둘러본 뒤 최종 목적지를 공개합니다.
-    const exploreCount = Math.max(1, Math.ceil(list.length * 0.5));
+    const exploreCount = Math.max(1, Math.ceil(list.length * 0.3));
     const candidates = shuffle(list.filter(p => p.id !== final.id)).slice(0, Math.min(exploreCount, list.length - 1));
     const bounds = L.latLngBounds(list.map(p => [p.lat,p.lng])); map.fitBounds(bounds, {padding:[36,36], maxZoom:9, animate:true}); await wait(650);
-    for (let i = 0; i < candidates.length; i++) { const p = candidates[i]; $("#searching").textContent = `후보를 둘러보는 중… ${i + 1}/${candidates.length}`; const marker = L.marker([p.lat,p.lng], {icon:icon(), opacity:.55, interactive:false}).addTo(map); tempMarkers.push(marker); map.panTo([p.lat,p.lng], {animate:true, duration:.28}); await wait(250); }
+    for (let i = 0; i < candidates.length; i++) { const p = candidates[i]; $("#searching").textContent = `후보를 둘러보는 중… ${i + 1}/${candidates.length}`; const marker = L.marker([p.lat,p.lng], {icon:icon(), opacity:.55, interactive:false}).addTo(map); tempMarkers.push(marker); map.panTo([p.lat,p.lng], {animate:true, duration:.18}); await wait(170); }
     $("#searching").textContent = "최종 여행지를 고르는 중…"; clearTemps(); if (finalMarker) map.removeLayer(finalMarker); finalMarker = L.marker([final.lat,final.lng], {icon:icon()}).addTo(map).bindPopup(`<b>${safe(final.name)}</b><br>${safe(final.province)} · ${safe(final.city)}`).openPopup(); map.setView([final.lat,final.lng], 13, {animate:true}); await wait(450); $("#searching").hidden = true; $("#searching").textContent = "후보를 살펴보는 중…";
   }
   function show(p) { $("#result").classList.remove("empty"); $("#result").innerHTML = `<h2>📍 ${safe(p.name)}</h2><p class="meta">${safe(p.province)} · ${safe(p.city)}</p><div class="badges"><span class="badge">${categoryName[p.category]}</span><span class="badge">${p.access === "A" ? "🚗 차량 접근 쉬움" : "🚶 짧은 도보 포함"}</span><span class="badge">가족 여행 후보</span></div><div class="result-actions"><button id="again">다시 찾기</button><button id="route" class="primary">길찾기</button></div>`; $("#again").onclick = draw; $("#route").onclick = () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name} ${p.city}`)}`, "_blank", "noopener"); }
@@ -64,7 +80,7 @@
   }
   $("#selectAll").onclick = () => { selectedProvinces = new Set(provinces); updateProvinceUI(); syncCities(true); }; $("#clearAll").onclick = () => { selectedProvinces.clear(); updateProvinceUI(); syncCities(); };
   $("#selectAllCities").onclick = () => { selectedCities = new Set(availableCities()); updateCityUI(); }; $("#clearCities").onclick = () => { selectedCities.clear(); updateCityUI(); };
-  $("#drawBtn").onclick = draw; $("#fitBtn").onclick = fit; $("#reloadMapBtn").onclick = () => { $("#mapMessage").hidden = false; tiles.redraw(); resize(); };
+  $("#bgmToggle").onclick = toggleBgm; $("#drawBtn").onclick = draw; $("#fitBtn").onclick = fit; $("#reloadMapBtn").onclick = () => { $("#mapMessage").hidden = false; tiles.redraw(); resize(); };
   [0,200,700].forEach(ms => setTimeout(resize, ms)); window.addEventListener("resize", resize); window.addEventListener("orientationchange", () => setTimeout(resize, 300)); document.addEventListener("visibilitychange", () => !document.hidden && setTimeout(resize, 120)); init();
 })();
 
