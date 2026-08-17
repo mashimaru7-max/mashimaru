@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#183153">
+  <title>랜덤 여행지 · 대한민국</title>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main class="app">
+    <header><div><p class="eyebrow">WEEKEND TRIP FINDER</p><h1>🇰🇷 랜덤 여행지</h1><p class="subtitle">조건을 고르면, 오늘 떠날 한 곳을 찾아드려요.</p></div><span id="dbStatus" class="status">장소 데이터 불러오는 중</span></header>
+    <section class="panel controls" aria-label="여행지 조건">
+      <div class="control-grid">
+        <div class="field region-field"><label>광역시·도 <span id="provinceCount"></span></label><details id="provincePicker"><summary id="provinceSummary">대한민국 전체</summary><div class="picker-actions"><button type="button" id="selectAll">전체 선택</button><button type="button" id="clearAll">전체 해제</button></div><div id="provinceList" class="checks"></div></details></div>
+        <div class="field city-field"><label>시·군·구 <span id="cityCount"></span></label><details id="cityPicker"><summary id="citySummary">전체</summary><div class="picker-actions"><button type="button" id="selectAllCities">전체 선택</button><button type="button" id="clearCities">전체 해제</button></div><div id="cityList" class="checks city-checks"></div></details></div>
+        <div class="field"><label for="category">장소 유형</label><select id="category"><option value="all">전체</option><option value="landmark">명소</option><option value="place">지명·마을</option><option value="nature">자연</option><option value="history">역사·문화</option><option value="park">공원·휴양</option></select></div>
+        <div class="field"><label for="access">이동 방식</label><select id="access"><option value="AB">차량 접근 가능한 곳</option><option value="A">주차·도로 접근 쉬움</option><option value="B">차량 + 짧은 도보</option></select></div>
+        <div class="field"><label for="recent">중복 방지</label><select id="recent"><option value="10">최근 10회 제외</option><option value="5">최근 5회 제외</option><option value="0">중복 허용</option></select></div>
+        <div class="field action-field"><label>&nbsp;</label><button id="drawBtn" class="primary">랜덤으로 찾기</button></div>
+      </div>
+    </section>
+    <section class="map-card"><div id="map" aria-label="대한민국 지도"></div><div class="map-actions"><button id="fitBtn" type="button">조건 영역 보기</button><button id="reloadMapBtn" type="button" title="지도 새로고침">↻</button></div><div id="mapMessage" class="map-message">지도를 불러오는 중…</div><div id="searching" class="searching" hidden>후보를 살펴보는 중…</div></section>
+    <section id="result" class="panel result empty">지역과 조건을 선택한 뒤 <b>랜덤으로 찾기</b>를 눌러주세요.</section>
+    <p class="notice">장소 정보는 여행 후보를 위한 데이터입니다. 출발 전 운영 시간, 주차, 기상·통행 상황을 꼭 확인하세요.</p>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
