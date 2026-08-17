@@ -46,20 +46,41 @@
   function icon() { return L.divIcon({ className: "", html: '<div class="marker"></div>', iconSize: [23,23], iconAnchor: [12,12] }); }
   function clearTemps() { tempMarkers.forEach(m => map.removeLayer(m)); tempMarkers = []; }
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const BGM_NOTES = [523.25, 659.25, 783.99, 659.25, 587.33, 659.25, 880, 783.99, 659.25, 587.33, 523.25, 587.33];
-  function playTone(frequency, when, duration, volume = 0.035) {
+  const BGM_MELODY = [659.25, 783.99, 880, 783.99, 987.77, 880, 783.99, 659.25, 587.33, 659.25, 783.99, 880, 1046.5, 987.77, 880, 783.99];
+  const BGM_BASS = [130.81, 130.81, 146.83, 146.83, 164.81, 164.81, 146.83, 130.81];
+  function playTone(frequency, when, duration, volume = 0.035, type = "triangle") {
     const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
-    oscillator.type = "triangle"; oscillator.frequency.setValueAtTime(frequency, when);
-    gain.gain.setValueAtTime(0.0001, when); gain.gain.exponentialRampToValueAtTime(volume, when + 0.025);
+    oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when); gain.gain.exponentialRampToValueAtTime(volume, when + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
     oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + duration + 0.03);
+  }
+  function playKick(when) {
+    const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+    oscillator.type = "sine"; oscillator.frequency.setValueAtTime(160, when); oscillator.frequency.exponentialRampToValueAtTime(52, when + 0.12);
+    gain.gain.setValueAtTime(0.09, when); gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.14);
+    oscillator.connect(gain).connect(audioContext.destination); oscillator.start(when); oscillator.stop(when + 0.15);
+  }
+  function playClap(when) {
+    const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.045, audioContext.sampleRate), data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.025;
+    source.connect(gain).connect(audioContext.destination); source.start(when);
   }
   function toggleBgm() {
     const button = $("#bgmToggle");
     if (bgmOn) { clearInterval(bgmTimer); bgmOn = false; button.textContent = "♫ BGM 켜기"; button.setAttribute("aria-pressed", "false"); return; }
     audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); audioContext.resume();
-    const playBar = () => { const start = audioContext.currentTime + 0.04; for (let i = 0; i < 4; i++) { playTone(BGM_NOTES[bgmStep++ % BGM_NOTES.length], start + i * 0.28, 0.22); if (i % 2 === 0) playTone(BGM_NOTES[(bgmStep + 5) % BGM_NOTES.length] / 2, start + i * 0.28, 0.18, 0.018); } };
-    playBar(); bgmTimer = setInterval(playBar, 1120); bgmOn = true; button.textContent = "♫ BGM 끄기"; button.setAttribute("aria-pressed", "true");
+    const playPhrase = () => {
+      const start = audioContext.currentTime + 0.04, step = 0.18;
+      for (let i = 0; i < 8; i++) {
+        const time = start + i * step, note = BGM_MELODY[bgmStep++ % BGM_MELODY.length];
+        playTone(note, time, 0.14, 0.038, "square"); playTone(note / 2, time, 0.11, 0.018, "triangle");
+        if (i % 2 === 0) playKick(time); else playClap(time);
+        if (i === 0 || i === 4) playTone(BGM_BASS[(bgmStep / 2 | 0) % BGM_BASS.length], time, 0.30, 0.055, "sawtooth");
+      }
+    };
+    playPhrase(); bgmTimer = setInterval(playPhrase, 1440); bgmOn = true; button.textContent = "♫ BGM 끄기"; button.setAttribute("aria-pressed", "true");
   }
   async function animateDraw(final, list) {
     $("#searching").hidden = false; clearTemps();
