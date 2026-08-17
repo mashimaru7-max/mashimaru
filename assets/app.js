@@ -3,7 +3,7 @@
   const categoryName = { landmark: "명소", place: "지명·마을", nature: "자연", history: "역사·문화", park: "공원·휴양" };
   let places = [], provinces = [], selectedProvinces = new Set(), selectedCities = new Set();
   let finalMarker, tempMarkers = [], busy = false;
-  let audioContext, bgmGain, bgmTimer, bgmStep = 0, bgmOn = false, bgmVolume = 1;
+  let audioContext, bgmGain, bgmTimer, bgmStep = 0, bgmOn = false, bgmVolume = 4;
 
   const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([36.35, 127.75], 7);
   const tileUrls = ["https://tile.openstreetmap.org/{z}/{x}/{y}.png", "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"];
@@ -67,10 +67,10 @@
     const source = audioContext.createBufferSource(), gain = audioContext.createGain(); source.buffer = buffer; gain.gain.value = 0.05;
     source.connect(gain).connect(bgmGain); source.start(when);
   }
-  function updateBgmVolume() { bgmVolume = Number($("#bgmVolume").value) / 100; if (bgmGain) bgmGain.gain.value = bgmVolume; $("#bgmVolumeValue").textContent = `${Math.round(bgmVolume * 100)}%`; }\n  function toggleBgm() {
+  function updateBgmVolume() { bgmVolume = Number($("#bgmVolume").value) / 100 * 4; if (bgmGain) bgmGain.gain.value = bgmVolume; $("#bgmVolumeValue").textContent = `${Math.round(bgmVolume * 100)}%`; }\n  function toggleBgm() {
     const button = $("#bgmToggle");
     if (bgmOn) { clearInterval(bgmTimer); bgmOn = false; button.textContent = "♫ BGM 켜기"; button.setAttribute("aria-pressed", "false"); return; }
-    audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); bgmGain ||= (() => { const gain = audioContext.createGain(); gain.connect(audioContext.destination); return gain; })(); bgmGain.gain.value = bgmVolume; audioContext.resume();
+    audioContext ||= new (window.AudioContext || window.webkitAudioContext)(); bgmGain ||= (() => { const gain = audioContext.createGain(), compressor = audioContext.createDynamicsCompressor(); compressor.threshold.value = -18; compressor.knee.value = 24; compressor.ratio.value = 12; compressor.attack.value = 0.003; compressor.release.value = 0.25; gain.connect(compressor).connect(audioContext.destination); return gain; })(); bgmGain.gain.value = bgmVolume; audioContext.resume();
     const playPhrase = () => {
       const start = audioContext.currentTime + 0.04, step = 0.18;
       for (let i = 0; i < 8; i++) {
@@ -84,12 +84,23 @@
   }
   async function animateDraw(final, list) {
     $("#searching").hidden = false; clearTemps();
-    // 현재 조건에 맞는 후보의 절반을 실제로 둘러본 뒤 최종 목적지를 공개합니다.
-    const exploreCount = Math.max(1, Math.ceil(list.length * 0.3));
-    const candidates = shuffle(list.filter(p => p.id !== final.id)).slice(0, Math.min(exploreCount, list.length - 1));
-    const bounds = L.latLngBounds(list.map(p => [p.lat,p.lng])); map.fitBounds(bounds, {padding:[36,36], maxZoom:9, animate:true}); await wait(650);
-    for (let i = 0; i < candidates.length; i++) { const p = candidates[i]; $("#searching").textContent = `후보를 둘러보는 중… ${i + 1}/${candidates.length}`; const marker = L.marker([p.lat,p.lng], {icon:icon(), opacity:.55, interactive:false}).addTo(map); tempMarkers.push(marker); map.panTo([p.lat,p.lng], {animate:true, duration:.18}); await wait(170); }
-    $("#searching").textContent = "최종 여행지를 고르는 중…"; clearTemps(); if (finalMarker) map.removeLayer(finalMarker); finalMarker = L.marker([final.lat,final.lng], {icon:icon()}).addTo(map).bindPopup(`<b>${safe(final.name)}</b><br>${safe(final.province)} · ${safe(final.city)}`).openPopup(); map.setView([final.lat,final.lng], 13, {animate:true}); await wait(450); $("#searching").hidden = true; $("#searching").textContent = "후보를 살펴보는 중…";
+    // 최종 장소는 전체 후보에서 이미 뽑고, 화면에는 빠른 점 찍기 연출만 보여줍니다.
+    const previewPool = shuffle(list.filter(p => p.id !== final.id));
+    const barrageCount = Math.min(52, Math.max(28, Math.round(Math.sqrt(list.length) * 4)));
+    const bounds = L.latLngBounds(list.map(p => [p.lat, p.lng]));
+    map.fitBounds(bounds, {padding:[36,36], maxZoom:9, animate:true}); await wait(300);
+    for (let i = 0; i < barrageCount; i++) {
+      const p = previewPool[i % previewPool.length];
+      $("#searching").textContent = `여행 후보를 고르는 중… ${i + 1}/${barrageCount}`;
+      const marker = L.marker([p.lat,p.lng], {icon:icon(), opacity:.58, interactive:false}).addTo(map);
+      tempMarkers.push(marker); await wait(85);
+    }
+    $("#searching").textContent = "최종 여행지를 고르는 중…";
+    await wait(180); clearTemps();
+    if (finalMarker) map.removeLayer(finalMarker);
+    finalMarker = L.marker([final.lat,final.lng], {icon:icon()}).addTo(map).bindPopup(`<b>${safe(final.name)}</b><br>${safe(final.province)} · ${safe(final.city)}`).openPopup();
+    map.setView([final.lat,final.lng], 13, {animate:true}); await wait(420);
+    $("#searching").hidden = true; $("#searching").textContent = "후보를 살펴보는 중…";
   }
   function show(p) { $("#result").classList.remove("empty"); $("#result").innerHTML = `<h2>📍 ${safe(p.name)}</h2><p class="meta">${safe(p.province)} · ${safe(p.city)}</p><div class="badges"><span class="badge">${categoryName[p.category]}</span><span class="badge">${p.access === "A" ? "🚗 차량 접근 쉬움" : "🚶 짧은 도보 포함"}</span><span class="badge">가족 여행 후보</span></div><div class="result-actions"><button id="again">다시 찾기</button><button id="route" class="primary">길찾기</button></div>`; $("#again").onclick = draw; $("#route").onclick = () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name} ${p.city}`)}`, "_blank", "noopener"); }
   async function draw() { if (busy) return; const list = pool(); if (!list.length) { $("#result").classList.remove("empty"); $("#result").textContent = "현재 조건에 맞는 장소가 없습니다. 지역 또는 조건을 넓혀주세요."; return; } busy = true; $("#drawBtn").disabled = true; const final = pick(list); await animateDraw(final, list); show(final); saveHistory(final.id); busy = false; $("#drawBtn").disabled = false; }
