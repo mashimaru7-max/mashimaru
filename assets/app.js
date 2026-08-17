@@ -41,7 +41,7 @@
     let list = places.filter(p => selectedProvinces.has(p.province) && selectedCities.has(p.city) && (category === "all" || p.category === category) && (access === "AB" || p.access === access));
     const fresh = list.filter(p => !history().includes(p.id)); return fresh.length ? fresh : list;
   }
-  function shuffle(a) { a = [...a]; for (let i = a.length - 1; i; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function shuffle(a) { const copy = Array.isArray(a) ? a.slice() : Array.from(a); for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; } return copy; }
   function pick(list) { const grouped = {}; list.forEach(p => { const key = `${p.province}/${p.city}`; (grouped[key] ||= []).push(p); }); return shuffle(Object.keys(grouped)).map(k => shuffle(grouped[k])[0])[0]; }
   function icon() { return L.divIcon({ className: "", html: '<div class="marker"></div>', iconSize: [23,23], iconAnchor: [12,12] }); }
   function clearTemps() { tempMarkers.forEach(m => map.removeLayer(m)); tempMarkers = []; }
@@ -91,7 +91,7 @@
     const bounds = L.latLngBounds(list.map(p => [p.lat, p.lng]));
     map.fitBounds(bounds, {padding:[36,36], maxZoom:9, animate:true}); await wait(300);
     for (let i = 0; i < barrageCount; i++) {
-      const p = previewPool[i % previewPool.length];
+      const p = previewPool.length ? previewPool[i % previewPool.length] : final;
       $("#searching").textContent = `여행 후보를 고르는 중… ${i + 1}/${barrageCount}`;
       const marker = L.marker([p.lat,p.lng], {icon:icon(), opacity:.58, interactive:false}).addTo(map);
       tempMarkers.push(marker); await wait(85);
@@ -104,7 +104,7 @@
     $("#searching").hidden = true; $("#searching").textContent = "후보를 살펴보는 중…";
   }
   function show(p) { $("#result").classList.remove("empty"); $("#result").innerHTML = `<h2>📍 ${safe(p.name)}</h2><p class="meta">${safe(p.province)} · ${safe(p.city)}</p><div class="badges"><span class="badge">${categoryName[p.category]}</span><span class="badge">${p.access === "A" ? "🚗 차량 접근 쉬움" : "🚶 짧은 도보 포함"}</span><span class="badge">가족 여행 후보</span></div><div class="result-actions"><button id="again">다시 찾기</button><button id="route" class="primary">길찾기</button></div>`; $("#again").onclick = draw; $("#route").onclick = () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name} ${p.city}`)}`, "_blank", "noopener"); }
-  async function draw() { if (busy) return; const list = pool(); if (!list.length) { $("#result").classList.remove("empty"); $("#result").textContent = "현재 조건에 맞는 장소가 없습니다. 지역 또는 조건을 넓혀주세요."; return; } busy = true; $("#drawBtn").disabled = true; const final = pick(list); await animateDraw(final, list); show(final); saveHistory(final.id); busy = false; $("#drawBtn").disabled = false; }
+  async function draw() { if (busy) return; const list = pool(); if (!list.length) { $("#result").classList.remove("empty"); $("#result").textContent = "현재 조건에 맞는 장소가 없습니다. 지역 또는 조건을 넓혀주세요."; return; } busy = true; $("#drawBtn").disabled = true; try { const final = pick(list); await animateDraw(final, list); show(final); saveHistory(final.id); } catch (error) { console.error(error); $("#result").classList.remove("empty"); $("#result").textContent = "여행지를 고르는 중 문제가 생겼습니다. 다시 한 번 눌러주세요."; } finally { $("#searching").hidden = true; busy = false; $("#drawBtn").disabled = false; } }
   function fit() { const list = pool(); if (list.length) map.fitBounds(L.latLngBounds(list.map(p => [p.lat,p.lng])), {padding:[36,36], maxZoom:9}); }
   function resize() { map.invalidateSize({animate:false}); }
   async function init() {
