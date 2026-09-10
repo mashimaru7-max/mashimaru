@@ -1,7 +1,7 @@
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./vendor/matter.min.js'));else root.DuckPhysics=factory(root.Matter)})(typeof globalThis!=='undefined'?globalThis:this,function(Matter){
  'use strict';
  const WIDTH=420,HEIGHT=580,FLOOR=568,LINE=105,SPAWN=45,STEP=1000/120,CONTACT_EPSILON=1.5;
- const TIERS=[{name:'아기',r:18,points:0},{name:'기본',r:25,points:30},{name:'리본',r:33,points:60},{name:'탐험가',r:42,points:100},{name:'마법사',r:53,points:150},{name:'천사',r:66,points:210},{name:'우주',r:80,points:280},{name:'대왕',r:96,points:500},{name:'황제',r:102,points:800},{name:'전설의 태양',r:110,points:1200}];
+ const TIERS=[{name:'아기',r:18,points:0},{name:'기본',r:25,points:30},{name:'리본',r:33,points:60},{name:'탐험가',r:42,points:100},{name:'마법사',r:53,points:150},{name:'천사',r:66,points:210},{name:'우주',r:80,points:280},{name:'대왕',r:88,points:500},{name:'황제',r:92,points:800},{name:'전설의 태양',r:96,points:1200}];
  const FINAL_TIER=TIERS.length-1;
  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
  class Game{

@@ -1,6 +1,6 @@
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.DuckGraphics=factory()})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='3.0.0';
+ const VERSION='3.0.1';
  // Sprites are square, padded assets. One uniform scale is mandatory: using
  // different x/y scales made a rotated duck look long and hid real gaps.
  const SCALES=[1.05,1.05,1.05,1.06,1.05,1.05,1.05,1.06,1.05,1.05];
