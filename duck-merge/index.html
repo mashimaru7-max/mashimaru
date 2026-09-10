@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#e8f5ff"><meta name="description" content="동글동글 오리를 톡! 같은 오리를 합쳐 대왕 오리를 만드는 덕덕 합체. 모바일과 PC에서 바로 플레이하세요.">
+  <title>덕덕 합체 · Go-Go! Duck</title>
+  <link rel="icon" href="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="><link rel="stylesheet" href="style.css">
+  <script defer src="vendor/matter.min.js"></script><script defer src="physics.js"></script><script defer src="game.js"></script>
+</head>
+<body>
+ <main class="app">
+  <header class="header"><div class="brand"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" width="44" height="44"><span>Go-Go! Duck<small>동글동글, 오리 한 판</small></span></div><span class="edition">MERGE CLUB</span></header>
+  <div class="layout">
+   <section class="game" aria-label="덕덕 합체 게임">
+    <div class="title-row"><div><span class="eyebrow">꽥! 하고 더 커지는 즐거움</span><h1>덕덕 합체<span class="title-star" aria-hidden="true">✦</span></h1></div><div class="tools"><button class="icon-button" id="sound" aria-label="소리 켜기" aria-pressed="false">♪<span class="off-dot"></span></button><button class="icon-button" id="pause" aria-label="일시정지">Ⅱ</button></div></div>
+    <div class="scores"><div class="score-card"><span>점수</span><strong id="score">0</strong></div><div class="score-card best"><span><b aria-hidden="true">♛</b> 최고 점수</span><strong id="best">0</strong></div><div class="score-card next"><span>다음 오리</span><img id="next" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="다음: 아기 오리" width="52" height="52"></div></div>
+    <div class="pool-wrap"><div class="pool"><canvas id="board" width="420" height="580" tabindex="0" role="application" aria-label="오리 게임판. 마우스나 손가락으로 이동 후 놓기. 키보드는 좌우 방향키와 스페이스로 놓기."></canvas><div id="load" class="loading"><span class="loader"></span>오리들이 모이는 중…</div><div id="empty-hint" class="empty-hint"><span>여기에 첫 오리를 놓아봐!</span><small>같은 오리 둘이 만나면 합체</small></div><div class="danger" id="danger" hidden>넘치기 전에 합쳐줘! <b id="countdown">3</b></div><div id="toast" role="status" class="toast"></div></div></div>
+    <div class="hint"><span aria-hidden="true">↔</span> 움직이고 손을 떼면 톡! <span aria-hidden="true">✦</span></div>
+    <div class="bottom-actions"><button id="restart" class="restart"><span aria-hidden="true">↻</span> 다시 시작</button><button id="help" class="help-button" aria-label="게임 방법 보기">?</button></div>
+    <p id="status" class="sr-only" role="status" aria-live="polite">게임을 준비하고 있어요.</p>
+   </section>
+   <aside class="sidebar"><section class="collection"><div class="section-heading"><div><span class="eyebrow">작은 오리의 큰 꿈</span><h2>오늘은 어디까지?</h2></div><span id="unlocked-count" class="badge">1 / 8</span></div><div class="duck-grid" id="duck-grid"></div><p class="collection-note">같은 오리 두 마리 → 다음 오리 한 마리</p></section><section class="howto"><h2>이렇게 놀아요</h2><ol><li><b>위치를 정하고 톡!</b><span>손가락이나 마우스로 오리를 놓아요.</span></li><li><b>같은 오리끼리 꽥!</b><span>굴러가다 만나도, 쌓이다 만나도 합체!</span></li><li><b>빨간 선을 조심!</b><span>오리가 선 위에 3초 머무르면 끝나요.</span></li></ol><div class="goal"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="황금 대왕 오리" width="68" height="68"><p>마지막엔,<br><strong>대왕 오리를 만나자!</strong></p></div></section></aside>
+  </div>
+  <footer>나만의 최고 기록은 이 브라우저에 저장돼요.</footer>
+ </main>
+ <dialog id="modal" aria-labelledby="modal-title"><div class="modal-content"><img id="modal-duck" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" width="100" height="100"><h2 id="modal-title"></h2><p id="modal-text"></p><div id="modal-actions"></div></div></dialog>
+ <noscript>이 게임을 실행하려면 브라우저의 JavaScript를 켜주세요.</noscript>
+</body></html>
