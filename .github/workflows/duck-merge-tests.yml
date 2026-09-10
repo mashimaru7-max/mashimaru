@@ -1,0 +1,26 @@
+name: Duck Merge regression tests
+on:
+  push:
+    paths: ['duck-merge/**', '.github/workflows/duck-merge-tests.yml']
+  pull_request:
+    paths: ['duck-merge/**', '.github/workflows/duck-merge-tests.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: duck-merge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check physics.js
+          node --check graphics.js
+          node --check game.js
+      - name: Test physics, assets, and UI recovery
+        run: node --test tests/*.test.cjs
