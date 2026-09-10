@@ -46,6 +46,10 @@ for tier in range(8):
     bounds=im.getchannel('A').getbbox()
     assert bounds, 'Empty sprite'
     im=im.crop(bounds)
-    im.thumbnail((256,256),Image.Resampling.LANCZOS)
-    im.save(ROOT / f'assets/duck-{tier+1}.png',optimize=True)
-    print(tier+1,im.size)
+    # Every runtime sprite uses the same square coordinate system. Padding,
+    # instead of resizing width and height independently, preserves roundness.
+    im.thumbnail((244,244),Image.Resampling.LANCZOS)
+    sprite=Image.new('RGBA',(256,256),(0,0,0,0))
+    sprite.alpha_composite(im,((256-im.width)//2,(256-im.height)//2))
+    sprite.save(ROOT / f'assets/duck-{tier+1}.png',optimize=True)
+    print(tier+1,sprite.size,im.size)

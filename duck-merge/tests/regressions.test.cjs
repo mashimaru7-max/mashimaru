@@ -1,5 +1,5 @@
 const test=require('node:test');const assert=require('node:assert/strict');
-const {Game,STEP,FLOOR,TIERS}=require('../physics.js');const M=require('../vendor/matter.min.js');
+const {Game,STEP,FLOOR,TIERS,CONTACT_EPSILON}=require('../physics.js');const M=require('../vendor/matter.min.js');
 const advance=(g,ms)=>{for(let i=0;i<Math.ceil(ms/STEP);i++)g.step()};
 test('regression: removing a settled support makes the upper duck fall without a nudge',()=>{
  const g=new Game(),base=M.Bodies.rectangle(160,420,180,24,{isStatic:true}),top=g.add(0,160,370);M.Composite.add(g.engine.world,base);advance(g,5000);const y=top.position.y;assert.ok(y<410);
@@ -19,7 +19,7 @@ test('regression: a young contacting pair is reconsidered even without collision
  advance(g,75);assert.equal(g.merges,0);advance(g,100);assert.equal(g.merges,1);assert.equal(g.score,30);
 });
 test('same-tier gap is not enlarged into an invisible merge zone',()=>{
- for(let tier=0;tier<7;tier++){const g=new Game(),r=TIERS[tier].r,a=g.add(tier,210-r-2,400),b=g.add(tier,210+r+2,400);M.Body.setStatic(a,true);M.Body.setStatic(b,true);advance(g,500);assert.equal(g.merges,0)}
+ for(let tier=0;tier<7;tier++){const g=new Game(),r=TIERS[tier].r,a=g.add(tier,210-r-(CONTACT_EPSILON+1)/2,400),b=g.add(tier,210+r+(CONTACT_EPSILON+1)/2,400);M.Body.setStatic(a,true);M.Body.setStatic(b,true);advance(g,500);assert.equal(g.merges,0)}
 });
 test('contact tolerance admits only subpixel slop and respects tier identity',()=>{
  const g=new Game(),a=g.add(0,192,450),b=g.add(0,228.3,450);M.Body.setStatic(a,true);M.Body.setStatic(b,true);advance(g,200);assert.equal(g.merges,1);
@@ -35,4 +35,8 @@ test('invalid construction and timestep inputs cannot poison physics',()=>{
 });
 test('20 deterministic sessions keep positions and scores valid',()=>{
  for(let run=1;run<=20;run++){let seed=run;const rng=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);const g=new Game({random:rng});for(let n=0;n<100&&!g.over;n++){g.drop(20+rng()*380);advance(g,800);for(const d of g.ducks){assert.ok(Number.isFinite(d.position.x)&&Number.isFinite(d.position.y)&&Number.isFinite(d.angle));assert.equal(d.isSleeping,false);assert.ok(d.position.y<=FLOOR+1)}}assert.ok(Number.isSafeInteger(g.score));}
+});
+test('settled bodies do not remain deeply overlapped after merge resolution',()=>{
+ let seed=42;const rng=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);const g=new Game({random:rng});for(let n=0;n<80&&!g.over;n++){g.drop(20+rng()*380);advance(g,850)}advance(g,3000);
+ for(let i=0;i<g.ducks.length;i++)for(let j=i+1;j<g.ducks.length;j++){const a=g.ducks[i],b=g.ducks[j],sum=TIERS[a.duck.tier].r+TIERS[b.duck.tier].r,dist=Math.hypot(a.position.x-b.position.x,a.position.y-b.position.y);assert.ok(sum-dist<2.5,`deep overlap: ${sum-dist}`)}
 });
