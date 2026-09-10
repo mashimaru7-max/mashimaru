@@ -4,12 +4,12 @@
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#e8f5ff"><meta name="description" content="동글동글 오리를 톡! 같은 오리를 합쳐 대왕 오리를 만드는 덕덕 합체. 모바일과 PC에서 바로 플레이하세요.">
   <title>덕덕 합체 · Go-Go! Duck</title>
-  <link rel="icon" href="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="><link rel="stylesheet" href="style.css?v=2.1.0">
-  <script defer src="vendor/matter.min.js"></script><script defer src="physics.js?v=2.1.0"></script><script defer src="graphics.js?v=2.1.0"></script><script defer src="game.js?v=2.1.0"></script>
+  <link rel="icon" href="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="><link rel="stylesheet" href="style.css?v=3.0.0">
+  <script defer src="vendor/matter.min.js"></script><script defer src="physics.js?v=3.0.0"></script><script defer src="graphics.js?v=3.0.0"></script><script defer src="game.js?v=3.0.0"></script>
 </head>
 <body>
  <main class="app">
-  <header class="header"><div class="brand"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" width="44" height="44"><span>Go-Go! Duck<small>동글동글, 오리 한 판</small></span></div><span class="edition">MERGE CLUB · v2.1</span></header>
+  <header class="header"><div class="brand"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="" width="44" height="44"><span>Go-Go! Duck<small>동글동글, 오리 한 판</small></span></div><span class="edition">MERGE CLUB · v3.0</span></header>
   <div class="layout">
    <section class="game" aria-label="덕덕 합체 게임">
     <div class="title-row"><div><span class="eyebrow">꽥! 하고 더 커지는 즐거움</span><h1>덕덕 합체<span class="title-star" aria-hidden="true">✦</span></h1></div><div class="tools"><button class="icon-button" id="sound" aria-label="소리 켜기" aria-pressed="false">♪<span class="off-dot"></span></button><button class="icon-button" id="pause" aria-label="일시정지">Ⅱ</button></div></div>
@@ -19,7 +19,7 @@
     <div class="bottom-actions"><button id="restart" class="restart"><span aria-hidden="true">↻</span> 다시 시작</button><button id="help" class="help-button" aria-label="게임 방법 보기">?</button></div>
     <p id="status" class="sr-only" role="status" aria-live="polite">게임을 준비하고 있어요.</p>
    </section>
-   <aside class="sidebar"><section class="collection"><div class="section-heading"><div><span class="eyebrow">작은 오리의 큰 꿈</span><h2>오늘은 어디까지?</h2></div><span id="unlocked-count" class="badge">1 / 8</span></div><div class="duck-grid" id="duck-grid"></div><p class="collection-note">같은 오리 두 마리 → 다음 오리 한 마리</p></section><section class="howto"><h2>이렇게 놀아요</h2><ol><li><b>위치를 정하고 톡!</b><span>손가락이나 마우스로 오리를 놓아요.</span></li><li><b>같은 오리끼리 꽥!</b><span>굴러가다 만나도, 쌓이다 만나도 합체!</span></li><li><b>빨간 선을 조심!</b><span>오리가 선 위에 3초 머무르면 끝나요.</span></li></ol><div class="goal"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="황금 대왕 오리" width="68" height="68"><p>마지막엔,<br><strong>대왕 오리를 만나자!</strong></p></div></section></aside>
+   <aside class="sidebar"><section class="collection"><div class="section-heading"><div><span class="eyebrow">작은 오리의 큰 꿈</span><h2>오늘은 어디까지?</h2></div><div class="collection-badges"><span id="unlocked-count" class="badge">1 / 10</span><span class="badge completion-badge">☀ 완성 <b id="completion-count">0</b></span></div></div><div class="duck-grid" id="duck-grid"></div><p class="collection-note">같은 오리 두 마리 → 다음 오리 한 마리</p></section><section class="howto"><h2>이렇게 놀아요</h2><ol><li><b>위치를 정하고 톡!</b><span>손가락이나 마우스로 오리를 놓아요.</span></li><li><b>같은 오리끼리 꽥!</b><span>굴러가다 만나도, 쌓이다 만나도 합체!</span></li><li><b>빨간 선을 조심!</b><span>오리가 선 위에 3초 머무르면 끝나요.</span></li></ol><div class="goal"><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="전설의 태양 오리" width="68" height="68"><p>마지막엔,<br><strong>전설의 태양 오리를 만나자!</strong></p></div></section></aside>
   </div>
   <footer>나만의 최고 기록은 이 브라우저에 저장돼요.</footer>
  </main>

@@ -6,3 +6,12 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
 
 .loading .restart{flex:initial;width:100%;margin-top:10px;padding:14px;font-size:18px}
+
+/* v3: ten-stage collection and legendary completion state */
+.collection-badges{display:flex;align-items:flex-end;flex-direction:column;gap:5px}.completion-badge{color:#b47a16;background:#fff6d9}.completion-badge b{font-variant-numeric:tabular-nums}.goal img{filter:drop-shadow(0 0 8px #ffd24d88)}
+dialog.victory{border:2px solid #ffd560;background:radial-gradient(circle at 50% 20%,#fffce9,#fafdff 58%);box-shadow:0 0 0 6px #fff7cf,0 24px 90px #67460066}
+dialog.victory .modal-content>img{width:150px;height:150px;filter:drop-shadow(0 0 18px #ffd43b);animation:victory-bob 1.7s ease-in-out infinite}
+dialog.victory h2{color:#b76c00;text-shadow:0 2px #fff}
+dialog.victory .modal-content button.primary{background:linear-gradient(#ffd95d,#f6ad19);border-color:#e3a11d;color:#704500}
+@keyframes victory-bob{50%{transform:translateY(-7px) scale(1.035)}}
+@media(max-width:760px){.collection-badges{gap:3px}.collection-badges .badge{font-size:10px;padding:4px 8px}.duck-grid{grid-template-columns:repeat(5,1fr);gap:4px}.duck-card img{max-width:54px}}
