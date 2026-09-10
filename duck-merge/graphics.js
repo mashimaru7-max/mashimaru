@@ -1,9 +1,9 @@
 (function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.DuckGraphics=factory()})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
- const VERSION='3.0.1';
+ const VERSION='3.0.2';
  // Sprites are square, padded assets. One uniform scale is mandatory: using
  // different x/y scales made a rotated duck look long and hid real gaps.
- const SCALES=[1.05,1.05,1.05,1.06,1.05,1.05,1.05,1.06,1.05,1.05];
+ const SCALES=[1.05,1.05,1.05,1.06,1.05,1.05,1.05,1.15,1.4,1.3];
  const urls=SCALES.map((_,i)=>`assets/duck-${i+1}.png?v=${VERSION}`);
  function placement(tier,r){if(!Number.isFinite(SCALES[tier])||!Number.isFinite(r)||r<=0)throw new RangeError('Invalid sprite placement');const size=2*r*SCALES[tier];return{x:-size/2,y:-size/2,w:size,h:size}}
  function createAssetStore(loader){let assets=null,pending=null,revision=0;return{
