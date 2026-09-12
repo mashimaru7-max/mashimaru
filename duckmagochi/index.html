@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7df">
+  <meta name="description" content="먹이고 놀아주고 함께 자라는 오리 육성 게임 덕마고치">
+  <title>덕마고치</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='29' fill='%23ffd95c'/%3E%3Ccircle cx='23' cy='28' r='4' fill='%234a2e23'/%3E%3Ccircle cx='41' cy='28' r='4' fill='%234a2e23'/%3E%3Cpath d='M25 38q7-8 14 0-7 8-14 0' fill='%23f58b54'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css?v=5">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"><img src="./assets/stage-5.png?v=5" alt=""></span>
+        <div>
+          <h1>덕마고치</h1>
+          <p id="dayLabel">함께한 첫날</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="testBadge" class="test-badge hidden">관리자 테스트</span>
+        <button id="dailyBtn" class="icon-btn" aria-label="오늘의 돌봄">🎁</button>
+        <button id="shopBtn" class="icon-btn" aria-label="상점과 꾸미기">🛍️</button>
+        <button id="soundBtn" class="icon-btn" aria-label="소리 켜기 또는 끄기">🔊</button>
+        <button id="settingsBtn" class="icon-btn" aria-label="설정 열기">⚙️</button>
+      </div>
+    </header>
+
+    <section class="status-panel" aria-label="오리 상태">
+      <article class="status-card bad-up">
+        <div class="status-heading"><span>🍽️ 배고픔</span><strong id="hungerText">20</strong></div>
+        <div class="meter"><i id="hungerBar"></i></div>
+      </article>
+      <article class="status-card">
+        <div class="status-heading"><span>😊 기분</span><strong id="moodText">80</strong></div>
+        <div class="meter"><i id="moodBar"></i></div>
+      </article>
+      <article class="status-card">
+        <div class="status-heading"><span>🫧 청결</span><strong id="cleanText">90</strong></div>
+        <div class="meter"><i id="cleanBar"></i></div>
+      </article>
+      <article class="status-card">
+        <div class="status-heading"><span>❤️ 체력</span><strong id="energyText">80</strong></div>
+        <div class="meter"><i id="energyBar"></i></div>
+      </article>
+      <article class="status-card health-card">
+        <div class="status-heading"><span>🩺 건강</span><strong id="healthText">100</strong></div>
+        <div class="meter"><i id="healthBar"></i></div>
+      </article>
+    </section>
+
+    <section id="roomCard" class="room-card" data-theme="default">
+      <div class="window-view" aria-hidden="true"><span>☁️</span><span>☀️</span></div>
+      <div class="room-prop bed" aria-hidden="true">🛏️</div>
+      <div class="room-prop plant" aria-hidden="true">🪴</div>
+      <div class="room-prop bath" aria-hidden="true">🛁</div>
+      <div id="speech" class="speech">오늘도 같이 놀자!</div>
+      <div id="sleepGlow" class="sleep-glow hidden">Z z z</div>
+      <div id="personalityBadge" class="personality-badge">장난꾸러기</div>
+      <div id="coinBadge" class="coin-badge">🪙 50</div>
+      <button id="petButton" class="pet-button" aria-label="오리 쓰다듬기">
+        <img id="petImage" src="./assets/stage-1.png" alt="1단계 알">
+      </button>
+      <div id="accessoryLayer" class="accessory-layer" aria-hidden="true"></div>
+      <div id="poopArea" class="poop-area" aria-label="배설물"></div>
+      <div class="floor-shadow" aria-hidden="true"></div>
+    </section>
+
+    <section class="care-tools" aria-label="추가 돌보기">
+      <button type="button" data-action="treat"><span>🍪</span><strong>간식</strong><small id="treatCount">오늘 0/5</small></button>
+      <button type="button" data-action="water"><span>💧</span><strong>물</strong><small>건강 +1</small></button>
+      <button type="button" data-action="medicine"><span>💊</span><strong>약</strong><small id="medicineCount">2개</small></button>
+      <button id="cleanAllBtn" type="button"><span>🧹</span><strong>청소</strong><small id="poopCount">깨끗함</small></button>
+    </section>
+
+    <section class="growth-card" aria-label="성장 진행">
+      <div class="growth-copy">
+        <span id="stageName">1단계 · 알</span>
+        <strong id="xpLabel">성장 0 / 15</strong>
+      </div>
+      <div class="xp-track"><i id="xpBar"></i></div>
+      <div id="stageDots" class="stage-dots"></div>
+      <button id="growBtn" class="grow-btn hidden" type="button">✨ 성장 준비 완료!</button>
+    </section>
+
+    <nav class="action-dock" aria-label="돌보기">
+      <button class="action-btn food" data-action="feed"><span>🥣</span><strong>밥</strong><small>배고픔 -18</small></button>
+      <button class="action-btn play" data-action="play"><span>⚽</span><strong>놀이</strong><small>기분 +14</small></button>
+      <button class="action-btn wash" data-action="wash"><span>🫧</span><strong>씻기기</strong><small>청결 +45</small></button>
+      <button class="action-btn sleep" data-action="sleep"><span>🌙</span><strong id="sleepLabel">잠자기</strong><small>체력 회복</small></button>
+    </nav>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="settingsDialog" class="modal">
+    <form method="dialog">
+      <div class="modal-head"><h2>설정</h2><button class="close-btn" value="cancel" aria-label="닫기">✕</button></div>
+      <label class="setting-row"><span><strong>효과음</strong><small>오리 반응 소리</small></span><input id="soundToggle" type="checkbox"></label>
+      <label class="setting-row"><span><strong>움직임 줄이기</strong><small>큰 애니메이션 감소</small></span><input id="motionToggle" type="checkbox"></label>
+      <button id="adminEntryBtn" class="wide-btn admin-entry" type="button">🛠️ 관리자 모드 바로 열기</button>
+      <button id="resetBtn" class="text-danger" type="button">게임 데이터 초기화</button>
+    </form>
+  </dialog>
+
+  <dialog id="adminDialog" class="modal admin-modal">
+    <form method="dialog">
+      <div class="modal-head"><div><h2>관리자 테스트</h2><p>테스트 저장칸에만 적용돼요.</p></div><button class="close-btn" value="cancel" aria-label="닫기">✕</button></div>
+      <section class="admin-section">
+        <h3>시간 배속</h3>
+        <div id="speedButtons" class="segmented">
+          <button type="button" data-speed="1">1×</button><button type="button" data-speed="12">12×</button><button type="button" data-speed="60">60×</button><button type="button" data-speed="360">360×</button>
+        </div>
+        <p id="speedNote">실제 1분 = 게임 1분</p>
+      </section>
+      <section class="admin-section">
+        <h3>빠른 시간 이동</h3>
+        <div class="quick-grid">
+          <button type="button" data-advance="5">+5분</button><button type="button" data-advance="60">+1시간</button><button type="button" data-advance="480">+8시간</button><button type="button" data-advance="1440">+1일</button>
+        </div>
+      </section>
+      <section class="admin-section">
+        <h3>성장 단계</h3>
+        <select id="stageSelect" aria-label="성장 단계 선택">
+          <option value="1">1단계 알</option><option value="2">2단계 아기오리</option><option value="3">3단계 꼬마오리</option><option value="4">4단계 멋쟁이오리</option><option value="5">5단계 하얀오리</option>
+        </select>
+      </section>
+      <section class="admin-section">
+        <h3>상태값 조절</h3>
+        <div id="adminSliders" class="admin-sliders">
+          <label>배고픔 <output data-out="hunger">20</output><input type="range" min="0" max="100" data-stat="hunger"></label>
+          <label>기분 <output data-out="mood">80</output><input type="range" min="0" max="100" data-stat="mood"></label>
+          <label>청결 <output data-out="cleanliness">90</output><input type="range" min="0" max="100" data-stat="cleanliness"></label>
+          <label>체력 <output data-out="energy">80</output><input type="range" min="0" max="100" data-stat="energy"></label>
+          <label>건강 <output data-out="health">100</output><input type="range" min="10" max="100" data-stat="health"></label>
+        </div>
+        <label class="setting-row compact"><span><strong>아픈 상태</strong></span><input id="sickToggle" type="checkbox"></label>
+      </section>
+      <section class="admin-section">
+        <h3>이벤트 로그 <button id="clearLogBtn" class="mini-btn" type="button">비우기</button></h3>
+        <pre id="eventLog" class="event-log">기록 없음</pre>
+      </section>
+      <section class="admin-section">
+        <h3>자동 점검</h3>
+        <button id="selfTestBtn" class="wide-btn test-run" type="button">핵심 로직 테스트 실행</button>
+        <pre id="selfTestResult" class="event-log">아직 실행하지 않음</pre>
+      </section>
+      <button id="exitAdminBtn" class="wide-btn secondary" type="button">관리자 테스트 종료</button>
+      <button id="resetTestBtn" class="text-btn" type="button">테스트 저장칸 초기화</button>
+    </form>
+  </dialog>
+
+  <dialog id="dailyDialog" class="modal">
+    <form method="dialog">
+      <div class="modal-head"><div><h2>오늘의 돌봄</h2><p id="streakText">연속 1일째</p></div><button class="close-btn" value="cancel" aria-label="닫기">✕</button></div>
+      <div class="daily-reward"><span>오늘의 선물</span><strong id="dailyRewardText">🪙 10 받기</strong><button id="claimDailyBtn" type="button">받기</button></div>
+      <div id="questList" class="quest-list"></div>
+    </form>
+  </dialog>
+
+  <dialog id="shopDialog" class="modal shop-modal">
+    <form method="dialog">
+      <div class="modal-head"><div><h2>오리 상점</h2><p id="shopCoins">🪙 50</p></div><button class="close-btn" value="cancel" aria-label="닫기">✕</button></div>
+      <div class="shop-tabs"><button class="active" type="button" data-shop-tab="shop">상점</button><button type="button" data-shop-tab="owned">보관함</button></div>
+      <div id="shopGrid" class="shop-grid"></div>
+    </form>
+  </dialog>
+
+  <dialog id="returnDialog" class="modal">
+    <form method="dialog">
+      <div class="return-duck">🦆</div>
+      <h2>기다렸어!</h2>
+      <p id="returnSummary"></p>
+      <button class="wide-btn" value="ok">오리 만나기</button>
+    </form>
+  </dialog>
+
+  <script src="./game.js?v=5"></script>
+</body>
+</html>
