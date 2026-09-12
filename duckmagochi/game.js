@@ -543,7 +543,8 @@
     meter(els.cleanBar, els.cleanText, s.cleanliness, false);
     meter(els.energyBar, els.energyText, s.energy, false);
     meter(els.healthBar, els.healthText, s.health, false);
-    els.petImage.src = "./assets/stage-" + state.stage + ".png?v=5";
+    var sleepSuffix = state.isSleeping && state.stage > 1 ? "-sleep" : "";
+    els.petImage.src = "./assets/stage-" + state.stage + sleepSuffix + ".png?v=6";
     els.petImage.alt = state.stage + "단계 " + STAGES[state.stage - 1].name;
     els.stageName.textContent = state.stage + "단계 · " + STAGES[state.stage - 1].name;
     var next = state.stage < 5 ? STAGES[state.stage] : STAGES[4];
