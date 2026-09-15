@@ -10,7 +10,7 @@ import {
   keyOf,
   specialKindForGroup,
   swapCells,
-} from './game-core.js?v=4';
+} from './game-core.js?v=5';
 
 const ROUND_SECONDS = 75;
 const LEGEND_TARGET = 60;
@@ -87,7 +87,7 @@ function updateHud() {
 }
 
 function specialLabel(special) {
-  return { row: '가로 줄 특수', col: '세로 줄 특수', bomb: '폭발 특수', sun: '태양 특수' }[special] || '';
+  return { row: '가로 로켓', col: '세로 로켓', propeller: '프로펠러', bomb: 'TNT 폭탄', sun: '태양 특수' }[special] || '';
 }
 
 function renderBoard(dropRows = new Map()) {
@@ -115,7 +115,7 @@ function renderBoard(dropRows = new Map()) {
       if (tile.special) {
         const badge = document.createElement('span');
         badge.className = 'special-badge';
-        badge.textContent = { row: '↔', col: '↕', bomb: '✦', sun: '☀' }[tile.special];
+        badge.textContent = { row: '↔', col: '↕', propeller: '✣', bomb: '💥', sun: '☀' }[tile.special];
         button.append(badge);
       }
       const rows = dropRows.get(tile.id) || 0;
@@ -140,6 +140,27 @@ function markCells(keys, className) {
     const [row, col] = key.split(',');
     boardElement.querySelector(`[data-row="${row}"][data-col="${col}"]`)?.classList.add(className);
   }
+}
+
+function playSpecialEffects(keys) {
+  const boardRect = boardElement.getBoundingClientRect();
+  let played = false;
+  for (const key of keys) {
+    const [row, col] = key.split(',').map(Number);
+    const special = board[row]?.[col]?.special;
+    if (!special) continue;
+    const cell = cellElement({ row, col });
+    if (!cell) continue;
+    const rect = cell.getBoundingClientRect();
+    const effect = document.createElement('span');
+    effect.className = `power-effect effect-${special}`;
+    effect.style.left = `${rect.left - boardRect.left + rect.width / 2}px`;
+    effect.style.top = `${rect.top - boardRect.top + rect.height / 2}px`;
+    effect.setAttribute('aria-hidden', 'true');
+    boardElement.append(effect);
+    played = true;
+  }
+  return played ? 390 : 0;
 }
 
 function showBurst(amount) {
@@ -199,13 +220,14 @@ async function resolveMatches(initialGroups, preferredCells = []) {
     const spawnKeys = new Set(creations.map(({ cell }) => keyOf(cell.row, cell.col)));
     const matched = expandSpecialCells(board, unionCells(groups));
     for (const spawnKey of spawnKeys) matched.delete(spawnKey);
+    const effectTime = playSpecialEffects(matched);
     markCells(matched, 'matched');
     const earned = calculateScore(matched.size + creations.length, chain, isLegendActive());
     score += earned;
     gauge = Math.min(LEGEND_TARGET, gauge + matched.size + creations.length + (chain - 1) * 3);
     showBurst(earned);
     updateHud();
-    await wait(190);
+    await wait(Math.max(190, effectTime));
     for (const key of matched) {
       const [row, col] = key.split(',').map(Number);
       board[row][col] = null;
@@ -238,13 +260,14 @@ async function activateSpecials(cells) {
   const affected = expandSpecialCells(board, initial);
   comboElement.textContent = cells.length > 1 ? 'SPECIAL COMBO!' : 'SPECIAL!';
   comboElement.classList.add('visible');
+  const effectTime = playSpecialEffects(affected);
   markCells(affected, 'matched');
   const earned = calculateScore(affected.size, cells.length > 1 ? 2 : 1, isLegendActive());
   score += earned;
   gauge = Math.min(LEGEND_TARGET, gauge + affected.size);
   showBurst(earned);
   updateHud();
-  await wait(210);
+  await wait(Math.max(210, effectTime));
   for (const key of affected) {
     const [row, col] = key.split(',').map(Number);
     board[row][col] = null;

@@ -71,14 +71,14 @@ test('직선 4개와 5개를 특수 생성 가능한 그룹으로 구분한다',
   assert.equal(specialKindForGroup(fiveGroup), 'sun');
 });
 
-test('정사각형은 3×3 폭발 특수로 결정한다', () => {
+test('정사각형은 프로펠러 특수로 결정한다', () => {
   const group = {
     shape: 'square',
     orientation: 'square',
     type: 1,
     cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }],
   };
-  assert.equal(specialKindForGroup(group), 'bomb');
+  assert.equal(specialKindForGroup(group), 'propeller');
 });
 
 test('T·L·십자 모양은 줄 특수 두 개가 아니라 폭발 특수 하나로 합친다', () => {
@@ -125,11 +125,29 @@ test('특수오리를 단독 발동하면 정해진 범위를 즉시 반환한�
     Array.from({ length: 5 }, (_, col) => ({ id: ++id, type: (row + col) % 5, special: null })),
   );
   board[2][2].special = 'row';
-  assert.equal(expandSpecialCells(board, new Set(['2,2'])).size, 5);
+  const horizontal = expandSpecialCells(board, new Set(['2,2']));
+  assert.equal(horizontal.size, 5);
+  assert(horizontal.has('2,0'));
+  assert(!horizontal.has('0,2'));
   board[2][2].special = 'col';
-  assert.equal(expandSpecialCells(board, new Set(['2,2'])).size, 5);
+  const vertical = expandSpecialCells(board, new Set(['2,2']));
+  assert.equal(vertical.size, 5);
+  assert(vertical.has('0,2'));
+  assert(!vertical.has('2,0'));
+  board[2][2].special = null;
   board[0][0].special = 'bomb';
-  assert.equal(expandSpecialCells(board, new Set(['0,0'])).size, 4);
+  assert.equal(expandSpecialCells(board, new Set(['0,0'])).size, 9);
+});
+
+test('프로펠러와 TNT의 제거 범위가 서로 다르다', () => {
+  let id = 0;
+  const board = Array.from({ length: 7 }, (_, row) =>
+    Array.from({ length: 7 }, (_, col) => ({ id: ++id, type: (row + col) % 5, special: null })),
+  );
+  board[3][3].special = 'propeller';
+  assert.equal(expandSpecialCells(board, new Set(['3,3'])).size, 10);
+  board[3][3].special = 'bomb';
+  assert.equal(expandSpecialCells(board, new Set(['3,3'])).size, 25);
 });
 
 test('특수끼리 닿으면 연쇄 범위까지 함께 발동한다', () => {

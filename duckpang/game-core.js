@@ -123,7 +123,8 @@ export function findMatches(board) {
 }
 
 export function specialKindForGroup(group) {
-  if (group.shape === 'square' || group.shape === 'junction' || group.shape === 'cluster') return 'bomb';
+  if (group.shape === 'square') return 'propeller';
+  if (group.shape === 'junction' || group.shape === 'cluster') return 'bomb';
   if (group.cells.length >= 5) return 'sun';
   if (group.cells.length === 4) return group.orientation;
   return null;
@@ -151,9 +152,23 @@ export function expandSpecialCells(board, initialCells) {
     activated.add(tile.id);
     if (tile.special === 'row') for (let cursor = 0; cursor < size; cursor += 1) add(row, cursor);
     if (tile.special === 'col') for (let cursor = 0; cursor < size; cursor += 1) add(cursor, col);
-    if (tile.special === 'bomb') {
+    if (tile.special === 'propeller') {
       for (let r = row - 1; r <= row + 1; r += 1) {
         for (let c = col - 1; c <= col + 1; c += 1) add(r, c);
+      }
+      const start = tile.id % (size * size);
+      for (let offset = 0; offset < size * size; offset += 1) {
+        const target = (start + offset) % (size * size);
+        const targetKey = keyOf(Math.floor(target / size), target % size);
+        if (!expanded.has(targetKey)) {
+          add(Math.floor(target / size), target % size);
+          break;
+        }
+      }
+    }
+    if (tile.special === 'bomb') {
+      for (let r = row - 2; r <= row + 2; r += 1) {
+        for (let c = col - 2; c <= col + 2; c += 1) add(r, c);
       }
     }
     if (tile.special === 'sun') {
