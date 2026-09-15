@@ -17,7 +17,7 @@ import {
   swapCells,
   totalBestScore,
   unlockedStageCount,
-} from './game-core.js?v=8';
+} from './game-core.js?v=9';
 
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
@@ -236,8 +236,8 @@ function renderBoard(dropRows = new Map()) {
       }
       const rows = dropRows.get(tile.id) || 0;
       if (rows > 0) {
-        const duration = Math.min(930, 495 + rows * 63);
-        const delay = Math.min(54, row * 8);
+        const duration = Math.min(620, 330 + rows * 42);
+        const delay = Math.min(36, row * 5);
         button.style.setProperty('--drop-distance', `${Math.round(rows * cellStep)}px`);
         button.style.setProperty('--drop-duration', `${duration}ms`);
         button.style.setProperty('--drop-delay', `${delay}ms`);
@@ -288,7 +288,7 @@ function playSpecialEffects(keys) {
     boardElement.append(effect);
     played = true;
   }
-  return played ? 690 : 0;
+  return played ? 460 : 0;
 }
 
 function playComboEffect(combo, cell) {
@@ -315,8 +315,8 @@ function playComboEffect(combo, cell) {
   effect.setAttribute('aria-hidden', 'true');
   boardElement.append(effect);
   boardElement.classList.add('combo-flash');
-  setTimeout(() => boardElement.classList.remove('combo-flash'), 900);
-  return 900;
+  setTimeout(() => boardElement.classList.remove('combo-flash'), 600);
+  return 600;
 }
 
 function showBurst(amount) {
@@ -395,14 +395,14 @@ async function resolveMatches(initialGroups, preferredCells = [], move = null) {
     for (const spawnKey of spawnKeys) matched.delete(spawnKey);
     const obstacleHit = applyObstacleHits(matched);
     const effectTime = playSpecialEffects(matched);
-    if (effectTime) await wait(165);
+    if (effectTime) await wait(110);
     markCells(matched, 'matched');
     const earned = calculateScore(matched.size + creations.length, activeCombo, isLegendActive()) + obstacleHit.bonus;
     score += earned;
     gauge = Math.min(currentStage.legendTarget, gauge + matched.size + creations.length + (chain - 1) * 3 + obstacleHit.gaugeBonus);
     showBurst(earned);
     updateHud();
-    await wait(Math.max(315, effectTime - 165));
+    await wait(Math.max(210, effectTime - 110));
     for (const key of matched) {
       const [row, col] = key.split(',').map(Number);
       if (!obstacleHit.protectedKeys.has(key)) board[row][col] = null;
@@ -414,19 +414,19 @@ async function resolveMatches(initialGroups, preferredCells = [], move = null) {
     }
     const dropRows = collapseTiles();
     const dropTime = renderBoard(dropRows);
-    await wait(dropTime + 38);
+    await wait(dropTime + 25);
     groups = findMatchGroups(board);
     preferredCells = [];
     move = null;
   }
-  await wait(90);
+  await wait(60);
   comboElement.classList.remove('visible');
   if (!hasPossibleMove(board) && running) {
     comboElement.textContent = '자동 셔플!';
     comboElement.classList.add('visible');
     board = makePlayableBoard(false);
     const dropTime = renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
-    await wait(dropTime + 38);
+    await wait(dropTime + 25);
     comboElement.classList.remove('visible');
   }
 }
@@ -440,21 +440,21 @@ async function activateSpecials(cells) {
   comboElement.textContent = combo ? 'POWER COMBO!' : 'SPECIAL!';
   comboElement.classList.add('visible');
   const effectTime = combo ? playComboEffect(combo, cells[0]) : playSpecialEffects(affected);
-  if (effectTime) await wait(165);
+  if (effectTime) await wait(110);
   markCells(affected, 'matched');
   const earned = calculateScore(affected.size, comboCount + (cells.length > 1 ? 1 : 0), isLegendActive()) + obstacleHit.bonus;
   score += earned;
   gauge = Math.min(currentStage.legendTarget, gauge + affected.size + obstacleHit.gaugeBonus);
   showBurst(earned);
   updateHud();
-  await wait(Math.max(345, effectTime - 165));
+  await wait(Math.max(230, effectTime - 110));
   for (const key of affected) {
     const [row, col] = key.split(',').map(Number);
     if (!obstacleHit.protectedKeys.has(key)) board[row][col] = null;
   }
   const dropRows = collapseTiles();
   const dropTime = renderBoard(dropRows);
-  await wait(dropTime + 38);
+  await wait(dropTime + 25);
   const cascade = findMatchGroups(board);
   if (cascade.length) await resolveMatches(cascade);
   comboElement.classList.remove('visible');
@@ -472,11 +472,11 @@ async function animateSwap(a, b, valid) {
   second.classList.add('moving');
   first.style.transform = `translate(${dx}px, ${dy}px)`;
   second.style.transform = `translate(${-dx}px, ${-dy}px)`;
-  await wait(330);
+  await wait(220);
   if (!valid) {
     first.style.transform = '';
     second.style.transform = '';
-    await wait(315);
+    await wait(210);
   }
 }
 
@@ -488,7 +488,7 @@ async function tryMove(a, b) {
     await animateSwap(a, b, false);
     renderBoard();
     markCells(new Set([keyOf(a.row, a.col), keyOf(b.row, b.col)]), 'invalid');
-    await wait(180);
+    await wait(120);
     busy = false;
     return;
   }
@@ -637,7 +637,7 @@ legendButton.addEventListener('click', () => {
   legendUntil = Date.now() + LEGEND_DURATION;
   renderBoard();
   boardElement.classList.add('awakening');
-  setTimeout(() => boardElement.classList.remove('awakening'), 720);
+  setTimeout(() => boardElement.classList.remove('awakening'), 480);
   updateHud();
   legendHandle = setInterval(() => {
     if (!isLegendActive()) {
