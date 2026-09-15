@@ -1,20 +1,23 @@
 import {
   SIZE,
+  STAGE_CONFIGS,
   TYPE_COUNT,
   areAdjacent,
   calculateScore,
+  countPossibleMoves,
   createBoard,
   expandSpecialCells,
   findMatchGroups,
+  findObstacleHits,
   hasPossibleMove,
   keyOf,
   specialKindForGroup,
   specialKindForMove,
   swapCells,
-} from './game-core.js?v=6';
+  totalBestScore,
+  unlockedStageCount,
+} from './game-core.js?v=7';
 
-const ROUND_SECONDS = 75;
-const LEGEND_TARGET = 60;
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
 
@@ -31,11 +34,32 @@ const resultOverlay = document.querySelector('#result-overlay');
 const finalScoreElement = document.querySelector('#final-score');
 const newBestElement = document.querySelector('#new-best');
 const scoreBurst = document.querySelector('#score-burst');
+const stageSelect = document.querySelector('#stage-select');
+const stageList = document.querySelector('#stage-list');
+const totalBestElement = document.querySelector('#total-best');
+const stageLabelElement = document.querySelector('#stage-label');
+const startStageName = document.querySelector('#start-stage-name');
+const startStageInfo = document.querySelector('#start-stage-info');
+const resultDetail = document.querySelector('#result-detail');
 
 let nextTileId = 1;
+let currentStageIndex = Math.min(4, Math.max(0, Number(localStorage.getItem('duckpang-last-stage') || 1) - 1));
+let currentStage = STAGE_CONFIGS[currentStageIndex];
+let bests;
+try {
+  bests = JSON.parse(localStorage.getItem('duckpang-bests') || '[]');
+} catch {
+  bests = [];
+}
+if (!Array.isArray(bests)) bests = [];
+if (!bests[0]) bests[0] = Number(localStorage.getItem('duckpang-best') || 0);
+let waterCells = new Set();
 let board = makePlayableBoard();
 let score = 0;
-let best = Number(localStorage.getItem('duckpang-best') || 0);
+let best = Number(bests[currentStageIndex]) || 0;
+let comboCount = 0;
+let maxCombo = 0;
+let lastMatchAt = 0;
 let gauge = 0;
 let deadline = 0;
 let timerHandle = null;
@@ -46,16 +70,44 @@ let running = false;
 let legendUntil = 0;
 let legendHandle = null;
 
-function newTile(type, special = null) {
-  return { id: nextTileId++, type, special };
+function newTile(type, special = null, locked = false) {
+  return { id: nextTileId++, type, special, locked };
 }
 
-function makePlayableBoard() {
-  return createBoard().map((row) => row.map((type) => newTile(type)));
+function makePlayableBoard(initializeObstacles = true) {
+  const lockCount = initializeObstacles ? currentStage.locks : (board?.flat().filter((tile) => tile.locked).length || 0);
+  let fallback;
+  let fallbackWater = new Set(waterCells);
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const next = createBoard().map((row) => row.map((type) => newTile(type)));
+    const cells = Array.from({ length: SIZE * SIZE }, (_, index) => index).sort(() => Math.random() - .5);
+    const nextWater = initializeObstacles
+      ? new Set(cells.slice(0, currentStage.water).map((index) => keyOf(Math.floor(index / SIZE), index % SIZE)))
+      : new Set(waterCells);
+    const lockStart = initializeObstacles ? currentStage.water : 0;
+    for (const index of cells.slice(lockStart, lockStart + lockCount)) {
+      next[Math.floor(index / SIZE)][index % SIZE].locked = true;
+    }
+    fallback = next;
+    fallbackWater = nextWater;
+    if (countPossibleMoves(next) >= 3) {
+      waterCells = nextWater;
+      return next;
+    }
+  }
+  waterCells = fallbackWater;
+  return fallback;
 }
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function registerPlayerCombo() {
+  const now = Date.now();
+  comboCount = now - lastMatchAt <= currentStage.comboWindow ? comboCount + 1 : 1;
+  lastMatchAt = now;
+  maxCombo = Math.max(maxCombo, comboCount);
 }
 
 function isLegendActive() {
@@ -64,6 +116,59 @@ function isLegendActive() {
 
 function duckImage(type) {
   return `./assets/duck-${type + (isLegendActive() ? 6 : 1)}.png`;
+}
+
+function stageFeature(stage) {
+  if (stage.id === 1) return '기본 규칙 · 75초';
+  if (stage.id === 2) return '물방울 4칸 · 60초';
+  if (stage.id === 3) return '잠금 오리 6마리 · 60초';
+  if (stage.id === 4) return '물방울 4 + 잠금 6';
+  return '장애물 12 · 게이지 80';
+}
+
+function renderStageSelect() {
+  const unlocked = unlockedStageCount(bests);
+  totalBestElement.textContent = totalBestScore(bests).toLocaleString('ko-KR');
+  stageList.innerHTML = '';
+  STAGE_CONFIGS.forEach((stage, index) => {
+    const locked = index >= unlocked;
+    const button = document.createElement('button');
+    button.className = 'stage-card';
+    button.disabled = locked;
+    button.innerHTML = `
+      <span class="stage-icon">${locked ? '🔒' : stage.icon}</span>
+      <span class="stage-copy"><b>${stage.id}단계 · ${stage.name}</b><small>${locked ? `이전 단계 ${stage.unlockScore.toLocaleString('ko-KR')}점 필요` : stageFeature(stage)}</small></span>
+      <span class="stage-record"><small>최고</small><b>${(Number(bests[index]) || 0).toLocaleString('ko-KR')}</b></span>`;
+    if (!locked) button.addEventListener('click', () => selectStage(index));
+    stageList.append(button);
+  });
+}
+
+function selectStage(index) {
+  currentStageIndex = index;
+  currentStage = STAGE_CONFIGS[index];
+  best = Number(bests[index]) || 0;
+  localStorage.setItem('duckpang-last-stage', String(currentStage.id));
+  document.body.dataset.stage = String(currentStage.id);
+  stageLabelElement.textContent = `${currentStage.id}단계 · ${currentStage.name}`;
+  startStageName.textContent = currentStage.name;
+  startStageInfo.textContent = `${currentStage.seconds}초 · ${stageFeature(currentStage)}`;
+  stageSelect.hidden = true;
+  startOverlay.hidden = false;
+  resultOverlay.hidden = true;
+  board = makePlayableBoard();
+  renderBoard();
+  updateHud();
+}
+
+function showHome() {
+  running = false;
+  clearInterval(timerHandle);
+  clearInterval(legendHandle);
+  startOverlay.hidden = true;
+  resultOverlay.hidden = true;
+  renderStageSelect();
+  stageSelect.hidden = false;
 }
 
 function cellAt(target) {
@@ -79,11 +184,11 @@ function cellElement(cell) {
 function updateHud() {
   scoreElement.textContent = score.toLocaleString('ko-KR');
   bestElement.textContent = best.toLocaleString('ko-KR');
-  const gaugePercent = Math.min(100, (gauge / LEGEND_TARGET) * 100);
+  const gaugePercent = Math.min(100, (gauge / currentStage.legendTarget) * 100);
   gaugeFill.style.width = `${gaugePercent}%`;
-  gaugeText.textContent = isLegendActive() ? `각성 ${Math.max(0, (legendUntil - Date.now()) / 1000).toFixed(1)}초` : `${gauge} / ${LEGEND_TARGET}`;
-  legendButton.disabled = gauge < LEGEND_TARGET || isLegendActive() || !running;
-  legendButton.classList.toggle('ready', gauge >= LEGEND_TARGET && !isLegendActive() && running);
+  gaugeText.textContent = isLegendActive() ? `각성 ${Math.max(0, (legendUntil - Date.now()) / 1000).toFixed(1)}초` : `${gauge} / ${currentStage.legendTarget}`;
+  legendButton.disabled = gauge < currentStage.legendTarget || isLegendActive() || !running;
+  legendButton.classList.toggle('ready', gauge >= currentStage.legendTarget && !isLegendActive() && running);
   document.body.classList.toggle('legend-active', isLegendActive());
 }
 
@@ -104,9 +209,12 @@ function renderBoard(dropRows = new Map()) {
       button.dataset.row = row;
       button.dataset.col = col;
       button.dataset.tileId = tile.id;
+      const water = waterCells.has(keyOf(row, col));
+      if (water) button.classList.add('has-water');
+      if (tile.locked) button.classList.add('locked');
       if (tile.special) button.classList.add(`special-${tile.special}`);
       const extraLabel = tile.special ? ` ${specialLabel(tile.special)}` : '';
-      button.setAttribute('aria-label', `${row + 1}행 ${col + 1}열 ${DUCK_NAMES[tile.type]}${extraLabel}`);
+      button.setAttribute('aria-label', `${row + 1}행 ${col + 1}열 ${DUCK_NAMES[tile.type]}${extraLabel}${water ? ' 물방울' : ''}${tile.locked ? ' 잠금' : ''}`);
       if (selected?.row === row && selected?.col === col) button.classList.add('selected');
       const image = document.createElement('img');
       image.src = duckImage(tile.type);
@@ -119,10 +227,16 @@ function renderBoard(dropRows = new Map()) {
         badge.textContent = { row: '↔', col: '↕', propeller: '✣', bomb: '💥', sun: '☀' }[tile.special];
         button.append(badge);
       }
+      if (water || tile.locked) {
+        const obstacle = document.createElement('span');
+        obstacle.className = `obstacle-badge${water ? ' water' : ''}${tile.locked ? ' lock' : ''}`;
+        obstacle.textContent = `${water ? '💧' : ''}${tile.locked ? '🔒' : ''}`;
+        button.append(obstacle);
+      }
       const rows = dropRows.get(tile.id) || 0;
       if (rows > 0) {
-        const duration = Math.min(620, 330 + rows * 42);
-        const delay = Math.min(36, row * 5);
+        const duration = Math.min(930, 495 + rows * 63);
+        const delay = Math.min(54, row * 8);
         button.style.setProperty('--drop-distance', `${Math.round(rows * cellStep)}px`);
         button.style.setProperty('--drop-duration', `${duration}ms`);
         button.style.setProperty('--drop-delay', `${delay}ms`);
@@ -173,7 +287,7 @@ function playSpecialEffects(keys) {
     boardElement.append(effect);
     played = true;
   }
-  return played ? 460 : 0;
+  return played ? 690 : 0;
 }
 
 function showBurst(amount) {
@@ -189,12 +303,23 @@ function unionCells(groups) {
   return cells;
 }
 
+function applyObstacleHits(keys) {
+  const hits = findObstacleHits(board, waterCells, keys);
+  for (const key of hits.locked) {
+    const [row, col] = key.split(',').map(Number);
+    board[row][col].locked = false;
+  }
+  for (const key of hits.water) waterCells.delete(key);
+  const removed = hits.locked.size + hits.water.size;
+  return { protectedKeys: hits.locked, bonus: removed * 150, gaugeBonus: removed * 2 };
+}
+
 function chooseSpecial(group, preferredCells = [], move = null) {
   let special = specialKindForGroup(group);
   if (!special) return null;
   const inGroup = (candidate) => group.cells.some((cell) => cell.row === candidate.row && cell.col === candidate.col);
-  let cell = preferredCells.find((candidate) => inGroup(candidate) && !board[candidate.row][candidate.col].special);
-  if (!cell) cell = group.cells.find((candidate) => !board[candidate.row][candidate.col].special);
+  let cell = preferredCells.find((candidate) => inGroup(candidate) && !board[candidate.row][candidate.col].special && !board[candidate.row][candidate.col].locked);
+  if (!cell) cell = group.cells.find((candidate) => !board[candidate.row][candidate.col].special && !board[candidate.row][candidate.col].locked);
   if (!cell) cell = group.cells[Math.floor(group.cells.length / 2)];
   if (move && cell.row === move.to.row && cell.col === move.to.col) {
     special = specialKindForMove(group, move.from, move.to);
@@ -228,26 +353,30 @@ function collapseTiles() {
 async function resolveMatches(initialGroups, preferredCells = [], move = null) {
   let groups = initialGroups;
   let chain = 0;
+  if (move) registerPlayerCombo();
   while (groups.length && running) {
     chain += 1;
-    comboElement.textContent = chain > 1 ? `${chain} CHAIN!` : 'GOOD!';
+    const activeCombo = comboCount + chain - 1;
+    maxCombo = Math.max(maxCombo, activeCombo);
+    comboElement.textContent = activeCombo > 1 ? `${activeCombo} COMBO!` : 'GOOD!';
     comboElement.classList.add('visible');
     const creations = groups.map((group) => chooseSpecial(group, preferredCells, move)).filter(Boolean);
     const spawnKeys = new Set(creations.map(({ cell }) => keyOf(cell.row, cell.col)));
     const matched = expandSpecialCells(board, unionCells(groups));
     for (const spawnKey of spawnKeys) matched.delete(spawnKey);
+    const obstacleHit = applyObstacleHits(matched);
     const effectTime = playSpecialEffects(matched);
-    if (effectTime) await wait(110);
+    if (effectTime) await wait(165);
     markCells(matched, 'matched');
-    const earned = calculateScore(matched.size + creations.length, chain, isLegendActive());
+    const earned = calculateScore(matched.size + creations.length, activeCombo, isLegendActive()) + obstacleHit.bonus;
     score += earned;
-    gauge = Math.min(LEGEND_TARGET, gauge + matched.size + creations.length + (chain - 1) * 3);
+    gauge = Math.min(currentStage.legendTarget, gauge + matched.size + creations.length + (chain - 1) * 3 + obstacleHit.gaugeBonus);
     showBurst(earned);
     updateHud();
-    await wait(Math.max(210, effectTime - 110));
+    await wait(Math.max(315, effectTime - 165));
     for (const key of matched) {
       const [row, col] = key.split(',').map(Number);
-      board[row][col] = null;
+      if (!obstacleHit.protectedKeys.has(key)) board[row][col] = null;
     }
     for (const creation of creations) {
       const { row, col } = creation.cell;
@@ -256,44 +385,46 @@ async function resolveMatches(initialGroups, preferredCells = [], move = null) {
     }
     const dropRows = collapseTiles();
     const dropTime = renderBoard(dropRows);
-    await wait(dropTime + 25);
+    await wait(dropTime + 38);
     groups = findMatchGroups(board);
     preferredCells = [];
     move = null;
   }
-  await wait(60);
+  await wait(90);
   comboElement.classList.remove('visible');
   if (!hasPossibleMove(board) && running) {
     comboElement.textContent = '자동 셔플!';
     comboElement.classList.add('visible');
-    board = makePlayableBoard();
+    board = makePlayableBoard(false);
     const dropTime = renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
-    await wait(dropTime + 25);
+    await wait(dropTime + 38);
     comboElement.classList.remove('visible');
   }
 }
 
 async function activateSpecials(cells) {
+  registerPlayerCombo();
   const initial = new Set(cells.map((cell) => keyOf(cell.row, cell.col)));
   const affected = expandSpecialCells(board, initial);
+  const obstacleHit = applyObstacleHits(affected);
   comboElement.textContent = cells.length > 1 ? 'SPECIAL COMBO!' : 'SPECIAL!';
   comboElement.classList.add('visible');
   const effectTime = playSpecialEffects(affected);
-  if (effectTime) await wait(110);
+  if (effectTime) await wait(165);
   markCells(affected, 'matched');
-  const earned = calculateScore(affected.size, cells.length > 1 ? 2 : 1, isLegendActive());
+  const earned = calculateScore(affected.size, comboCount + (cells.length > 1 ? 1 : 0), isLegendActive()) + obstacleHit.bonus;
   score += earned;
-  gauge = Math.min(LEGEND_TARGET, gauge + affected.size);
+  gauge = Math.min(currentStage.legendTarget, gauge + affected.size + obstacleHit.gaugeBonus);
   showBurst(earned);
   updateHud();
-  await wait(Math.max(230, effectTime - 110));
+  await wait(Math.max(345, effectTime - 165));
   for (const key of affected) {
     const [row, col] = key.split(',').map(Number);
-    board[row][col] = null;
+    if (!obstacleHit.protectedKeys.has(key)) board[row][col] = null;
   }
   const dropRows = collapseTiles();
   const dropTime = renderBoard(dropRows);
-  await wait(dropTime + 25);
+  await wait(dropTime + 38);
   const cascade = findMatchGroups(board);
   if (cascade.length) await resolveMatches(cascade);
   comboElement.classList.remove('visible');
@@ -311,11 +442,11 @@ async function animateSwap(a, b, valid) {
   second.classList.add('moving');
   first.style.transform = `translate(${dx}px, ${dy}px)`;
   second.style.transform = `translate(${-dx}px, ${-dy}px)`;
-  await wait(220);
+  await wait(330);
   if (!valid) {
     first.style.transform = '';
     second.style.transform = '';
-    await wait(210);
+    await wait(315);
   }
 }
 
@@ -323,6 +454,14 @@ async function tryMove(a, b) {
   if (!running || busy || !areAdjacent(a, b)) return;
   busy = true;
   selected = null;
+  if (board[a.row][a.col].locked || board[b.row][b.col].locked) {
+    await animateSwap(a, b, false);
+    renderBoard();
+    markCells(new Set([keyOf(a.row, a.col), keyOf(b.row, b.col)]), 'invalid');
+    await wait(180);
+    busy = false;
+    return;
+  }
   const firstSpecial = board[a.row][a.col].special;
   const secondSpecial = board[b.row][b.col].special;
   swapCells(board, a, b);
@@ -421,13 +560,16 @@ function startGame() {
   clearInterval(legendHandle);
   board = makePlayableBoard();
   score = 0;
+  comboCount = 0;
+  maxCombo = 0;
+  lastMatchAt = 0;
   gauge = 0;
   legendUntil = 0;
   selected = null;
   busy = false;
   running = true;
-  deadline = Date.now() + ROUND_SECONDS * 1000;
-  timeElement.textContent = ROUND_SECONDS;
+  deadline = Date.now() + currentStage.seconds * 1000;
+  timeElement.textContent = currentStage.seconds;
   startOverlay.hidden = true;
   resultOverlay.hidden = true;
   renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
@@ -441,24 +583,31 @@ function endGame() {
   clearInterval(timerHandle);
   clearInterval(legendHandle);
   const previousBest = best;
+  const unlockedBefore = unlockedStageCount(bests);
   if (score > best) {
     best = score;
-    localStorage.setItem('duckpang-best', String(best));
+    bests[currentStageIndex] = best;
+    localStorage.setItem('duckpang-bests', JSON.stringify(bests));
+    if (currentStageIndex === 0) localStorage.setItem('duckpang-best', String(best));
   }
+  const unlockedAfter = unlockedStageCount(bests);
   finalScoreElement.textContent = score.toLocaleString('ko-KR');
   newBestElement.hidden = score <= previousBest;
+  resultDetail.textContent = unlockedAfter > unlockedBefore
+    ? `🎉 ${STAGE_CONFIGS[unlockedAfter - 1].name} 해금!`
+    : `${currentStage.name} 최고 ${best.toLocaleString('ko-KR')}점 · 최고 ${maxCombo}콤보`;
   resultOverlay.hidden = false;
   selected = null;
   updateHud();
 }
 
 legendButton.addEventListener('click', () => {
-  if (!running || gauge < LEGEND_TARGET || isLegendActive()) return;
+  if (!running || gauge < currentStage.legendTarget || isLegendActive()) return;
   gauge = 0;
   legendUntil = Date.now() + LEGEND_DURATION;
   renderBoard();
   boardElement.classList.add('awakening');
-  setTimeout(() => boardElement.classList.remove('awakening'), 480);
+  setTimeout(() => boardElement.classList.remove('awakening'), 720);
   updateHud();
   legendHandle = setInterval(() => {
     if (!isLegendActive()) {
@@ -471,8 +620,12 @@ legendButton.addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-action="start"]').forEach((button) => button.addEventListener('click', startGame));
+document.querySelectorAll('[data-action="home"]').forEach((button) => button.addEventListener('click', showHome));
+document.querySelector('#home-button').addEventListener('click', showHome);
 document.querySelector('#how-button').addEventListener('click', () => document.querySelector('#how-panel').classList.toggle('open'));
 
 bestElement.textContent = best.toLocaleString('ko-KR');
 renderBoard();
 updateHud();
+startOverlay.hidden = true;
+renderStageSelect();

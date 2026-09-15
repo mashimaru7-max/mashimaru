@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  STAGE_CONFIGS,
   areAdjacent,
   calculateScore,
   clearMatches,
@@ -9,10 +10,13 @@ import {
   expandSpecialCells,
   findMatchGroups,
   findMatches,
+  findObstacleHits,
   hasPossibleMove,
   moveCreatesMatch,
   specialKindForGroup,
   specialKindForMove,
+  totalBestScore,
+  unlockedStageCount,
 } from '../game-core.js';
 
 test('가로·세로·교차 매치를 중복 없이 찾는다', () => {
@@ -215,4 +219,38 @@ test('연쇄와 각성 배율이 점수에 반영된다', () => {
   assert.equal(calculateScore(3, 1, false), 300);
   assert.equal(calculateScore(4, 2, false), 500);
   assert.equal(calculateScore(4, 2, true), 1000);
+});
+
+test('5개 난이도 설정과 단계별 시간·장애물·게이지가 정확하다', () => {
+  assert.equal(STAGE_CONFIGS.length, 5);
+  assert.deepEqual(STAGE_CONFIGS.map((stage) => stage.seconds), [75, 60, 60, 60, 60]);
+  assert.deepEqual(STAGE_CONFIGS.map((stage) => stage.water + stage.locks), [0, 4, 6, 10, 12]);
+  assert.deepEqual(STAGE_CONFIGS.map((stage) => stage.legendTarget), [60, 60, 65, 70, 80]);
+  assert.deepEqual(STAGE_CONFIGS.map((stage) => stage.comboWindow), [1800, 1800, 1800, 1600, 1400]);
+});
+
+test('해금은 직전 단계 최고 점수로만 결정하고 종합 점수는 단계별 최고를 합산한다', () => {
+  assert.equal(unlockedStageCount([39999, 999999, 999999, 999999, 0]), 1);
+  assert.equal(unlockedStageCount([40000, 65000, 90000, 120000, 0]), 5);
+  assert.equal(totalBestScore([40000, 65000, 90000, 120000, 50000]), 365000);
+});
+
+test('잠긴 오리는 가능한 교환에서 제외한다', () => {
+  const tile = (type, locked = false) => ({ type, locked });
+  const board = [
+    [tile(0), tile(1, true), tile(0)],
+    [tile(2), tile(0), tile(2)],
+    [tile(3), tile(0), tile(4)],
+  ];
+  assert.equal(hasPossibleMove(board), false);
+});
+
+test('잠금은 직접 매치로, 물방울은 인접 매치로 제거 대상이 된다', () => {
+  const board = Array.from({ length: 3 }, (_, row) =>
+    Array.from({ length: 3 }, (_, col) => ({ type: (row + col) % 3, locked: row === 1 && col === 1 })),
+  );
+  const hits = findObstacleHits(board, new Set(['0,0', '2,2']), new Set(['1,1', '0,1']));
+  assert.deepEqual([...hits.locked], ['1,1']);
+  assert(hits.water.has('0,0'));
+  assert(!hits.water.has('2,2'));
 });

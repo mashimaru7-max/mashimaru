@@ -1,6 +1,47 @@
 export const SIZE = 7;
 export const TYPE_COUNT = 5;
 
+export const STAGE_CONFIGS = [
+  { id: 1, name: '오리마을', seconds: 75, water: 0, locks: 0, legendTarget: 60, comboWindow: 1800, unlockScore: 0, icon: '🏡' },
+  { id: 2, name: '구름초원', seconds: 60, water: 4, locks: 0, legendTarget: 60, comboWindow: 1800, unlockScore: 40000, icon: '☁️' },
+  { id: 3, name: '별빛호수', seconds: 60, water: 0, locks: 6, legendTarget: 65, comboWindow: 1800, unlockScore: 65000, icon: '🌙' },
+  { id: 4, name: '황금왕국', seconds: 60, water: 4, locks: 6, legendTarget: 70, comboWindow: 1600, unlockScore: 90000, icon: '👑' },
+  { id: 5, name: '태양신전', seconds: 60, water: 6, locks: 6, legendTarget: 80, comboWindow: 1400, unlockScore: 120000, icon: '☀️' },
+];
+
+export function unlockedStageCount(bests) {
+  let count = 1;
+  for (let index = 1; index < STAGE_CONFIGS.length; index += 1) {
+    if ((Number(bests[index - 1]) || 0) < STAGE_CONFIGS[index].unlockScore) break;
+    count += 1;
+  }
+  return count;
+}
+
+export function totalBestScore(bests) {
+  return STAGE_CONFIGS.reduce((total, _, index) => total + (Number(bests[index]) || 0), 0);
+}
+
+export function findObstacleHits(board, waterCells, affectedKeys) {
+  const locked = new Set();
+  const water = new Set();
+  for (const key of affectedKeys) {
+    const [row, col] = key.split(',').map(Number);
+    if (board[row]?.[col]?.locked) locked.add(key);
+  }
+  for (const waterKey of waterCells) {
+    const [waterRow, waterCol] = waterKey.split(',').map(Number);
+    for (const key of affectedKeys) {
+      const [row, col] = key.split(',').map(Number);
+      if (Math.abs(row - waterRow) + Math.abs(col - waterCol) <= 1) {
+        water.add(waterKey);
+        break;
+      }
+    }
+  }
+  return { locked, water };
+}
+
 export function keyOf(row, col) {
   return `${row},${col}`;
 }
@@ -196,15 +237,20 @@ export function moveCreatesMatch(board, a, b) {
   return valid;
 }
 
-export function hasPossibleMove(board) {
+export function countPossibleMoves(board) {
   const size = board.length;
+  let count = 0;
   for (let row = 0; row < size; row += 1) {
     for (let col = 0; col < size; col += 1) {
-      if (col + 1 < size && moveCreatesMatch(board, { row, col }, { row, col: col + 1 })) return true;
-      if (row + 1 < size && moveCreatesMatch(board, { row, col }, { row: row + 1, col })) return true;
+      if (col + 1 < size && !board[row][col]?.locked && !board[row][col + 1]?.locked && moveCreatesMatch(board, { row, col }, { row, col: col + 1 })) count += 1;
+      if (row + 1 < size && !board[row][col]?.locked && !board[row + 1][col]?.locked && moveCreatesMatch(board, { row, col }, { row: row + 1, col })) count += 1;
     }
   }
-  return false;
+  return count;
+}
+
+export function hasPossibleMove(board) {
+  return countPossibleMoves(board) > 0;
 }
 
 export function createBoard(size = SIZE, typeCount = TYPE_COUNT, rng = Math.random) {

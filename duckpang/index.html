@@ -6,17 +6,30 @@
     <meta name="theme-color" content="#65c8ff" />
     <meta name="description" content="오리팡 1단계 오리마을 점수 경쟁 퍼즐" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
     <title>오리팡: 전설 각성</title>
   </head>
   <body>
     <main class="game-shell">
+      <section id="stage-select" class="stage-select" aria-label="난이도 선택">
+        <div class="select-title">
+          <div><p>최고 기록의 합</p><strong id="total-best">0</strong></div>
+          <img src="./assets/duck-10.png" alt="전설 태양오리" />
+        </div>
+        <h2>난이도 선택</h2>
+        <p class="select-subtitle">5개 난이도에서 최고 점수에 도전해봐!</p>
+        <div id="stage-list" class="stage-list"></div>
+      </section>
+
       <header class="topbar">
         <div>
-          <p class="stage-label">1단계 · 오리마을</p>
+          <p id="stage-label" class="stage-label">1단계 · 오리마을</p>
           <h1>오리팡</h1>
         </div>
-        <button id="how-button" class="round-button" aria-label="게임 방법">?</button>
+        <div class="top-actions">
+          <button id="home-button" class="round-button" aria-label="난이도 선택">⌂</button>
+          <button id="how-button" class="round-button" aria-label="게임 방법">?</button>
+        </div>
       </header>
 
       <section id="how-panel" class="how-panel" aria-label="게임 방법">
@@ -41,8 +54,8 @@
 
         <div id="start-overlay" class="overlay start-overlay">
           <img src="./assets/duck-1.png" alt="아기오리" />
-          <h2>오리마을</h2>
-          <p>75초 동안 최고 점수에 도전!</p>
+          <h2 id="start-stage-name">오리마을</h2>
+          <p id="start-stage-info">75초 동안 최고 점수에 도전!</p>
           <button data-action="start" class="primary-button">게임 시작</button>
         </div>
 
@@ -50,7 +63,9 @@
           <p class="result-caption">이번 점수</p>
           <strong id="final-score" class="final-score">0</strong>
           <p id="new-best" class="new-best">🎉 최고 기록 갱신!</p>
+          <p id="result-detail" class="result-detail"></p>
           <button data-action="start" class="primary-button">다시 하기</button>
+          <button data-action="home" class="secondary-button">난이도 선택</button>
         </div>
       </section>
 
@@ -60,6 +75,6 @@
       </button>
       <p class="tip">오리를 탭하거나 원하는 방향으로 밀어 움직여봐!</p>
     </main>
-    <script type="module" src="./game.js?v=6"></script>
+    <script type="module" src="./game.js?v=7"></script>
   </body>
 </html>
