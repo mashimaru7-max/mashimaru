@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <meta name="theme-color" content="#65c8ff" />
+    <meta name="description" content="오리팡 1단계 오리마을 점수 경쟁 퍼즐" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>오리팡: 전설 각성</title>
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="topbar">
+        <div>
+          <p class="stage-label">1단계 · 오리마을</p>
+          <h1>오리팡</h1>
+        </div>
+        <button id="how-button" class="round-button" aria-label="게임 방법">?</button>
+      </header>
+
+      <section id="how-panel" class="how-panel" aria-label="게임 방법">
+        옆 오리와 바꿔 3마리 이상 맞춰봐! 게이지가 차면 전설 각성 버튼을 눌러 점수 2배!
+      </section>
+
+      <section class="scorebar" aria-label="게임 정보">
+        <div class="score-card"><span>점수</span><strong id="score">0</strong></div>
+        <div class="timer" aria-label="남은 시간"><strong id="time">75</strong><span>초</span></div>
+        <div class="score-card right"><span>최고</span><strong id="best">0</strong></div>
+      </section>
+
+      <section class="legend-meter" aria-label="전설 게이지">
+        <div class="meter-title"><span>⚡ 전설 게이지</span><strong id="gauge-text">0 / 60</strong></div>
+        <div class="meter-track"><div id="gauge-fill" class="meter-fill"></div></div>
+      </section>
+
+      <section class="board-wrap">
+        <div id="score-burst" class="score-burst" aria-live="polite"></div>
+        <div id="board" class="board" aria-label="7 곱하기 7 오리 퍼즐판"></div>
+        <div id="combo" class="combo">GOOD!</div>
+
+        <div id="start-overlay" class="overlay start-overlay">
+          <img src="./assets/duck-1.png" alt="아기오리" />
+          <h2>오리마을</h2>
+          <p>75초 동안 최고 점수에 도전!</p>
+          <button data-action="start" class="primary-button">게임 시작</button>
+        </div>
+
+        <div id="result-overlay" class="overlay result-overlay" hidden>
+          <p class="result-caption">이번 점수</p>
+          <strong id="final-score" class="final-score">0</strong>
+          <p id="new-best" class="new-best">🎉 최고 기록 갱신!</p>
+          <button data-action="start" class="primary-button">다시 하기</button>
+        </div>
+      </section>
+
+      <button id="legend-button" class="legend-button" disabled>
+        <img src="./assets/duck-10.png" alt="전설 태양오리" />
+        <span><b>전설 각성</b><small>10초간 점수 2배</small></span>
+      </button>
+      <p class="tip">오리를 탭하거나 원하는 방향으로 밀어 움직여봐!</p>
+    </main>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

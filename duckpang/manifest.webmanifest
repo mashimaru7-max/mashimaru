@@ -1,0 +1,9 @@
+{
+  "name": "오리팡: 전설 각성",
+  "short_name": "오리팡",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#65c8ff",
+  "theme_color": "#65c8ff"
+}
