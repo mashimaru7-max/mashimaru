@@ -81,6 +81,34 @@ test('정사각형은 3×3 폭발 특수로 결정한다', () => {
   assert.equal(specialKindForGroup(group), 'bomb');
 });
 
+test('T·L·십자 모양은 줄 특수 두 개가 아니라 폭발 특수 하나로 합친다', () => {
+  const board = [
+    [0, 1, 2, 3, 4],
+    [1, 2, 3, 4, 0],
+    [2, 2, 2, 2, 3],
+    [3, 4, 2, 0, 1],
+    [4, 0, 2, 1, 3],
+  ];
+  const groups = findMatchGroups(board);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].shape, 'junction');
+  assert.equal(groups[0].cells.length, 6);
+  assert.equal(specialKindForGroup(groups[0]), 'bomb');
+});
+
+test('서로 겹치지 않은 같은 색 줄은 하나의 십자 모양으로 합치지 않는다', () => {
+  const board = [
+    [1, 1, 1, 2, 3],
+    [0, 2, 3, 4, 1],
+    [1, 3, 4, 0, 2],
+    [2, 4, 0, 1, 3],
+    [1, 1, 1, 3, 4],
+  ];
+  const groups = findMatchGroups(board);
+  assert.equal(groups.length, 2);
+  assert(groups.every((group) => group.shape === 'line'));
+});
+
 test('객체 타일에서도 type 기준으로 매치를 찾는다', () => {
   const tile = (id, type, special = null) => ({ id, type, special });
   const board = [

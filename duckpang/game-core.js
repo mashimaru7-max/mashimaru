@@ -24,7 +24,7 @@ export function tileType(tile) {
 }
 
 export function findMatchGroups(board) {
-  const groups = [];
+  const rawGroups = [];
   const size = board.length;
 
   for (let row = 0; row < size; row += 1) {
@@ -32,7 +32,7 @@ export function findMatchGroups(board) {
     for (let col = 1; col <= size; col += 1) {
       if (col < size && tileType(board[row][col]) !== null && tileType(board[row][col]) === tileType(board[row][start])) continue;
       if (tileType(board[row][start]) !== null && col - start >= 3) {
-        groups.push({
+        rawGroups.push({
           shape: 'line',
           orientation: 'row',
           type: tileType(board[row][start]),
@@ -48,7 +48,7 @@ export function findMatchGroups(board) {
     for (let row = 1; row <= size; row += 1) {
       if (row < size && tileType(board[row][col]) !== null && tileType(board[row][col]) === tileType(board[start][col])) continue;
       if (tileType(board[start]?.[col]) !== null && row - start >= 3) {
-        groups.push({
+        rawGroups.push({
           shape: 'line',
           orientation: 'col',
           type: tileType(board[start][col]),
@@ -68,7 +68,7 @@ export function findMatchGroups(board) {
         && tileType(board[row + 1][col]) === type
         && tileType(board[row + 1][col + 1]) === type
       ) {
-        groups.push({
+        rawGroups.push({
           shape: 'square',
           orientation: 'square',
           type,
@@ -81,7 +81,37 @@ export function findMatchGroups(board) {
     }
   }
 
-  return groups;
+  // 한 번의 모양을 방향별 그룹으로 쪼개 특수를 중복 생성하지 않는다.
+  const merged = [];
+  for (const raw of rawGroups) {
+    const rawKeys = new Set(raw.cells.map((cell) => keyOf(cell.row, cell.col)));
+    const touching = [];
+    for (let index = 0; index < merged.length; index += 1) {
+      const group = merged[index];
+      if (group.type === raw.type && group.cells.some((cell) => rawKeys.has(keyOf(cell.row, cell.col)))) touching.push(index);
+    }
+    if (!touching.length) {
+      merged.push({ ...raw, sources: [raw] });
+      continue;
+    }
+    const sources = [raw];
+    const cells = new Map(raw.cells.map((cell) => [keyOf(cell.row, cell.col), cell]));
+    for (const index of touching.reverse()) {
+      const group = merged.splice(index, 1)[0];
+      sources.push(...group.sources);
+      for (const cell of group.cells) cells.set(keyOf(cell.row, cell.col), cell);
+    }
+    const orientations = new Set(sources.filter((source) => source.shape === 'line').map((source) => source.orientation));
+    const hasSquare = sources.some((source) => source.shape === 'square');
+    merged.push({
+      shape: orientations.size > 1 ? 'junction' : hasSquare && sources.length > 1 ? 'cluster' : sources[0].shape,
+      orientation: orientations.size === 1 && !hasSquare ? [...orientations][0] : 'mixed',
+      type: raw.type,
+      cells: [...cells.values()],
+      sources,
+    });
+  }
+  return merged;
 }
 
 export function findMatches(board) {
@@ -93,7 +123,7 @@ export function findMatches(board) {
 }
 
 export function specialKindForGroup(group) {
-  if (group.shape === 'square') return 'bomb';
+  if (group.shape === 'square' || group.shape === 'junction' || group.shape === 'cluster') return 'bomb';
   if (group.cells.length >= 5) return 'sun';
   if (group.cells.length === 4) return group.orientation;
   return null;

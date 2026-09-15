@@ -10,7 +10,7 @@ import {
   keyOf,
   specialKindForGroup,
   swapCells,
-} from './game-core.js?v=3';
+} from './game-core.js?v=4';
 
 const ROUND_SECONDS = 75;
 const LEGEND_TARGET = 60;
@@ -120,8 +120,8 @@ function renderBoard(dropRows = new Map()) {
       }
       const rows = dropRows.get(tile.id) || 0;
       if (rows > 0) {
-        const duration = Math.min(420, 255 + rows * 23);
-        const delay = Math.min(55, row * 8);
+        const duration = Math.min(620, 330 + rows * 42);
+        const delay = Math.min(36, row * 5);
         button.style.setProperty('--drop-distance', `${Math.round(rows * cellStep)}px`);
         button.style.setProperty('--drop-duration', `${duration}ms`);
         button.style.setProperty('--drop-delay', `${delay}ms`);
