@@ -19,16 +19,25 @@ export function areAdjacent(a, b) {
   return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
 }
 
-export function findMatches(board) {
-  const matches = new Set();
+export function tileType(tile) {
+  return typeof tile === 'object' && tile !== null ? tile.type : tile;
+}
+
+export function findMatchGroups(board) {
+  const groups = [];
   const size = board.length;
 
   for (let row = 0; row < size; row += 1) {
     let start = 0;
     for (let col = 1; col <= size; col += 1) {
-      if (col < size && board[row][col] !== null && board[row][col] === board[row][start]) continue;
-      if (board[row][start] !== null && col - start >= 3) {
-        for (let cursor = start; cursor < col; cursor += 1) matches.add(keyOf(row, cursor));
+      if (col < size && tileType(board[row][col]) !== null && tileType(board[row][col]) === tileType(board[row][start])) continue;
+      if (tileType(board[row][start]) !== null && col - start >= 3) {
+        groups.push({
+          shape: 'line',
+          orientation: 'row',
+          type: tileType(board[row][start]),
+          cells: Array.from({ length: col - start }, (_, offset) => ({ row, col: start + offset })),
+        });
       }
       start = col;
     }
@@ -37,15 +46,57 @@ export function findMatches(board) {
   for (let col = 0; col < size; col += 1) {
     let start = 0;
     for (let row = 1; row <= size; row += 1) {
-      if (row < size && board[row][col] !== null && board[row][col] === board[start][col]) continue;
-      if (board[start]?.[col] !== null && row - start >= 3) {
-        for (let cursor = start; cursor < row; cursor += 1) matches.add(keyOf(cursor, col));
+      if (row < size && tileType(board[row][col]) !== null && tileType(board[row][col]) === tileType(board[start][col])) continue;
+      if (tileType(board[start]?.[col]) !== null && row - start >= 3) {
+        groups.push({
+          shape: 'line',
+          orientation: 'col',
+          type: tileType(board[start][col]),
+          cells: Array.from({ length: row - start }, (_, offset) => ({ row: start + offset, col })),
+        });
       }
       start = row;
     }
   }
 
+  for (let row = 0; row < size - 1; row += 1) {
+    for (let col = 0; col < size - 1; col += 1) {
+      const type = tileType(board[row][col]);
+      if (
+        type !== null
+        && tileType(board[row][col + 1]) === type
+        && tileType(board[row + 1][col]) === type
+        && tileType(board[row + 1][col + 1]) === type
+      ) {
+        groups.push({
+          shape: 'square',
+          orientation: 'square',
+          type,
+          cells: [
+            { row, col }, { row, col: col + 1 },
+            { row: row + 1, col }, { row: row + 1, col: col + 1 },
+          ],
+        });
+      }
+    }
+  }
+
+  return groups;
+}
+
+export function findMatches(board) {
+  const matches = new Set();
+  for (const group of findMatchGroups(board)) {
+    for (const cell of group.cells) matches.add(keyOf(cell.row, cell.col));
+  }
   return matches;
+}
+
+export function specialKindForGroup(group) {
+  if (group.shape === 'square') return 'bomb';
+  if (group.cells.length >= 5) return 'sun';
+  if (group.cells.length === 4) return group.orientation;
+  return null;
 }
 
 export function moveCreatesMatch(board, a, b) {

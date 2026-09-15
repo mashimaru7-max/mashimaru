@@ -3,14 +3,14 @@ import {
   TYPE_COUNT,
   areAdjacent,
   calculateScore,
-  clearMatches,
-  collapseBoard,
   createBoard,
-  findMatches,
+  findMatchGroups,
   hasPossibleMove,
   keyOf,
+  specialKindForGroup,
   swapCells,
-} from './game-core.js';
+  tileType,
+} from './game-core.js?v=2';
 
 const ROUND_SECONDS = 75;
 const LEGEND_TARGET = 60;
@@ -31,7 +31,8 @@ const finalScoreElement = document.querySelector('#final-score');
 const newBestElement = document.querySelector('#new-best');
 const scoreBurst = document.querySelector('#score-burst');
 
-let board = createBoard();
+let nextTileId = 1;
+let board = makePlayableBoard();
 let score = 0;
 let best = Number(localStorage.getItem('duckpang-best') || 0);
 let gauge = 0;
@@ -43,6 +44,14 @@ let busy = false;
 let running = false;
 let legendUntil = 0;
 let legendHandle = null;
+
+function newTile(type, special = null) {
+  return { id: nextTileId++, type, special };
+}
+
+function makePlayableBoard() {
+  return createBoard().map((row) => row.map((type) => newTile(type)));
+}
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,6 +71,10 @@ function cellAt(target) {
   return { row: Number(cell.dataset.row), col: Number(cell.dataset.col) };
 }
 
+function cellElement(cell) {
+  return boardElement.querySelector(`[data-row="${cell.row}"][data-col="${cell.col}"]`);
+}
+
 function updateHud() {
   scoreElement.textContent = score.toLocaleString('ko-KR');
   bestElement.textContent = best.toLocaleString('ko-KR');
@@ -73,23 +86,43 @@ function updateHud() {
   document.body.classList.toggle('legend-active', isLegendActive());
 }
 
-function renderBoard(extraClass = '') {
+function specialLabel(special) {
+  return { row: '가로 줄 특수', col: '세로 줄 특수', bomb: '폭발 특수', sun: '태양 특수' }[special] || '';
+}
+
+function renderBoard(dropRows = new Map()) {
   boardElement.innerHTML = '';
   const fragment = document.createDocumentFragment();
+  const cellStep = boardElement.clientWidth / SIZE;
   for (let row = 0; row < SIZE; row += 1) {
     for (let col = 0; col < SIZE; col += 1) {
-      const type = board[row][col];
+      const tile = board[row][col];
       const button = document.createElement('button');
-      button.className = `cell ${extraClass}`;
+      button.className = 'cell';
       button.dataset.row = row;
       button.dataset.col = col;
-      button.setAttribute('aria-label', `${row + 1}행 ${col + 1}열 ${DUCK_NAMES[type]}`);
+      button.dataset.tileId = tile.id;
+      if (tile.special) button.classList.add(`special-${tile.special}`);
+      const extraLabel = tile.special ? ` ${specialLabel(tile.special)}` : '';
+      button.setAttribute('aria-label', `${row + 1}행 ${col + 1}열 ${DUCK_NAMES[tile.type]}${extraLabel}`);
       if (selected?.row === row && selected?.col === col) button.classList.add('selected');
       const image = document.createElement('img');
-      image.src = duckImage(type);
+      image.src = duckImage(tile.type);
       image.alt = '';
       image.draggable = false;
       button.append(image);
+      if (tile.special) {
+        const badge = document.createElement('span');
+        badge.className = 'special-badge';
+        badge.textContent = { row: '↔', col: '↕', bomb: '✦', sun: '☀' }[tile.special];
+        button.append(badge);
+      }
+      const rows = dropRows.get(tile.id) || 0;
+      if (rows > 0) {
+        button.style.setProperty('--drop-distance', `${Math.round(rows * cellStep)}px`);
+        button.style.setProperty('--drop-delay', `${Math.min(90, row * 12)}ms`);
+        button.classList.add('dropping');
+      }
       fragment.append(button);
     }
   }
@@ -110,35 +143,138 @@ function showBurst(amount) {
   scoreBurst.classList.add('show');
 }
 
-async function resolveMatches(initialMatches) {
-  let matches = initialMatches;
+function unionCells(groups) {
+  const cells = new Set();
+  for (const group of groups) for (const cell of group.cells) cells.add(keyOf(cell.row, cell.col));
+  return cells;
+}
+
+function chooseSpecial(group, preferredCells = []) {
+  const special = specialKindForGroup(group);
+  if (!special) return null;
+  const inGroup = (candidate) => group.cells.some((cell) => cell.row === candidate.row && cell.col === candidate.col);
+  let cell = preferredCells.find((candidate) => inGroup(candidate) && !board[candidate.row][candidate.col].special);
+  if (!cell) cell = group.cells.find((candidate) => !board[candidate.row][candidate.col].special);
+  if (!cell) cell = group.cells[Math.floor(group.cells.length / 2)];
+  return { cell, special, type: group.type };
+}
+
+function expandSpecials(initialCells) {
+  const expanded = new Set(initialCells);
+  const queue = [...initialCells];
+  const activated = new Set();
+  const add = (row, col) => {
+    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
+    const key = keyOf(row, col);
+    if (!expanded.has(key)) {
+      expanded.add(key);
+      queue.push(key);
+    }
+  };
+
+  while (queue.length) {
+    const key = queue.shift();
+    const [row, col] = key.split(',').map(Number);
+    const tile = board[row][col];
+    if (!tile?.special || activated.has(tile.id)) continue;
+    activated.add(tile.id);
+    if (tile.special === 'row') for (let cursor = 0; cursor < SIZE; cursor += 1) add(row, cursor);
+    if (tile.special === 'col') for (let cursor = 0; cursor < SIZE; cursor += 1) add(cursor, col);
+    if (tile.special === 'bomb') {
+      for (let r = row - 1; r <= row + 1; r += 1) for (let c = col - 1; c <= col + 1; c += 1) add(r, c);
+    }
+    if (tile.special === 'sun') {
+      for (let r = 0; r < SIZE; r += 1) for (let c = 0; c < SIZE; c += 1) if (tileType(board[r][c]) === tile.type) add(r, c);
+    }
+  }
+  return expanded;
+}
+
+function collapseTiles() {
+  const nextBoard = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+  const dropRows = new Map();
+  for (let col = 0; col < SIZE; col += 1) {
+    let writeRow = SIZE - 1;
+    for (let readRow = SIZE - 1; readRow >= 0; readRow -= 1) {
+      const tile = board[readRow][col];
+      if (!tile) continue;
+      nextBoard[writeRow][col] = tile;
+      if (writeRow > readRow) dropRows.set(tile.id, writeRow - readRow);
+      writeRow -= 1;
+    }
+    const newCount = writeRow + 1;
+    for (let row = writeRow; row >= 0; row -= 1) {
+      const tile = newTile(Math.floor(Math.random() * TYPE_COUNT));
+      nextBoard[row][col] = tile;
+      dropRows.set(tile.id, newCount);
+    }
+  }
+  board = nextBoard;
+  return dropRows;
+}
+
+async function resolveMatches(initialGroups, preferredCells = []) {
+  let groups = initialGroups;
   let chain = 0;
-  while (matches.size && running) {
+  while (groups.length && running) {
     chain += 1;
     comboElement.textContent = chain > 1 ? `${chain} CHAIN!` : 'GOOD!';
     comboElement.classList.add('visible');
-    markCells(matches, 'matched');
-    const earned = calculateScore(matches.size, chain, isLegendActive());
+    const creations = groups.map((group) => chooseSpecial(group, preferredCells)).filter(Boolean);
+    const spawnKeys = new Set(creations.map(({ cell }) => keyOf(cell.row, cell.col)));
+    const matched = expandSpecials(unionCells(groups));
+    for (const spawnKey of spawnKeys) matched.delete(spawnKey);
+    markCells(matched, 'matched');
+    const earned = calculateScore(matched.size + creations.length, chain, isLegendActive());
     score += earned;
-    gauge = Math.min(LEGEND_TARGET, gauge + matches.size + (chain - 1) * 3);
+    gauge = Math.min(LEGEND_TARGET, gauge + matched.size + creations.length + (chain - 1) * 3);
     showBurst(earned);
     updateHud();
-    await wait(170);
-    clearMatches(board, matches);
-    collapseBoard(board);
-    renderBoard('dropping');
-    await wait(210);
-    matches = findMatches(board);
+    await wait(190);
+    for (const key of matched) {
+      const [row, col] = key.split(',').map(Number);
+      board[row][col] = null;
+    }
+    for (const creation of creations) {
+      const { row, col } = creation.cell;
+      if (board[row][col]) board[row][col].special = creation.special;
+      else board[row][col] = newTile(creation.type, creation.special);
+    }
+    const dropRows = collapseTiles();
+    renderBoard(dropRows);
+    await wait(300);
+    groups = findMatchGroups(board);
+    preferredCells = [];
   }
-  await wait(80);
+  await wait(60);
   comboElement.classList.remove('visible');
   if (!hasPossibleMove(board) && running) {
     comboElement.textContent = '자동 셔플!';
     comboElement.classList.add('visible');
-    do board = createBoard(); while (!hasPossibleMove(board));
-    renderBoard('shuffle');
-    await wait(350);
+    board = makePlayableBoard();
+    renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
+    await wait(380);
     comboElement.classList.remove('visible');
+  }
+}
+
+async function animateSwap(a, b, valid) {
+  const first = cellElement(a);
+  const second = cellElement(b);
+  if (!first || !second) return;
+  const firstRect = first.getBoundingClientRect();
+  const secondRect = second.getBoundingClientRect();
+  const dx = secondRect.left - firstRect.left;
+  const dy = secondRect.top - firstRect.top;
+  first.classList.add('moving');
+  second.classList.add('moving');
+  first.style.transform = `translate(${dx}px, ${dy}px)`;
+  second.style.transform = `translate(${-dx}px, ${-dy}px)`;
+  await wait(150);
+  if (!valid) {
+    first.style.transform = '';
+    second.style.transform = '';
+    await wait(145);
   }
 }
 
@@ -147,18 +283,18 @@ async function tryMove(a, b) {
   busy = true;
   selected = null;
   swapCells(board, a, b);
-  renderBoard('swapping');
-  await wait(130);
-  const matches = findMatches(board);
-  if (!matches.size) {
+  const groups = findMatchGroups(board);
+  swapCells(board, a, b);
+  const valid = groups.length > 0;
+  await animateSwap(a, b, valid);
+  if (!valid) {
+    renderBoard();
+    markCells(new Set([keyOf(a.row, a.col), keyOf(b.row, b.col)]), 'invalid');
+    await wait(120);
+  } else {
     swapCells(board, a, b);
     renderBoard();
-    const aKey = keyOf(a.row, a.col);
-    const bKey = keyOf(b.row, b.col);
-    markCells(new Set([aKey, bKey]), 'invalid');
-    await wait(170);
-  } else {
-    await resolveMatches(matches);
+    await resolveMatches(findMatchGroups(board), [b, a]);
   }
   renderBoard();
   busy = false;
@@ -209,9 +345,7 @@ boardElement.addEventListener('pointerup', (event) => {
   if (target.row >= 0 && target.row < SIZE && target.col >= 0 && target.col < SIZE) void tryMove(start, target);
 });
 
-boardElement.addEventListener('pointercancel', () => {
-  pointerStart = null;
-});
+boardElement.addEventListener('pointercancel', () => { pointerStart = null; });
 
 function tick() {
   if (!running) return;
@@ -225,7 +359,7 @@ function tick() {
 function startGame() {
   clearInterval(timerHandle);
   clearInterval(legendHandle);
-  board = createBoard();
+  board = makePlayableBoard();
   score = 0;
   gauge = 0;
   legendUntil = 0;
@@ -236,7 +370,7 @@ function startGame() {
   timeElement.textContent = ROUND_SECONDS;
   startOverlay.hidden = true;
   resultOverlay.hidden = true;
-  renderBoard();
+  renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
   updateHud();
   timerHandle = setInterval(tick, 100);
 }
@@ -262,7 +396,9 @@ legendButton.addEventListener('click', () => {
   if (!running || gauge < LEGEND_TARGET || isLegendActive()) return;
   gauge = 0;
   legendUntil = Date.now() + LEGEND_DURATION;
-  renderBoard('awakened');
+  renderBoard();
+  boardElement.classList.add('awakening');
+  setTimeout(() => boardElement.classList.remove('awakening'), 480);
   updateHud();
   legendHandle = setInterval(() => {
     if (!isLegendActive()) {
@@ -275,9 +411,7 @@ legendButton.addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-action="start"]').forEach((button) => button.addEventListener('click', startGame));
-document.querySelector('#how-button').addEventListener('click', () => {
-  document.querySelector('#how-panel').classList.toggle('open');
-});
+document.querySelector('#how-button').addEventListener('click', () => document.querySelector('#how-panel').classList.toggle('open'));
 
 bestElement.textContent = best.toLocaleString('ko-KR');
 renderBoard();

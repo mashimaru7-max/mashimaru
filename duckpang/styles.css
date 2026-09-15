@@ -64,14 +64,23 @@ h1 { margin: 0; color: #fff; font-size: clamp(29px, 8vw, 38px); line-height: 1; 
 
 .board-wrap { position: relative; }
 .board { display: grid; grid-template-columns: repeat(7, 1fr); gap: clamp(2px, .8vw, 4px); width: 100%; padding: clamp(6px, 2vw, 9px); touch-action: none; border: 4px solid rgba(255,255,255,.94); border-radius: 24px; background: linear-gradient(145deg,#177fc7,#83d8f3); box-shadow: inset 0 0 0 3px rgba(0,86,159,.2), 0 9px 20px rgba(0,73,133,.27); user-select: none; }
-.cell { position: relative; aspect-ratio: 1; min-width: 0; padding: 2px; overflow: visible; border: 0; border-radius: 25%; background: linear-gradient(145deg,rgba(255,255,255,.35),rgba(0,83,162,.14)); transition: transform 130ms ease, filter 130ms ease, opacity 130ms ease; }
+.cell { position: relative; aspect-ratio: 1; min-width: 0; padding: 2px; overflow: visible; border: 0; border-radius: 25%; background: linear-gradient(145deg,rgba(255,255,255,.35),rgba(0,83,162,.14)); transition: transform 145ms cubic-bezier(.22,.7,.24,1), filter 130ms ease, opacity 130ms ease; }
 .cell img { width: 100%; height: 100%; display: block; object-fit: contain; pointer-events: none; filter: drop-shadow(0 2px 1px rgba(0,58,111,.25)); }
 .cell.selected { z-index: 3; transform: scale(1.12); background: rgba(255,247,97,.82); box-shadow: 0 0 0 3px #fff, 0 0 14px #ffef3b; }
+.cell.moving { z-index: 5; transition-duration: 150ms; }
 .cell.matched { z-index: 2; animation: pop 170ms ease forwards; }
 .cell.invalid { animation: shake 170ms linear; }
-.cell.dropping { animation: drop 210ms cubic-bezier(.18,.88,.34,1.3); }
+.cell.dropping { animation: drop 280ms cubic-bezier(.16,.76,.24,1.08) var(--drop-delay, 0ms) both; }
 .cell.shuffle { animation: shuffle 330ms ease; }
 .cell.awakened { animation: awaken .48s ease both; }
+.board.awakening .cell { animation: awaken .48s ease both; }
+
+.special-badge { position: absolute; right: -3px; bottom: -2px; z-index: 3; width: 24px; height: 24px; display: grid; place-items: center; color: #fff; border: 2px solid #fff; border-radius: 50%; font-size: 15px; font-weight: 1000; line-height: 1; text-shadow: 0 1px 1px rgba(0,0,0,.25); background: linear-gradient(#ff6dd0,#a22ee1); box-shadow: 0 2px 5px rgba(49,13,100,.4); pointer-events: none; }
+.special-row::after, .special-col::after { content: ""; position: absolute; z-index: 1; border-radius: 10px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), #fff444, rgba(255,255,255,.95), transparent); box-shadow: 0 0 8px #fff244; pointer-events: none; }
+.special-row::after { left: -4px; right: -4px; top: 47%; height: 5px; }
+.special-col::after { top: -4px; bottom: -4px; left: 47%; width: 5px; background: linear-gradient(transparent, rgba(255,255,255,.95), #fff444, rgba(255,255,255,.95), transparent); }
+.special-bomb { background: radial-gradient(circle, rgba(255,255,255,.9), rgba(255,100,216,.42) 48%, rgba(102,36,220,.46)); box-shadow: inset 0 0 0 2px #fff, 0 0 12px #ff72e3; }
+.special-sun { background: radial-gradient(circle, #fffde0, rgba(255,213,30,.65) 52%, rgba(255,126,0,.48)); box-shadow: inset 0 0 0 2px #fff9a0, 0 0 15px #ffe34f; }
 
 .combo { position: absolute; left: 50%; bottom: 4%; z-index: 5; transform: translate(-50%,16px) scale(.75); opacity: 0; color: #fff; font-size: clamp(26px,8vw,42px); font-weight: 1000; white-space: nowrap; text-shadow: 0 4px 0 #e26a00, 0 7px 17px rgba(91,37,0,.5); transition: .14s ease; pointer-events: none; }
 .combo.visible { transform: translate(-50%,0) scale(1); opacity: 1; }
@@ -103,7 +112,7 @@ h1 { margin: 0; color: #fff; font-size: clamp(29px, 8vw, 38px); line-height: 1; 
 
 @keyframes pop { 50% { transform: scale(1.28) rotate(4deg); filter: brightness(1.5); } 100% { transform: scale(.15); opacity: 0; } }
 @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@keyframes drop { from { transform: translateY(-32px); opacity: .4; } }
+@keyframes drop { from { transform: translateY(calc(-1 * var(--drop-distance))); opacity: .55; } to { transform: translateY(0); opacity: 1; } }
 @keyframes shuffle { 50% { transform: scale(.6) rotate(12deg); opacity: .5; } }
 @keyframes awaken { from { transform: scale(.4) rotate(-15deg); filter: brightness(2); } }
 @keyframes score-rise { 0% { opacity: 0; transform: translate(-50%,20px) scale(.7); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-40px) scale(1.15); } }

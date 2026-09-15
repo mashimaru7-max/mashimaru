@@ -6,9 +6,11 @@ import {
   clearMatches,
   collapseBoard,
   createBoard,
+  findMatchGroups,
   findMatches,
   hasPossibleMove,
   moveCreatesMatch,
+  specialKindForGroup,
 } from '../game-core.js';
 
 test('가로·세로·교차 매치를 중복 없이 찾는다', () => {
@@ -28,6 +30,64 @@ test('가로·세로·교차 매치를 중복 없이 찾는다', () => {
 test('인접 여부를 상하좌우만 허용한다', () => {
   assert.equal(areAdjacent({ row: 1, col: 1 }, { row: 1, col: 2 }), true);
   assert.equal(areAdjacent({ row: 1, col: 1 }, { row: 2, col: 2 }), false);
+});
+
+test('같은 오리 2×2 정사각형을 하나의 매치로 찾는다', () => {
+  const board = [
+    [1, 1, 2, 3],
+    [1, 1, 3, 4],
+    [2, 3, 4, 0],
+    [3, 4, 0, 2],
+  ];
+  const groups = findMatchGroups(board);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].shape, 'square');
+  assert.equal(groups[0].cells.length, 4);
+  assert.equal(findMatches(board).size, 4);
+});
+
+test('직선 4개와 5개를 특수 생성 가능한 그룹으로 구분한다', () => {
+  const four = [
+    [2, 2, 2, 2, 0],
+    [0, 1, 3, 4, 1],
+    [1, 3, 4, 0, 2],
+    [3, 4, 0, 1, 3],
+    [4, 0, 1, 3, 4],
+  ];
+  const five = [
+    [0, 1, 2, 3, 4],
+    [1, 2, 3, 4, 0],
+    [3, 3, 3, 3, 3],
+    [2, 3, 4, 0, 1],
+    [4, 0, 1, 2, 3],
+  ];
+  const fourGroup = findMatchGroups(four)[0];
+  const fiveGroup = findMatchGroups(five)[0];
+  assert.equal(fourGroup.cells.length, 4);
+  assert.equal(fourGroup.orientation, 'row');
+  assert.equal(specialKindForGroup(fourGroup), 'row');
+  assert.equal(fiveGroup.cells.length, 5);
+  assert.equal(specialKindForGroup(fiveGroup), 'sun');
+});
+
+test('정사각형은 3×3 폭발 특수로 결정한다', () => {
+  const group = {
+    shape: 'square',
+    orientation: 'square',
+    type: 1,
+    cells: [{ row: 0, col: 0 }, { row: 0, col: 1 }, { row: 1, col: 0 }, { row: 1, col: 1 }],
+  };
+  assert.equal(specialKindForGroup(group), 'bomb');
+});
+
+test('객체 타일에서도 type 기준으로 매치를 찾는다', () => {
+  const tile = (id, type, special = null) => ({ id, type, special });
+  const board = [
+    [tile(1, 0), tile(2, 0, 'row'), tile(3, 0)],
+    [tile(4, 1), tile(5, 2), tile(6, 3)],
+    [tile(7, 2), tile(8, 3), tile(9, 4)],
+  ];
+  assert.equal(findMatches(board).size, 3);
 });
 
 test('유효한 교환만 매치로 인정한다', () => {
