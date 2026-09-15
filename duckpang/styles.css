@@ -70,7 +70,7 @@ h1 { margin: 0; color: #fff; font-size: clamp(29px, 8vw, 38px); line-height: 1; 
 .cell.moving { z-index: 5; transition-duration: 150ms; }
 .cell.matched { z-index: 2; animation: pop 170ms ease forwards; }
 .cell.invalid { animation: shake 170ms linear; }
-.cell.dropping { animation: drop 280ms cubic-bezier(.16,.76,.24,1.08) var(--drop-delay, 0ms) both; }
+.cell.dropping { animation-name: drop; animation-duration: var(--drop-duration, 320ms); animation-timing-function: cubic-bezier(.18,.72,.22,1); animation-delay: var(--drop-delay, 0ms); animation-fill-mode: both; }
 .cell.shuffle { animation: shuffle 330ms ease; }
 .cell.awakened { animation: awaken .48s ease both; }
 .board.awakening .cell { animation: awaken .48s ease both; }
@@ -112,7 +112,7 @@ h1 { margin: 0; color: #fff; font-size: clamp(29px, 8vw, 38px); line-height: 1; 
 
 @keyframes pop { 50% { transform: scale(1.28) rotate(4deg); filter: brightness(1.5); } 100% { transform: scale(.15); opacity: 0; } }
 @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-@keyframes drop { from { transform: translateY(calc(-1 * var(--drop-distance))); opacity: .55; } to { transform: translateY(0); opacity: 1; } }
+@keyframes drop { 0% { transform: translateY(calc(-1 * var(--drop-distance))); opacity: .48; } 84% { transform: translateY(2px); opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
 @keyframes shuffle { 50% { transform: scale(.6) rotate(12deg); opacity: .5; } }
 @keyframes awaken { from { transform: scale(.4) rotate(-15deg); filter: brightness(2); } }
 @keyframes score-rise { 0% { opacity: 0; transform: translate(-50%,20px) scale(.7); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-40px) scale(1.15); } }

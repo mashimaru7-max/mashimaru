@@ -4,13 +4,13 @@ import {
   areAdjacent,
   calculateScore,
   createBoard,
+  expandSpecialCells,
   findMatchGroups,
   hasPossibleMove,
   keyOf,
   specialKindForGroup,
   swapCells,
-  tileType,
-} from './game-core.js?v=2';
+} from './game-core.js?v=3';
 
 const ROUND_SECONDS = 75;
 const LEGEND_TARGET = 60;
@@ -94,6 +94,7 @@ function renderBoard(dropRows = new Map()) {
   boardElement.innerHTML = '';
   const fragment = document.createDocumentFragment();
   const cellStep = boardElement.clientWidth / SIZE;
+  let longestDrop = 0;
   for (let row = 0; row < SIZE; row += 1) {
     for (let col = 0; col < SIZE; col += 1) {
       const tile = board[row][col];
@@ -119,14 +120,19 @@ function renderBoard(dropRows = new Map()) {
       }
       const rows = dropRows.get(tile.id) || 0;
       if (rows > 0) {
+        const duration = Math.min(420, 255 + rows * 23);
+        const delay = Math.min(55, row * 8);
         button.style.setProperty('--drop-distance', `${Math.round(rows * cellStep)}px`);
-        button.style.setProperty('--drop-delay', `${Math.min(90, row * 12)}ms`);
+        button.style.setProperty('--drop-duration', `${duration}ms`);
+        button.style.setProperty('--drop-delay', `${delay}ms`);
         button.classList.add('dropping');
+        longestDrop = Math.max(longestDrop, duration + delay);
       }
       fragment.append(button);
     }
   }
   boardElement.append(fragment);
+  return longestDrop;
 }
 
 function markCells(keys, className) {
@@ -157,37 +163,6 @@ function chooseSpecial(group, preferredCells = []) {
   if (!cell) cell = group.cells.find((candidate) => !board[candidate.row][candidate.col].special);
   if (!cell) cell = group.cells[Math.floor(group.cells.length / 2)];
   return { cell, special, type: group.type };
-}
-
-function expandSpecials(initialCells) {
-  const expanded = new Set(initialCells);
-  const queue = [...initialCells];
-  const activated = new Set();
-  const add = (row, col) => {
-    if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return;
-    const key = keyOf(row, col);
-    if (!expanded.has(key)) {
-      expanded.add(key);
-      queue.push(key);
-    }
-  };
-
-  while (queue.length) {
-    const key = queue.shift();
-    const [row, col] = key.split(',').map(Number);
-    const tile = board[row][col];
-    if (!tile?.special || activated.has(tile.id)) continue;
-    activated.add(tile.id);
-    if (tile.special === 'row') for (let cursor = 0; cursor < SIZE; cursor += 1) add(row, cursor);
-    if (tile.special === 'col') for (let cursor = 0; cursor < SIZE; cursor += 1) add(cursor, col);
-    if (tile.special === 'bomb') {
-      for (let r = row - 1; r <= row + 1; r += 1) for (let c = col - 1; c <= col + 1; c += 1) add(r, c);
-    }
-    if (tile.special === 'sun') {
-      for (let r = 0; r < SIZE; r += 1) for (let c = 0; c < SIZE; c += 1) if (tileType(board[r][c]) === tile.type) add(r, c);
-    }
-  }
-  return expanded;
 }
 
 function collapseTiles() {
@@ -222,7 +197,7 @@ async function resolveMatches(initialGroups, preferredCells = []) {
     comboElement.classList.add('visible');
     const creations = groups.map((group) => chooseSpecial(group, preferredCells)).filter(Boolean);
     const spawnKeys = new Set(creations.map(({ cell }) => keyOf(cell.row, cell.col)));
-    const matched = expandSpecials(unionCells(groups));
+    const matched = expandSpecialCells(board, unionCells(groups));
     for (const spawnKey of spawnKeys) matched.delete(spawnKey);
     markCells(matched, 'matched');
     const earned = calculateScore(matched.size + creations.length, chain, isLegendActive());
@@ -241,8 +216,8 @@ async function resolveMatches(initialGroups, preferredCells = []) {
       else board[row][col] = newTile(creation.type, creation.special);
     }
     const dropRows = collapseTiles();
-    renderBoard(dropRows);
-    await wait(300);
+    const dropTime = renderBoard(dropRows);
+    await wait(dropTime + 25);
     groups = findMatchGroups(board);
     preferredCells = [];
   }
@@ -252,10 +227,34 @@ async function resolveMatches(initialGroups, preferredCells = []) {
     comboElement.textContent = '자동 셔플!';
     comboElement.classList.add('visible');
     board = makePlayableBoard();
-    renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
-    await wait(380);
+    const dropTime = renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
+    await wait(dropTime + 25);
     comboElement.classList.remove('visible');
   }
+}
+
+async function activateSpecials(cells) {
+  const initial = new Set(cells.map((cell) => keyOf(cell.row, cell.col)));
+  const affected = expandSpecialCells(board, initial);
+  comboElement.textContent = cells.length > 1 ? 'SPECIAL COMBO!' : 'SPECIAL!';
+  comboElement.classList.add('visible');
+  markCells(affected, 'matched');
+  const earned = calculateScore(affected.size, cells.length > 1 ? 2 : 1, isLegendActive());
+  score += earned;
+  gauge = Math.min(LEGEND_TARGET, gauge + affected.size);
+  showBurst(earned);
+  updateHud();
+  await wait(210);
+  for (const key of affected) {
+    const [row, col] = key.split(',').map(Number);
+    board[row][col] = null;
+  }
+  const dropRows = collapseTiles();
+  const dropTime = renderBoard(dropRows);
+  await wait(dropTime + 25);
+  const cascade = findMatchGroups(board);
+  if (cascade.length) await resolveMatches(cascade);
+  comboElement.classList.remove('visible');
 }
 
 async function animateSwap(a, b, valid) {
@@ -282,10 +281,13 @@ async function tryMove(a, b) {
   if (!running || busy || !areAdjacent(a, b)) return;
   busy = true;
   selected = null;
+  const firstSpecial = board[a.row][a.col].special;
+  const secondSpecial = board[b.row][b.col].special;
   swapCells(board, a, b);
   const groups = findMatchGroups(board);
   swapCells(board, a, b);
-  const valid = groups.length > 0;
+  const immediateSpecial = firstSpecial || secondSpecial;
+  const valid = immediateSpecial || groups.length > 0;
   await animateSwap(a, b, valid);
   if (!valid) {
     renderBoard();
@@ -294,7 +296,14 @@ async function tryMove(a, b) {
   } else {
     swapCells(board, a, b);
     renderBoard();
-    await resolveMatches(findMatchGroups(board), [b, a]);
+    if (immediateSpecial) {
+      const cells = [];
+      if (firstSpecial) cells.push(b);
+      if (secondSpecial) cells.push(a);
+      await activateSpecials(cells);
+    } else {
+      await resolveMatches(findMatchGroups(board), [b, a]);
+    }
   }
   renderBoard();
   busy = false;
@@ -302,6 +311,15 @@ async function tryMove(a, b) {
 
 function handleTap(cell) {
   if (!running || busy) return;
+  if (board[cell.row][cell.col].special) {
+    selected = null;
+    busy = true;
+    void activateSpecials([cell]).finally(() => {
+      renderBoard();
+      busy = false;
+    });
+    return;
+  }
   if (!selected) {
     selected = cell;
     renderBoard();

@@ -6,6 +6,7 @@ import {
   clearMatches,
   collapseBoard,
   createBoard,
+  expandSpecialCells,
   findMatchGroups,
   findMatches,
   hasPossibleMove,
@@ -88,6 +89,32 @@ test('객체 타일에서도 type 기준으로 매치를 찾는다', () => {
     [tile(7, 2), tile(8, 3), tile(9, 4)],
   ];
   assert.equal(findMatches(board).size, 3);
+});
+
+test('특수오리를 단독 발동하면 정해진 범위를 즉시 반환한다', () => {
+  let id = 0;
+  const board = Array.from({ length: 5 }, (_, row) =>
+    Array.from({ length: 5 }, (_, col) => ({ id: ++id, type: (row + col) % 5, special: null })),
+  );
+  board[2][2].special = 'row';
+  assert.equal(expandSpecialCells(board, new Set(['2,2'])).size, 5);
+  board[2][2].special = 'col';
+  assert.equal(expandSpecialCells(board, new Set(['2,2'])).size, 5);
+  board[0][0].special = 'bomb';
+  assert.equal(expandSpecialCells(board, new Set(['0,0'])).size, 4);
+});
+
+test('특수끼리 닿으면 연쇄 범위까지 함께 발동한다', () => {
+  let id = 0;
+  const board = Array.from({ length: 5 }, (_, row) =>
+    Array.from({ length: 5 }, (_, col) => ({ id: ++id, type: (row + col) % 5, special: null })),
+  );
+  board[2][0].special = 'row';
+  board[2][3].special = 'bomb';
+  const affected = expandSpecialCells(board, new Set(['2,0']));
+  assert(affected.has('1,3'));
+  assert(affected.has('3,4'));
+  assert(affected.size > 5);
 });
 
 test('유효한 교환만 매치로 인정한다', () => {

@@ -99,6 +99,42 @@ export function specialKindForGroup(group) {
   return null;
 }
 
+export function expandSpecialCells(board, initialCells) {
+  const size = board.length;
+  const expanded = new Set(initialCells);
+  const queue = [...initialCells];
+  const activated = new Set();
+  const add = (row, col) => {
+    if (row < 0 || row >= size || col < 0 || col >= size) return;
+    const key = keyOf(row, col);
+    if (!expanded.has(key)) {
+      expanded.add(key);
+      queue.push(key);
+    }
+  };
+
+  while (queue.length) {
+    const key = queue.shift();
+    const [row, col] = key.split(',').map(Number);
+    const tile = board[row][col];
+    if (!tile?.special || activated.has(tile.id)) continue;
+    activated.add(tile.id);
+    if (tile.special === 'row') for (let cursor = 0; cursor < size; cursor += 1) add(row, cursor);
+    if (tile.special === 'col') for (let cursor = 0; cursor < size; cursor += 1) add(cursor, col);
+    if (tile.special === 'bomb') {
+      for (let r = row - 1; r <= row + 1; r += 1) {
+        for (let c = col - 1; c <= col + 1; c += 1) add(r, c);
+      }
+    }
+    if (tile.special === 'sun') {
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) if (tileType(board[r][c]) === tile.type) add(r, c);
+      }
+    }
+  }
+  return expanded;
+}
+
 export function moveCreatesMatch(board, a, b) {
   if (!areAdjacent(a, b)) return false;
   swapCells(board, a, b);
