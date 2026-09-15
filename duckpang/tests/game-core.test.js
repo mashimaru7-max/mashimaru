@@ -12,6 +12,7 @@ import {
   hasPossibleMove,
   moveCreatesMatch,
   specialKindForGroup,
+  specialKindForMove,
 } from '../game-core.js';
 
 test('가로·세로·교차 매치를 중복 없이 찾는다', () => {
@@ -69,6 +70,19 @@ test('직선 4개와 5개를 특수 생성 가능한 그룹으로 구분한다',
   assert.equal(specialKindForGroup(fourGroup), 'row');
   assert.equal(fiveGroup.cells.length, 5);
   assert.equal(specialKindForGroup(fiveGroup), 'sun');
+});
+
+test('직선 4개 특수 방향은 완성 줄이 아니라 마지막 이동 방향을 따른다', () => {
+  const board = [
+    [0, 1, 2, 3],
+    [2, 2, 2, 2],
+    [1, 3, 4, 0],
+    [3, 4, 0, 1],
+  ];
+  const group = findMatchGroups(board)[0];
+  assert.equal(group.orientation, 'row');
+  assert.equal(specialKindForMove(group, { row: 0, col: 2 }, { row: 1, col: 2 }), 'col');
+  assert.equal(specialKindForMove(group, { row: 1, col: 3 }, { row: 1, col: 2 }), 'row');
 });
 
 test('정사각형은 프로펠러 특수로 결정한다', () => {

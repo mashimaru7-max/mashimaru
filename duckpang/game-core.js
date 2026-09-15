@@ -130,6 +130,14 @@ export function specialKindForGroup(group) {
   return null;
 }
 
+export function specialKindForMove(group, from, to) {
+  const special = specialKindForGroup(group);
+  if ((special !== 'row' && special !== 'col') || !from || !to) return special;
+  const destinationIsMatched = group.cells.some((cell) => cell.row === to.row && cell.col === to.col);
+  if (!destinationIsMatched) return special;
+  return from.row !== to.row ? 'col' : 'row';
+}
+
 export function expandSpecialCells(board, initialCells) {
   const size = board.length;
   const expanded = new Set(initialCells);

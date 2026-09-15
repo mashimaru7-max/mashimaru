@@ -9,8 +9,9 @@ import {
   hasPossibleMove,
   keyOf,
   specialKindForGroup,
+  specialKindForMove,
   swapCells,
-} from './game-core.js?v=5';
+} from './game-core.js?v=6';
 
 const ROUND_SECONDS = 75;
 const LEGEND_TARGET = 60;
@@ -156,11 +157,23 @@ function playSpecialEffects(keys) {
     effect.className = `power-effect effect-${special}`;
     effect.style.left = `${rect.left - boardRect.left + rect.width / 2}px`;
     effect.style.top = `${rect.top - boardRect.top + rect.height / 2}px`;
+    if (special === 'propeller') {
+      const targets = [...keys].map((targetKey) => targetKey.split(',').map(Number));
+      const target = targets.sort((a, b) =>
+        (Math.abs(b[0] - row) + Math.abs(b[1] - col)) - (Math.abs(a[0] - row) + Math.abs(a[1] - col)),
+      )[0];
+      const targetCell = target && cellElement({ row: target[0], col: target[1] });
+      if (targetCell) {
+        const targetRect = targetCell.getBoundingClientRect();
+        effect.style.setProperty('--fly-x', `${targetRect.left - rect.left}px`);
+        effect.style.setProperty('--fly-y', `${targetRect.top - rect.top}px`);
+      }
+    }
     effect.setAttribute('aria-hidden', 'true');
     boardElement.append(effect);
     played = true;
   }
-  return played ? 390 : 0;
+  return played ? 460 : 0;
 }
 
 function showBurst(amount) {
@@ -176,13 +189,16 @@ function unionCells(groups) {
   return cells;
 }
 
-function chooseSpecial(group, preferredCells = []) {
-  const special = specialKindForGroup(group);
+function chooseSpecial(group, preferredCells = [], move = null) {
+  let special = specialKindForGroup(group);
   if (!special) return null;
   const inGroup = (candidate) => group.cells.some((cell) => cell.row === candidate.row && cell.col === candidate.col);
   let cell = preferredCells.find((candidate) => inGroup(candidate) && !board[candidate.row][candidate.col].special);
   if (!cell) cell = group.cells.find((candidate) => !board[candidate.row][candidate.col].special);
   if (!cell) cell = group.cells[Math.floor(group.cells.length / 2)];
+  if (move && cell.row === move.to.row && cell.col === move.to.col) {
+    special = specialKindForMove(group, move.from, move.to);
+  }
   return { cell, special, type: group.type };
 }
 
@@ -209,25 +225,26 @@ function collapseTiles() {
   return dropRows;
 }
 
-async function resolveMatches(initialGroups, preferredCells = []) {
+async function resolveMatches(initialGroups, preferredCells = [], move = null) {
   let groups = initialGroups;
   let chain = 0;
   while (groups.length && running) {
     chain += 1;
     comboElement.textContent = chain > 1 ? `${chain} CHAIN!` : 'GOOD!';
     comboElement.classList.add('visible');
-    const creations = groups.map((group) => chooseSpecial(group, preferredCells)).filter(Boolean);
+    const creations = groups.map((group) => chooseSpecial(group, preferredCells, move)).filter(Boolean);
     const spawnKeys = new Set(creations.map(({ cell }) => keyOf(cell.row, cell.col)));
     const matched = expandSpecialCells(board, unionCells(groups));
     for (const spawnKey of spawnKeys) matched.delete(spawnKey);
     const effectTime = playSpecialEffects(matched);
+    if (effectTime) await wait(110);
     markCells(matched, 'matched');
     const earned = calculateScore(matched.size + creations.length, chain, isLegendActive());
     score += earned;
     gauge = Math.min(LEGEND_TARGET, gauge + matched.size + creations.length + (chain - 1) * 3);
     showBurst(earned);
     updateHud();
-    await wait(Math.max(190, effectTime));
+    await wait(Math.max(210, effectTime - 110));
     for (const key of matched) {
       const [row, col] = key.split(',').map(Number);
       board[row][col] = null;
@@ -242,6 +259,7 @@ async function resolveMatches(initialGroups, preferredCells = []) {
     await wait(dropTime + 25);
     groups = findMatchGroups(board);
     preferredCells = [];
+    move = null;
   }
   await wait(60);
   comboElement.classList.remove('visible');
@@ -261,13 +279,14 @@ async function activateSpecials(cells) {
   comboElement.textContent = cells.length > 1 ? 'SPECIAL COMBO!' : 'SPECIAL!';
   comboElement.classList.add('visible');
   const effectTime = playSpecialEffects(affected);
+  if (effectTime) await wait(110);
   markCells(affected, 'matched');
   const earned = calculateScore(affected.size, cells.length > 1 ? 2 : 1, isLegendActive());
   score += earned;
   gauge = Math.min(LEGEND_TARGET, gauge + affected.size);
   showBurst(earned);
   updateHud();
-  await wait(Math.max(210, effectTime));
+  await wait(Math.max(230, effectTime - 110));
   for (const key of affected) {
     const [row, col] = key.split(',').map(Number);
     board[row][col] = null;
@@ -292,11 +311,11 @@ async function animateSwap(a, b, valid) {
   second.classList.add('moving');
   first.style.transform = `translate(${dx}px, ${dy}px)`;
   second.style.transform = `translate(${-dx}px, ${-dy}px)`;
-  await wait(150);
+  await wait(220);
   if (!valid) {
     first.style.transform = '';
     second.style.transform = '';
-    await wait(145);
+    await wait(210);
   }
 }
 
@@ -325,7 +344,7 @@ async function tryMove(a, b) {
       if (secondSpecial) cells.push(a);
       await activateSpecials(cells);
     } else {
-      await resolveMatches(findMatchGroups(board), [b, a]);
+      await resolveMatches(findMatchGroups(board), [b, a], { from: a, to: b });
     }
   }
   renderBoard();
