@@ -13,6 +13,7 @@ import {
   findObstacleHits,
   hasPossibleMove,
   moveCreatesMatch,
+  resolveSpecialCombo,
   specialKindForGroup,
   specialKindForMove,
   totalBestScore,
@@ -179,6 +180,65 @@ test('특수끼리 닿으면 연쇄 범위까지 함께 발동한다', () => {
   assert(affected.has('1,3'));
   assert(affected.has('3,4'));
   assert(affected.size > 5);
+});
+
+test('로얄매치식 특수 결합은 개별 발동이 아닌 새로운 합성 범위를 만든다', () => {
+  let id = 0;
+  const makeBoard = () => Array.from({ length: 7 }, (_, row) =>
+    Array.from({ length: 7 }, (_, col) => ({ id: ++id, type: (row + col) % 5, special: null })),
+  );
+  const cells = [{ row: 3, col: 3 }, { row: 3, col: 4 }];
+
+  let board = makeBoard();
+  board[3][3].special = 'row';
+  board[3][4].special = 'col';
+  let combo = resolveSpecialCombo(board, cells);
+  assert.equal(combo.kind, 'rocket-rocket');
+  assert.equal(combo.affected.size, 13);
+
+  board = makeBoard();
+  board[3][3].special = 'row';
+  board[3][4].special = 'bomb';
+  combo = resolveSpecialCombo(board, cells);
+  assert.equal(combo.kind, 'rocket-bomb');
+  assert.equal(combo.affected.size, 33);
+
+  board = makeBoard();
+  board[3][3].special = 'bomb';
+  board[3][4].special = 'bomb';
+  combo = resolveSpecialCombo(board, cells);
+  assert.equal(combo.kind, 'bomb-bomb');
+  assert.equal(combo.affected.size, 49);
+
+  board = makeBoard();
+  board[3][3].special = 'sun';
+  board[3][4].special = 'sun';
+  combo = resolveSpecialCombo(board, cells);
+  assert.equal(combo.kind, 'sun-sun');
+  assert.equal(combo.affected.size, 49);
+});
+
+test('프로펠러 운반과 태양 변환 조합도 조합별 전용 효과를 선택한다', () => {
+  let nextId = 1000;
+  const cells = [{ row: 3, col: 3 }, { row: 3, col: 4 }];
+  const cases = [
+    ['propeller', 'propeller', 'propeller-propeller'],
+    ['propeller', 'row', 'propeller-rocket'],
+    ['propeller', 'bomb', 'propeller-bomb'],
+    ['sun', 'row', 'sun-rocket'],
+    ['sun', 'bomb', 'sun-bomb'],
+    ['sun', 'propeller', 'sun-propeller'],
+  ];
+  for (const [first, second, expected] of cases) {
+    const board = Array.from({ length: 7 }, (_, row) =>
+      Array.from({ length: 7 }, (_, col) => ({ id: ++nextId, type: (row + col) % 5, special: null })),
+    );
+    board[3][3].special = first;
+    board[3][4].special = second;
+    const combo = resolveSpecialCombo(board, cells);
+    assert.equal(combo.kind, expected);
+    assert(combo.affected.size > 2);
+  }
 });
 
 test('유효한 교환만 매치로 인정한다', () => {

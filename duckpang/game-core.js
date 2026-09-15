@@ -179,11 +179,11 @@ export function specialKindForMove(group, from, to) {
   return from.row !== to.row ? 'col' : 'row';
 }
 
-export function expandSpecialCells(board, initialCells) {
+export function expandSpecialCells(board, initialCells, skippedSpecialIds = new Set()) {
   const size = board.length;
   const expanded = new Set(initialCells);
   const queue = [...initialCells];
-  const activated = new Set();
+  const activated = new Set(skippedSpecialIds);
   const add = (row, col) => {
     if (row < 0 || row >= size || col < 0 || col >= size) return;
     const key = keyOf(row, col);
@@ -227,6 +227,79 @@ export function expandSpecialCells(board, initialCells) {
     }
   }
   return expanded;
+}
+
+function isRocket(special) {
+  return special === 'row' || special === 'col';
+}
+
+export function resolveSpecialCombo(board, cells) {
+  if (cells.length !== 2) return null;
+  const size = board.length;
+  const first = board[cells[0].row]?.[cells[0].col];
+  const second = board[cells[1].row]?.[cells[1].col];
+  if (!first?.special || !second?.special) return null;
+  const specials = [first.special, second.special];
+  const center = cells[0];
+  const affected = new Set(cells.map((cell) => keyOf(cell.row, cell.col)));
+  const skipped = new Set([first.id, second.id]);
+  const add = (row, col) => {
+    if (row >= 0 && row < size && col >= 0 && col < size) affected.add(keyOf(row, col));
+  };
+  const radius = (cell, amount) => {
+    for (let row = cell.row - amount; row <= cell.row + amount; row += 1) {
+      for (let col = cell.col - amount; col <= cell.col + amount; col += 1) add(row, col);
+    }
+  };
+  const powerAt = (cell, special) => {
+    if (special === 'row') for (let col = 0; col < size; col += 1) add(cell.row, col);
+    if (special === 'col') for (let row = 0; row < size; row += 1) add(row, cell.col);
+    if (special === 'bomb') radius(cell, 2);
+    if (special === 'propeller') radius(cell, 1);
+  };
+  let kind = 'dual';
+
+  if (specials.every((special) => special === 'sun')) {
+    kind = 'sun-sun';
+    for (let row = 0; row < size; row += 1) for (let col = 0; col < size; col += 1) add(row, col);
+  } else if (specials.includes('sun')) {
+    const other = specials.find((special) => special !== 'sun');
+    kind = `sun-${isRocket(other) ? 'rocket' : other}`;
+    const counts = Array(TYPE_COUNT).fill(0);
+    for (const row of board) for (const tile of row) if (tile && tile.special !== 'sun') counts[tile.type] += 1;
+    const targetType = counts.indexOf(Math.max(...counts));
+    for (let row = 0; row < size; row += 1) {
+      for (let col = 0; col < size; col += 1) if (board[row][col]?.type === targetType) powerAt({ row, col }, other);
+    }
+  } else if (specials.every(isRocket)) {
+    kind = 'rocket-rocket';
+    powerAt(center, 'row');
+    powerAt(center, 'col');
+  } else if (specials.includes('bomb') && specials.some(isRocket)) {
+    kind = 'rocket-bomb';
+    for (let offset = -1; offset <= 1; offset += 1) {
+      powerAt({ row: center.row + offset, col: center.col }, 'row');
+      powerAt({ row: center.row, col: center.col + offset }, 'col');
+    }
+  } else if (specials.every((special) => special === 'bomb')) {
+    kind = 'bomb-bomb';
+    radius(center, 4);
+  } else if (specials.every((special) => special === 'propeller')) {
+    kind = 'propeller-propeller';
+    const seed = (first.id + second.id) % (size * size);
+    for (let index = 0; index < 3; index += 1) {
+      const target = (seed + index * 17) % (size * size);
+      radius({ row: Math.floor(target / size), col: target % size }, 1);
+    }
+  } else if (specials.includes('propeller')) {
+    const other = specials.find((special) => special !== 'propeller');
+    kind = `propeller-${isRocket(other) ? 'rocket' : other}`;
+    const target = { row: size - 1 - center.row, col: size - 1 - center.col };
+    radius(center, 1);
+    powerAt(target, other);
+  }
+
+  return { kind, affected: expandSpecialCells(board, affected, skipped) };
 }
 
 export function moveCreatesMatch(board, a, b) {

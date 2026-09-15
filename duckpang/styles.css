@@ -121,6 +121,17 @@ h1 { margin: 0; color: #fff; font-size: clamp(29px, 8vw, 38px); line-height: 1; 
 .effect-bomb { width: 40px; height: 40px; border-radius: 50%; transform: translate(-50%,-50%); background: radial-gradient(circle,#fff 0 10%,#fff234 20%,#ff6b16 48%,rgba(231,25,30,.55) 62%,transparent 72%); animation: tnt 690ms cubic-bezier(.16,1,.3,1) both; }
 .effect-sun { width: 45px; height: 45px; border-radius: 50%; transform: translate(-50%,-50%); background: radial-gradient(circle,#fff,#fff93f 35%,rgba(255,151,0,.7) 58%,transparent 72%); animation: tnt 690ms cubic-bezier(.16,1,.3,1) both; }
 
+.combo-power-effect { position: absolute; z-index: 12; pointer-events: none; transform: translate(-50%,-50%); color: #fff; font-size: 38px; font-weight: 1000; white-space: nowrap; text-shadow: 0 0 7px #fff,0 0 16px #ffb300,0 3px 3px rgba(80,35,0,.45); animation: combo-core 900ms cubic-bezier(.16,1,.3,1) both; }
+.combo-rocket-rocket::before, .combo-rocket-bomb::before { content: ''; position: absolute; left: 50%; top: 50%; width: min(94vw,450px); height: 16px; border-radius: 20px; background: linear-gradient(90deg,transparent,#fff,#fff52f,#fff,transparent); transform: translate(-50%,-50%); animation: combo-beam 900ms ease-out both; }
+.combo-rocket-rocket::after, .combo-rocket-bomb::after { content: ''; position: absolute; left: 50%; top: 50%; width: 16px; height: min(94vw,450px); border-radius: 20px; background: linear-gradient(transparent,#fff,#fff52f,#fff,transparent); transform: translate(-50%,-50%); animation: combo-beam 900ms ease-out both; }
+.combo-rocket-bomb::before { box-shadow: 0 -52px 0 rgba(255,244,51,.85),0 52px 0 rgba(255,244,51,.85); }
+.combo-rocket-bomb::after { box-shadow: -52px 0 0 rgba(255,244,51,.85),52px 0 0 rgba(255,244,51,.85); }
+.combo-bomb-bomb { width: 64px; height: 64px; color: transparent; border-radius: 50%; background: radial-gradient(circle,#fff 0 8%,#fff72e 17%,#ff7b18 38%,rgba(226,35,24,.76) 55%,transparent 72%); animation: combo-boom 900ms ease-out both; }
+.combo-propeller-propeller { color: #65efff; letter-spacing: 7px; animation: combo-propellers 900ms cubic-bezier(.2,.8,.2,1) both; }
+.combo-propeller-rocket, .combo-propeller-bomb { color: #7ff6ff; animation: combo-carry 900ms cubic-bezier(.2,.8,.2,1) both; }
+.combo-sun-rocket, .combo-sun-bomb, .combo-sun-propeller, .combo-sun-sun { font-size: 50px; animation: combo-sun 900ms ease-out both; }
+.board.combo-flash { animation: board-flash 900ms ease-out; }
+
 .combo { position: absolute; left: 50%; bottom: 4%; z-index: 5; transform: translate(-50%,16px) scale(.75); opacity: 0; color: #fff; font-size: clamp(26px,8vw,42px); font-weight: 1000; white-space: nowrap; text-shadow: 0 4px 0 #e26a00, 0 7px 17px rgba(91,37,0,.5); transition: .14s ease; pointer-events: none; }
 .combo.visible { transform: translate(-50%,0) scale(1); opacity: 1; }
 .score-burst { position: absolute; top: 42%; left: 50%; z-index: 6; opacity: 0; color: #fff; font-size: 30px; font-weight: 1000; text-shadow: 0 3px 0 #d66100,0 5px 10px rgba(0,0,0,.25); pointer-events: none; }
@@ -169,6 +180,13 @@ body[data-stage="5"] { background: linear-gradient(#f38127,#ffd354 55%,#fff3ae);
 @keyframes rocket-col { 0% { clip-path: inset(50% 0); opacity: .5; } 65% { clip-path: inset(0); opacity: 1; } 100% { clip-path: inset(0); opacity: 0; } }
 @keyframes propeller { 0% { transform: translate(-50%,-50%) rotate(0) scale(.45); opacity: 1; } 35% { transform: translate(-50%,-50%) rotate(360deg) scale(1.1); opacity: 1; } 100% { transform: translate(calc(-50% + var(--fly-x,0px)),calc(-50% + var(--fly-y,0px))) rotate(900deg) scale(.65); opacity: 0; } }
 @keyframes tnt { 0% { transform: translate(-50%,-50%) scale(.25); opacity: .7; } 65% { transform: translate(-50%,-50%) scale(5); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(6); opacity: 0; } }
+@keyframes combo-core { 0% { transform: translate(-50%,-50%) scale(.2); opacity: 0; } 28% { transform: translate(-50%,-50%) scale(1.35); opacity: 1; } 72% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; } }
+@keyframes combo-beam { 0%,24% { clip-path: inset(0 50%); opacity: 0; } 65% { clip-path: inset(0); opacity: 1; } 100% { clip-path: inset(0); opacity: 0; } }
+@keyframes combo-boom { 0% { transform: translate(-50%,-50%) scale(.2); opacity: .6; } 55% { transform: translate(-50%,-50%) scale(5); opacity: 1; } 100% { transform: translate(-50%,-50%) scale(8); opacity: 0; } }
+@keyframes combo-propellers { 0% { transform: translate(-50%,-50%) rotate(0) scale(.25); opacity: 0; } 35% { transform: translate(-50%,-50%) rotate(360deg) scale(1.45); opacity: 1; } 100% { transform: translate(-50%,-180%) rotate(1080deg) scale(.8); letter-spacing: 55px; opacity: 0; } }
+@keyframes combo-carry { 0% { transform: translate(-50%,-50%) rotate(0) scale(.3); opacity: 0; } 35% { transform: translate(-50%,-50%) rotate(360deg) scale(1.35); opacity: 1; } 100% { transform: translate(120%,-190%) rotate(800deg) scale(.7); opacity: 0; } }
+@keyframes combo-sun { 0% { transform: translate(-50%,-50%) scale(.2) rotate(0); opacity: 0; } 45% { transform: translate(-50%,-50%) scale(2) rotate(220deg); opacity: 1; filter: brightness(1.8); } 100% { transform: translate(-50%,-50%) scale(6) rotate(360deg); opacity: 0; } }
+@keyframes board-flash { 0%,100% { filter: none; } 42% { filter: brightness(1.35) saturate(1.3); } }
 
 @media (max-height: 740px) {
   .game-shell { padding-top: 7px; }

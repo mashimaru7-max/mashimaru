@@ -11,12 +11,13 @@ import {
   findObstacleHits,
   hasPossibleMove,
   keyOf,
+  resolveSpecialCombo,
   specialKindForGroup,
   specialKindForMove,
   swapCells,
   totalBestScore,
   unlockedStageCount,
-} from './game-core.js?v=7';
+} from './game-core.js?v=8';
 
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
@@ -290,6 +291,34 @@ function playSpecialEffects(keys) {
   return played ? 690 : 0;
 }
 
+function playComboEffect(combo, cell) {
+  const source = cellElement(cell);
+  if (!source) return 0;
+  const boardRect = boardElement.getBoundingClientRect();
+  const rect = source.getBoundingClientRect();
+  const effect = document.createElement('span');
+  effect.className = `combo-power-effect combo-${combo.kind}`;
+  effect.style.left = `${rect.left - boardRect.left + rect.width / 2}px`;
+  effect.style.top = `${rect.top - boardRect.top + rect.height / 2}px`;
+  effect.textContent = {
+    'rocket-rocket': '↔↕',
+    'rocket-bomb': '💥',
+    'bomb-bomb': '💥',
+    'propeller-propeller': '✣✣✣',
+    'propeller-rocket': '✣➤',
+    'propeller-bomb': '✣💥',
+    'sun-rocket': '☀➤',
+    'sun-bomb': '☀💥',
+    'sun-propeller': '☀✣',
+    'sun-sun': '☀☀',
+  }[combo.kind] || 'SPECIAL';
+  effect.setAttribute('aria-hidden', 'true');
+  boardElement.append(effect);
+  boardElement.classList.add('combo-flash');
+  setTimeout(() => boardElement.classList.remove('combo-flash'), 900);
+  return 900;
+}
+
 function showBurst(amount) {
   scoreBurst.textContent = `+${amount.toLocaleString('ko-KR')}`;
   scoreBurst.classList.remove('show');
@@ -405,11 +434,12 @@ async function resolveMatches(initialGroups, preferredCells = [], move = null) {
 async function activateSpecials(cells) {
   registerPlayerCombo();
   const initial = new Set(cells.map((cell) => keyOf(cell.row, cell.col)));
-  const affected = expandSpecialCells(board, initial);
+  const combo = cells.length === 2 ? resolveSpecialCombo(board, cells) : null;
+  const affected = combo?.affected || expandSpecialCells(board, initial);
   const obstacleHit = applyObstacleHits(affected);
-  comboElement.textContent = cells.length > 1 ? 'SPECIAL COMBO!' : 'SPECIAL!';
+  comboElement.textContent = combo ? 'POWER COMBO!' : 'SPECIAL!';
   comboElement.classList.add('visible');
-  const effectTime = playSpecialEffects(affected);
+  const effectTime = combo ? playComboEffect(combo, cells[0]) : playSpecialEffects(affected);
   if (effectTime) await wait(165);
   markCells(affected, 'matched');
   const earned = calculateScore(affected.size, comboCount + (cells.length > 1 ? 1 : 0), isLegendActive()) + obstacleHit.bonus;
