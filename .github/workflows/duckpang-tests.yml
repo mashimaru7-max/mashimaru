@@ -1,0 +1,27 @@
+name: Duckpang tests
+
+on:
+  push:
+    paths:
+      - "duckpang/**"
+      - ".github/workflows/duckpang-tests.yml"
+  pull_request:
+    paths:
+      - "duckpang/**"
+      - ".github/workflows/duckpang-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  game-core:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: duckpang
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
