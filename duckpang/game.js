@@ -17,10 +17,11 @@ import {
   swapCells,
   totalBestScore,
   unlockedStageCount,
-} from './game-core.js?v=11';
+} from './game-core.js?v=12';
 
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
+const LEGEND_SKINS = [8, 6, 3, 4, 7];
 
 const boardElement = document.querySelector('#board');
 const scoreElement = document.querySelector('#score');
@@ -122,6 +123,7 @@ function isLegendActive() {
 }
 
 function duckImage(type) {
+  if (isLegendActive()) return `./assets/duck-${LEGEND_SKINS[type]}.png`;
   const advancedSkin = currentStage.id >= 4;
   return `./assets/duck-${type + (advancedSkin ? 6 : 1)}.png`;
 }
@@ -685,6 +687,7 @@ legendButton.addEventListener('click', () => {
     legendBurst.classList.remove('show');
     legendBurst.setAttribute('aria-hidden', 'true');
   }, 1000);
+  renderBoard();
   boardElement.classList.add('awakening');
   setTimeout(() => boardElement.classList.remove('awakening'), 480);
   updateHud();
@@ -692,6 +695,7 @@ legendButton.addEventListener('click', () => {
     if (!isLegendActive()) {
       clearInterval(legendHandle);
       legendUntil = 0;
+      renderBoard();
     }
     updateHud();
   }, 100);
