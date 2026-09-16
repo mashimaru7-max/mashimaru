@@ -17,7 +17,7 @@ import {
   swapCells,
   totalBestScore,
   unlockedStageCount,
-} from './game-core.js?v=9';
+} from './game-core.js?v=10';
 
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
@@ -42,6 +42,10 @@ const stageLabelElement = document.querySelector('#stage-label');
 const startStageName = document.querySelector('#start-stage-name');
 const startStageInfo = document.querySelector('#start-stage-info');
 const resultDetail = document.querySelector('#result-detail');
+const legendMeter = document.querySelector('.legend-meter');
+const legendButtonTitle = legendButton.querySelector('b');
+const legendButtonCaption = legendButton.querySelector('small');
+const legendBurst = document.querySelector('#legend-burst');
 
 let nextTileId = 1;
 let currentStageIndex = Math.min(4, Math.max(0, Number(localStorage.getItem('duckpang-last-stage') || 1) - 1));
@@ -166,10 +170,12 @@ function showHome() {
   running = false;
   clearInterval(timerHandle);
   clearInterval(legendHandle);
+  legendUntil = 0;
   startOverlay.hidden = true;
   resultOverlay.hidden = true;
   renderStageSelect();
   stageSelect.hidden = false;
+  updateHud();
 }
 
 function cellAt(target) {
@@ -186,11 +192,23 @@ function updateHud() {
   scoreElement.textContent = score.toLocaleString('ko-KR');
   bestElement.textContent = best.toLocaleString('ko-KR');
   const gaugePercent = Math.min(100, (gauge / currentStage.legendTarget) * 100);
+  const gaugeRounded = Math.round(gaugePercent);
+  const active = isLegendActive();
+  const ready = gauge >= currentStage.legendTarget && !active && running;
   gaugeFill.style.width = `${gaugePercent}%`;
-  gaugeText.textContent = isLegendActive() ? `각성 ${Math.max(0, (legendUntil - Date.now()) / 1000).toFixed(1)}초` : `${gauge} / ${currentStage.legendTarget}`;
-  legendButton.disabled = gauge < currentStage.legendTarget || isLegendActive() || !running;
-  legendButton.classList.toggle('ready', gauge >= currentStage.legendTarget && !isLegendActive() && running);
-  document.body.classList.toggle('legend-active', isLegendActive());
+  gaugeText.textContent = active
+    ? `🔥 ${Math.max(0, (legendUntil - Date.now()) / 1000).toFixed(1)}초`
+    : ready ? '⚡ 발동 가능!' : `${gaugeRounded}% · ${gauge}/${currentStage.legendTarget}`;
+  legendButton.disabled = !ready;
+  legendButton.classList.toggle('ready', ready);
+  legendButton.classList.toggle('active', active);
+  legendMeter.classList.toggle('ready', ready);
+  legendMeter.classList.toggle('active', active);
+  legendButtonTitle.textContent = active ? '전설 각성 중!' : ready ? '지금 각성!' : '전설 각성';
+  legendButtonCaption.textContent = active
+    ? `점수 2배 · ${Math.max(0, (legendUntil - Date.now()) / 1000).toFixed(1)}초 남음`
+    : ready ? '눌러서 10초간 점수 2배!' : `${gaugeRounded}% 충전 중`;
+  document.body.classList.toggle('legend-active', active);
 }
 
 function specialLabel(special) {
@@ -612,6 +630,7 @@ function endGame() {
   running = false;
   clearInterval(timerHandle);
   clearInterval(legendHandle);
+  legendUntil = 0;
   const previousBest = best;
   const unlockedBefore = unlockedStageCount(bests);
   if (score > best) {
@@ -635,6 +654,14 @@ legendButton.addEventListener('click', () => {
   if (!running || gauge < currentStage.legendTarget || isLegendActive()) return;
   gauge = 0;
   legendUntil = Date.now() + LEGEND_DURATION;
+  legendBurst.classList.remove('show');
+  void legendBurst.offsetWidth;
+  legendBurst.classList.add('show');
+  legendBurst.setAttribute('aria-hidden', 'false');
+  setTimeout(() => {
+    legendBurst.classList.remove('show');
+    legendBurst.setAttribute('aria-hidden', 'true');
+  }, 1000);
   renderBoard();
   boardElement.classList.add('awakening');
   setTimeout(() => boardElement.classList.remove('awakening'), 480);
