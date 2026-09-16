@@ -17,7 +17,7 @@ import {
   swapCells,
   totalBestScore,
   unlockedStageCount,
-} from './game-core.js?v=10';
+} from './game-core.js?v=11';
 
 const LEGEND_DURATION = 10_000;
 const DUCK_NAMES = ['아기오리', '흰오리', '리본오리', '탐험오리', '달빛오리'];
@@ -46,6 +46,8 @@ const legendMeter = document.querySelector('.legend-meter');
 const legendButtonTitle = legendButton.querySelector('b');
 const legendButtonCaption = legendButton.querySelector('small');
 const legendBurst = document.querySelector('#legend-burst');
+const howPanel = document.querySelector('#how-panel');
+const startStageImage = startOverlay.querySelector('img');
 
 let nextTileId = 1;
 let currentStageIndex = Math.min(4, Math.max(0, Number(localStorage.getItem('duckpang-last-stage') || 1) - 1));
@@ -120,15 +122,16 @@ function isLegendActive() {
 }
 
 function duckImage(type) {
-  return `./assets/duck-${type + (isLegendActive() ? 6 : 1)}.png`;
+  const advancedSkin = currentStage.id >= 4;
+  return `./assets/duck-${type + (advancedSkin ? 6 : 1)}.png`;
 }
 
 function stageFeature(stage) {
   if (stage.id === 1) return '기본 규칙 · 75초';
   if (stage.id === 2) return '물방울 4칸 · 60초';
   if (stage.id === 3) return '잠금 오리 6마리 · 60초';
-  if (stage.id === 4) return '물방울 4 + 잠금 6';
-  return '장애물 12 · 게이지 80';
+  if (stage.id === 4) return '물방울 4 + 잠금 6 · 상급 외형';
+  return '장애물 12 · 상급 외형';
 }
 
 function renderStageSelect() {
@@ -137,19 +140,33 @@ function renderStageSelect() {
   stageList.innerHTML = '';
   STAGE_CONFIGS.forEach((stage, index) => {
     const locked = index >= unlocked;
+    const previousBest = Number(bests[index - 1]) || 0;
+    const progress = locked ? Math.min(100, Math.round((previousBest / stage.unlockScore) * 100)) : 100;
+    const previewDuck = index < 3 ? index + 1 : index + 6;
     const button = document.createElement('button');
     button.className = 'stage-card';
     button.disabled = locked;
+    button.style.setProperty('--stage-hue', String(205 + index * 19));
     button.innerHTML = `
-      <span class="stage-icon">${locked ? '🔒' : stage.icon}</span>
-      <span class="stage-copy"><b>${stage.id}단계 · ${stage.name}</b><small>${locked ? `이전 단계 ${stage.unlockScore.toLocaleString('ko-KR')}점 필요` : stageFeature(stage)}</small></span>
-      <span class="stage-record"><small>최고</small><b>${(Number(bests[index]) || 0).toLocaleString('ko-KR')}</b></span>`;
+      <span class="stage-art"><img src="./assets/duck-${previewDuck}.png" alt="" />${locked ? '<i>🔒</i>' : `<i>${stage.icon}</i>`}</span>
+      <span class="stage-copy">
+        <span class="stage-level"><b>${stage.id}단계 · ${stage.name}</b><em>${'●'.repeat(stage.id)}${'○'.repeat(5 - stage.id)}</em></span>
+        <small>${locked ? `이전 단계 ${stage.unlockScore.toLocaleString('ko-KR')}점 달성 시 해금` : stageFeature(stage)}</small>
+        ${locked ? `<span class="unlock-track"><i style="width:${progress}%"></i></span>` : ''}
+      </span>
+      <span class="stage-record"><small>BEST</small><b>${(Number(bests[index]) || 0).toLocaleString('ko-KR')}</b><em>${locked ? `${progress}%` : 'PLAY ›'}</em></span>`;
     if (!locked) button.addEventListener('click', () => selectStage(index));
     stageList.append(button);
   });
 }
 
-function selectStage(index) {
+function selectStage(index, pushHistory = true) {
+  running = false;
+  clearInterval(timerHandle);
+  clearInterval(legendHandle);
+  legendUntil = 0;
+  busy = false;
+  selected = null;
   currentStageIndex = index;
   currentStage = STAGE_CONFIGS[index];
   best = Number(bests[index]) || 0;
@@ -158,15 +175,17 @@ function selectStage(index) {
   stageLabelElement.textContent = `${currentStage.id}단계 · ${currentStage.name}`;
   startStageName.textContent = currentStage.name;
   startStageInfo.textContent = `${currentStage.seconds}초 · ${stageFeature(currentStage)}`;
+  startStageImage.src = `./assets/duck-${index < 3 ? index + 1 : index + 6}.png`;
   stageSelect.hidden = true;
   startOverlay.hidden = false;
   resultOverlay.hidden = true;
   board = makePlayableBoard();
   renderBoard();
   updateHud();
+  if (pushHistory) history.pushState({ duckpang: true, view: 'intro', stage: index }, '');
 }
 
-function showHome() {
+function showHome(pushHistory = true) {
   running = false;
   clearInterval(timerHandle);
   clearInterval(legendHandle);
@@ -176,6 +195,7 @@ function showHome() {
   renderStageSelect();
   stageSelect.hidden = false;
   updateHud();
+  if (pushHistory) history.pushState({ duckpang: true, view: 'select', stage: currentStageIndex }, '');
 }
 
 function cellAt(target) {
@@ -603,7 +623,7 @@ function tick() {
   if (remaining <= 0) endGame();
 }
 
-function startGame() {
+function startGame(pushHistory = true) {
   clearInterval(timerHandle);
   clearInterval(legendHandle);
   board = makePlayableBoard();
@@ -623,6 +643,9 @@ function startGame() {
   renderBoard(new Map(board.flat().map((tile) => [tile.id, SIZE])));
   updateHud();
   timerHandle = setInterval(tick, 100);
+  if (pushHistory && history.state?.view !== 'game') {
+    history.pushState({ duckpang: true, view: 'game', stage: currentStageIndex }, '');
+  }
 }
 
 function endGame() {
@@ -662,7 +685,6 @@ legendButton.addEventListener('click', () => {
     legendBurst.classList.remove('show');
     legendBurst.setAttribute('aria-hidden', 'true');
   }, 1000);
-  renderBoard();
   boardElement.classList.add('awakening');
   setTimeout(() => boardElement.classList.remove('awakening'), 480);
   updateHud();
@@ -670,19 +692,47 @@ legendButton.addEventListener('click', () => {
     if (!isLegendActive()) {
       clearInterval(legendHandle);
       legendUntil = 0;
-      renderBoard();
     }
     updateHud();
   }, 100);
 });
 
-document.querySelectorAll('[data-action="start"]').forEach((button) => button.addEventListener('click', startGame));
-document.querySelectorAll('[data-action="home"]').forEach((button) => button.addEventListener('click', showHome));
-document.querySelector('#home-button').addEventListener('click', showHome);
-document.querySelector('#how-button').addEventListener('click', () => document.querySelector('#how-panel').classList.toggle('open'));
+document.querySelectorAll('[data-action="start"]').forEach((button) => button.addEventListener('click', () => startGame()));
+document.querySelectorAll('[data-action="home"]').forEach((button) => button.addEventListener('click', () => showHome()));
+document.querySelector('#home-button').addEventListener('click', () => showHome());
+document.querySelector('#how-button').addEventListener('click', () => {
+  if (howPanel.classList.contains('open')) {
+    history.back();
+    return;
+  }
+  howPanel.classList.add('open');
+  history.pushState({ duckpang: true, view: 'how', stage: currentStageIndex }, '');
+});
+
+window.addEventListener('popstate', (event) => {
+  if (howPanel.classList.contains('open')) {
+    howPanel.classList.remove('open');
+    return;
+  }
+  const state = event.state;
+  if (!state?.duckpang) {
+    showHome(false);
+    history.pushState({ duckpang: true, view: 'select', stage: currentStageIndex, guard: true }, '');
+    return;
+  }
+  const stage = Math.min(STAGE_CONFIGS.length - 1, Math.max(0, Number(state.stage) || 0));
+  if (state.view === 'select') {
+    showHome(false);
+    if (state.root) history.pushState({ duckpang: true, view: 'select', stage, guard: true }, '');
+    return;
+  }
+  selectStage(stage, false);
+});
 
 bestElement.textContent = best.toLocaleString('ko-KR');
 renderBoard();
 updateHud();
 startOverlay.hidden = true;
 renderStageSelect();
+history.replaceState({ duckpang: true, view: 'select', stage: currentStageIndex, root: true }, '');
+history.pushState({ duckpang: true, view: 'select', stage: currentStageIndex, guard: true }, '');

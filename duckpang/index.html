@@ -4,20 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
     <meta name="theme-color" content="#65c8ff" />
-    <meta name="description" content="오리팡 1단계 오리마을 점수 경쟁 퍼즐" />
+    <meta name="description" content="오리팡 5단계 최고 점수 경쟁 퍼즐" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=10" />
+    <link rel="stylesheet" href="./styles.css?v=11" />
     <title>오리팡: 전설 각성</title>
   </head>
   <body>
     <main class="game-shell">
       <section id="stage-select" class="stage-select" aria-label="난이도 선택">
         <div class="select-title">
-          <div><p>최고 기록의 합</p><strong id="total-best">0</strong></div>
-          <img src="./assets/duck-10.png" alt="전설 태양오리" />
+          <div class="select-score">
+            <span class="select-kicker">🏆 오리팡 챌린지</span>
+            <p>모든 단계 최고 기록 합계</p>
+            <strong id="total-best">0</strong>
+            <small>나만의 최고 기록을 계속 높여봐!</small>
+          </div>
+          <div class="select-hero" aria-hidden="true">
+            <span>✦</span><img src="./assets/duck-10.png" alt="" /><span>✦</span>
+          </div>
         </div>
-        <h2>난이도 선택</h2>
-        <p class="select-subtitle">5개 난이도에서 최고 점수에 도전해봐!</p>
+        <div class="select-heading">
+          <div><h2>난이도 선택</h2><p class="select-subtitle">단계를 골라 최고 점수에 도전해봐!</p></div>
+          <span class="difficulty-guide">쉬움 → 어려움</span>
+        </div>
         <div id="stage-list" class="stage-list"></div>
       </section>
 
@@ -81,6 +90,6 @@
       </button>
       <p class="tip">오리를 탭하거나 원하는 방향으로 밀어 움직여봐!</p>
     </main>
-    <script type="module" src="./game.js?v=10"></script>
+    <script type="module" src="./game.js?v=11"></script>
   </body>
 </html>
