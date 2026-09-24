@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#dceff9">
+  <title>반짝반짝 구구단</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:#27394b;background:#dceff9}*{box-sizing:border-box}body{margin:0;min-height:100svh;background:radial-gradient(circle at 12% 12%,#fff8d9 0 8%,transparent 8.2%),radial-gradient(circle at 90% 20%,#fff 0 3%,transparent 3.2%),linear-gradient(180deg,#d5efff 0%,#eff9ef 78%,#d2ebce 100%);overflow-x:hidden}button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}button:focus-visible{outline:4px solid #5866cc;outline-offset:3px}.cloud{position:fixed;z-index:0;width:136px;height:43px;background:#fff9;border-radius:80px;filter:blur(.2px);pointer-events:none}.cloud:before,.cloud:after{content:"";position:absolute;background:#fff;border-radius:50%}.cloud:before{width:62px;height:62px;left:23px;top:-24px}.cloud:after{width:47px;height:47px;left:71px;top:-18px}.cloud.one{top:15%;left:-54px}.cloud.two{top:35%;right:-74px;transform:scale(.85)}.wrap{position:relative;z-index:1;max-width:550px;margin:auto;padding:28px 17px 42px}.heading{text-align:center;margin:2px 0 18px}.eyebrow{font-weight:800;letter-spacing:.19em;color:#587899;font-size:12px}.heading h1{font-size:clamp(30px,8vw,43px);margin:5px 0 4px;letter-spacing:-.065em;color:#274d72}.heading p{margin:0;color:#60778e;font-weight:650;font-size:15px}.mascot{display:inline-grid;place-items:center;width:62px;height:62px;margin-bottom:5px;border-radius:20px;background:#fff7d5;box-shadow:0 5px 0 #e9d898;font-size:37px;transform:rotate(-7deg)}.card{background:#fffefb;border:2px solid #fff;border-radius:31px;padding:22px;box-shadow:0 16px 40px #608bae2b,0 4px 0 #d2e3e7}.screen[hidden]{display:none}.section-title{font-size:20px;font-weight:900;margin:3px 0 6px;letter-spacing:-.04em}.hint{color:#687f90;margin:0 0 19px;font-size:14px;line-height:1.5}.levels{display:grid;gap:11px}.level{border:2px solid #e4e9f1;background:#f6faff;border-radius:20px;text-align:left;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;min-height:80px;color:#2e4a68;transition:transform .13s,border-color .13s,background .13s}.level:hover,.level:focus-visible{transform:translateY(-2px)}.level.selected{border-color:#657be1;background:#f0f2ff;box-shadow:inset 0 0 0 1px #657be1}.level strong{display:block;font-size:19px}.level small{display:block;color:#6c8093;font-size:13px;margin-top:3px}.level .icon{font-size:30px}.primary{display:block;width:100%;border:0;border-radius:19px;background:#6867d8;color:white;font-weight:900;font-size:20px;padding:16px;margin-top:20px;box-shadow:0 6px 0 #4d4bad}.primary:active{transform:translateY(4px);box-shadow:0 2px 0 #4d4bad}.game-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:800;color:#687d91;font-size:14px}.text-button{border:0;background:#f0f4f9;border-radius:12px;padding:8px 12px;color:#49627a;font-weight:800}.progress{height:11px;border-radius:20px;background:#eaf0f5;overflow:hidden;margin:17px 0 20px}.progress-fill{height:100%;background:linear-gradient(90deg,#69cabb,#7294e8);width:0;transition:width .3s}.prompt{text-align:center;font-size:15px;font-weight:850;color:#697f93;margin:0}.equation{text-align:center;font-weight:950;font-size:clamp(52px,15vw,78px);letter-spacing:-.08em;line-height:1.32;margin:12px 0 18px;color:#314c83;white-space:nowrap}.equation .times{font-size:.68em;color:#ff9e71;padding:0 .12em}.equation .question{color:#e6a347}.answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.answer{height:78px;border:2px solid #dce6f2;background:#f6faff;border-radius:20px;font-size:31px;font-weight:900;color:#355576;box-shadow:0 4px 0 #dbe4ed}.answer:active{transform:translateY(3px);box-shadow:0 1px 0 #dbe4ed}.answer.correct{background:#d9f7e9;border-color:#56c592;color:#167658}.answer.wrong{background:#ffe6e1;border-color:#fa927e;color:#b94a3e}.answer:disabled{cursor:default}.feedback{min-height:38px;text-align:center;font-weight:850;font-size:17px;margin:17px 0 0;color:#317c66}.feedback.try-again{color:#c26152}.result{text-align:center}.result .medal{font-size:68px;margin:7px 0 0}.result h2{font-size:28px;letter-spacing:-.05em;margin:4px 0 12px}.result .score{font-size:48px;font-weight:950;color:#645fca;margin:0}.result .description{color:#687f90;font-size:16px;line-height:1.5;margin:7px 0 22px}.result-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.result-actions .primary{margin:0;font-size:17px;padding:15px 8px}.secondary{border:2px solid #dbe3ee;background:#f6faff;color:#42617c;font-size:17px;font-weight:850;border-radius:19px;padding:14px 8px}.footer{text-align:center;color:#627c8b;font-size:12px;margin:18px 0 0;font-weight:650}@media(max-width:360px){.card{padding:17px}.answer{height:69px}.result-actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="cloud one" aria-hidden="true"></div><div class="cloud two" aria-hidden="true"></div>
+  <main class="wrap">
+    <header class="heading"><div class="mascot" aria-hidden="true">🐥</div><div class="eyebrow">LITTLE MATH ADVENTURE</div><h1>반짝반짝 구구단</h1><p>한 문제씩 천천히, 즐겁게 해보자!</p></header>
+    <section class="card screen" id="startScreen" aria-label="게임 시작">
+      <h2 class="section-title">어디부터 시작할까?</h2><p class="hint">난이도를 고르고 10문제를 풀어봐!</p>
+      <div class="levels" role="group" aria-label="난이도 선택">
+        <button class="level selected" type="button" data-level="easy" aria-pressed="true"><span><strong>차근차근</strong><small>2단부터 5단까지</small></span><span class="icon" aria-hidden="true">🌱</span></button>
+        <button class="level" type="button" data-level="all" aria-pressed="false"><span><strong>구구단 탐험</strong><small>2단부터 9단까지</small></span><span class="icon" aria-hidden="true">🚀</span></button>
+      </div>
+      <button class="primary" type="button" id="startButton">시작하기 ✨</button>
+    </section>
+    <section class="card screen" id="gameScreen" aria-label="구구단 문제" hidden>
+      <div class="game-top"><span id="roundLabel">1 / 10 문제</span><button class="text-button" type="button" id="homeButton">처음으로</button></div>
+      <div class="progress" role="progressbar" aria-label="진행률" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div class="progress-fill" id="progressFill"></div></div>
+      <p class="prompt">빈칸에 들어갈 숫자는?</p><div class="equation" id="equation" aria-live="polite"></div>
+      <div class="answers" id="answers" role="group" aria-label="정답 고르기"></div>
+      <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+    </section>
+    <section class="card screen result" id="resultScreen" aria-label="게임 결과" hidden>
+      <div class="medal" id="medal" aria-hidden="true">🏅</div><h2 id="resultTitle">참 잘했어!</h2><p class="score" id="scoreText"></p><p class="description" id="resultDescription"></p>
+      <div class="result-actions"><button class="primary" id="againButton" type="button">한 번 더!</button><button class="secondary" id="changeButton" type="button">난이도 바꾸기</button></div>
+    </section>
+    <p class="footer">시간 제한 없이 내 속도로 풀어요 💛</p>
+  </main>
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const screens = ['startScreen', 'gameScreen', 'resultScreen'];
+      const total = 10;
+      let level = 'easy', questions = [], index = 0, score = 0, locked = false, timer = null;
+      const rand = (max) => Math.floor(Math.random() * max);
+      const shuffle = (items) => { const copy = [...items]; for (let i = copy.length - 1; i > 0; i--) { const j = rand(i + 1); [copy[i], copy[j]] = [copy[j], copy[i]]; } return copy; };
+      const show = (id) => { screens.forEach((name) => { $(name).hidden = name !== id; }); };
+      function makeQuestions() {
+        const pool = [];
+        const max = level === 'easy' ? 5 : 9;
+        for (let a = 2; a <= max; a++) for (let b = 1; b <= 9; b++) pool.push({ a, b, result: a * b });
+        return shuffle(pool).slice(0, total);
+      }
+      function choices(q) {
+        const values = new Set([q.result]);
+        const candidates = shuffle([q.a * Math.max(1, q.b - 2), q.a * Math.max(1, q.b - 1), q.a * (q.b + 1), q.a * (q.b + 2), q.result - 1, q.result + 1, q.result - 2, q.result + 2, q.result + q.b].filter((n) => n > 0 && n !== q.result));
+        for (const value of candidates) { values.add(value); if (values.size === 4) break; }
+        for (let n = 1; values.size < 4; n++) values.add(q.result + n);
+        return shuffle([...values]);
+      }
+      function renderQuestion() {
+        if (index >= total) { finish(); return; }
+        const q = questions[index]; locked = false;
+        $('roundLabel').textContent = `${index + 1} / ${total} 문제`;
+        $('progressFill').style.width = `${index / total * 100}%`;
+        document.querySelector('.progress').setAttribute('aria-valuenow', index);
+        $('equation').innerHTML = `${q.a} <span class="times">×</span> ${q.b} = <span class="question">?</span>`;
+        $('feedback').textContent = '';
+        $('feedback').classList.remove('try-again');
+        const holder = $('answers'); holder.replaceChildren();
+        choices(q).forEach((value) => {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = 'answer'; button.textContent = value;
+          button.addEventListener('click', () => answer(button, value)); holder.append(button);
+        });
+      }
+      function answer(button, value) {
+        if (locked || button.disabled) return;
+        const correct = questions[index].result;
+        if (value !== correct) {
+          button.disabled = true; button.classList.add('wrong');
+          $('feedback').textContent = '아깝다! 다른 숫자를 골라봐 😊';
+          $('feedback').classList.add('try-again');
+          return;
+        }
+        locked = true; score++;
+        button.classList.add('correct');
+        [...$('answers').children].forEach((item) => { item.disabled = true; });
+        $('feedback').classList.remove('try-again');
+        $('feedback').textContent = '정답! 정말 잘했어 🎉';
+        timer = setTimeout(() => { timer = null; index++; renderQuestion(); }, 850);
+      }
+      function finish() {
+        $('progressFill').style.width = '100%';
+        $('medal').textContent = score === total ? '🏆' : '🌟';
+        $('resultTitle').textContent = score === total ? '구구단 박사 탄생!' : '열 문제 모두 해냈어!';
+        $('scoreText').textContent = '10문제 완료';
+        $('resultDescription').textContent = score === total ? '끝까지 집중해서 풀었어. 멋지다!' : '틀려도 다시 도전해서 모두 맞혔어. 최고야!';
+        show('resultScreen');
+      }
+      function start() { if (timer) clearTimeout(timer); timer = null; questions = makeQuestions(); index = 0; score = 0; show('gameScreen'); renderQuestion(); }
+      function home() { if (timer) clearTimeout(timer); timer = null; show('startScreen'); }
+      document.querySelectorAll('.level').forEach((button) => button.addEventListener('click', () => {
+        level = button.dataset.level;
+        document.querySelectorAll('.level').forEach((item) => { const selected = item === button; item.classList.toggle('selected', selected); item.setAttribute('aria-pressed', selected); });
+      }));
+      $('startButton').addEventListener('click', start);
+      $('againButton').addEventListener('click', start);
+      $('homeButton').addEventListener('click', home);
+      $('changeButton').addEventListener('click', home);
+    })();
+  </script>
+</body>
+</html>
