@@ -31,8 +31,8 @@
       const state = { max:5, score:0, lives:3, phase:'intro', generation:0, count:0, pattern:[], paused:false, spawnTimer:null, spawnAt:0, remaining:0, messageTimer:null };
       function show(id){for(const name of ['intro','game','end']) $(name).hidden=name!==id}
       function speedLevel(){return Math.min(5,1+Math.floor(state.score/5))}
-      function interval(){const sky=$('sky'),lanes=sky.clientWidth<430?2:3,travel=Math.max(160,sky.clientHeight-74-44),base=state.max===5?1050:800,step=state.max===5?90:60;return Math.max(base-step*(speedLevel()-1),Math.ceil(84*duration()/travel/lanes))}
-      function duration(){return (state.max===5?7900:6500)-(state.max===5?450:350)*(speedLevel()-1)}
+      function interval(){const sky=$('sky'),lanes=sky.clientWidth<430?2:3,travel=Math.max(160,sky.clientHeight-74-44),base=state.max===5?2200:1700,step=state.max===5?150:100;return Math.max(base-step*(speedLevel()-1),Math.ceil(84*duration()/travel/lanes))}
+      function duration(){return (state.max===5?13500:11000)-(state.max===5?950:700)*(speedLevel()-1)}
       function clearTimers(){clearTimeout(state.spawnTimer);clearTimeout(state.messageTimer);state.spawnTimer=null;state.messageTimer=null}
       function feedback(text){$('message').textContent=text;clearTimeout(state.messageTimer);state.messageTimer=setTimeout(()=>{$('message').textContent=''},750)}
       function update(){ $('score').textContent=`⭐ ${state.score}점`; $('speed').textContent=`🚀 속도 ${speedLevel()}`; $('hearts').textContent='❤️'.repeat(state.lives)+'🤍'.repeat(3-state.lives);$('hearts').setAttribute('aria-label',`남은 목숨 ${state.lives}개`) }
