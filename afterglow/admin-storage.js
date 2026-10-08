@@ -1,0 +1,18 @@
+const DB_NAME='afterglow-custom-art',STORE='settings';
+let database;
+function db(){if(database)return database;database=new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,1);request.onupgradeneeded=()=>request.result.createObjectStore(STORE);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(new Error('이 브라우저에서 그림 저장소를 열지 못했어.'));});return database;}
+async function read(key){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction(STORE,'readonly'),r=t.objectStore(STORE).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function write(key,value){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction(STORE,'readwrite');t.objectStore(STORE).put(value,key);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error??new Error('저장하지 못했어.'));});}
+export async function passwordRecord(password,salt){if(typeof password!=='string'||password.length<4)throw new Error('비밀번호는 4자 이상으로 정해줘.');const bytes=salt?Uint8Array.from(salt):crypto.getRandomValues(new Uint8Array(16));const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);const hash=await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes,iterations:210000,hash:'SHA-256'},key,256);return {salt:[...bytes],hash:[...new Uint8Array(hash)]};}
+export async function passwordMatches(password,record){if(typeof password!=='string'||password.length<4)return false;const result=await passwordRecord(password,record.salt);let difference=0;for(let i=0;i<record.hash.length;i++)difference|=record.hash[i]^result.hash[i];return difference===0;}
+export class ArtStore{
+ constructor(){this.unlocked=false;}
+ async hasPassword(){return !!(await read('password'));}
+ async login(password){const record=await read('password');if(!record||!await passwordMatches(password,record))throw new Error('비밀번호가 맞지 않아.');this.unlocked=true;}
+ async setup(password){if(await this.hasPassword())throw new Error('이미 비밀번호가 있어. 로그인해줘.');await write('password',await passwordRecord(password));this.unlocked=true;}
+ lock(){this.unlocked=false;}
+ async stage(stage){if(!Number.isInteger(stage)||stage<1||stage>5)throw new Error('스테이지가 올바르지 않아.');return await read('stage-'+stage)??{};}
+ async save(stage,images){if(!this.unlocked)throw new Error('관리자 비밀번호로 먼저 로그인해줘.');await this.stage(stage);for(const key of Object.keys(images))if(!['base','bonus'].includes(key)||!(images[key] instanceof Blob))throw new Error('올바른 그림 파일을 선택해줘.');await write('stage-'+stage,images);}
+ async restore(stage){if(!this.unlocked)throw new Error('먼저 로그인해줘.');await this.stage(stage);await write('stage-'+stage,{});}
+}
+export async function prepareImage(file){if(!file||!/^image\/(jpeg|png|webp|gif|avif)$/.test(file.type))throw new Error('JPG, PNG, WEBP, GIF, AVIF 그림을 선택해줘.');if(file.size>20*1024*1024)throw new Error('20MB 이하 그림을 선택해줘.');const url=URL.createObjectURL(file);try{const image=new Image();image.src=url;await image.decode();const scale=Math.min(1,1600/Math.max(image.naturalWidth,image.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('그림을 준비하지 못했어.')),'image/jpeg',.9));}catch{throw new Error('그림을 읽지 못했어. JPG 또는 PNG로 저장해서 다시 선택해줘.');}finally{URL.revokeObjectURL(url);}}
