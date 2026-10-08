@@ -1,0 +1,4 @@
+---
+layout: null
+---
+[{% assign separator = '' %}{% for file in site.static_files %}{% assign folder = file.path | slice: 0, 18 %}{% if folder == '/afterglow/images/' %}{{ separator }}{{ file.path | remove_first: '/afterglow/' | jsonify }}{% assign separator = ',' %}{% endif %}{% endfor %}]
