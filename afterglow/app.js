@@ -1,4 +1,4 @@
-import {Game,W,H,EMPTY,SAFE,TRAIL} from './engine.js?v=12';
+import {Game,W,H,EMPTY,SAFE,TRAIL} from './engine.js?v=13';
 import {FloatingStick} from './joystick.js?v=3';
 import {artStore,setupAdmin} from './admin.js?v=11';
 const $=s=>document.querySelector(s),game=new Game(),canvas=$('#canvas'),ctx=canvas.getContext('2d'),art=new Image();art.src='pool.jpg';let loaded=false,renderPlayer={x:1,y:45},last=0,flash=0,sound=false,audio=null,activePointer=null,direction=null;
