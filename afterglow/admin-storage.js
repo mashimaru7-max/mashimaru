@@ -1,4 +1,5 @@
 const DB_NAME='afterglow-custom-art',STORE='settings';
+const ADMIN_PASSWORD={"salt":[98,21,29,248,70,159,73,78,0,248,236,113,150,78,111,36],"hash":[149,120,163,98,229,47,89,57,149,158,123,53,86,70,119,211,125,116,4,6,55,180,5,137,37,209,177,2,245,109,22,135]};
 let database;
 function db(){if(database)return database;database=new Promise((resolve,reject)=>{const request=indexedDB.open(DB_NAME,1);request.onupgradeneeded=()=>request.result.createObjectStore(STORE);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(new Error('이 브라우저에서 그림 저장소를 열지 못했어.'));});return database;}
 async function read(key){const d=await db();return new Promise((resolve,reject)=>{const t=d.transaction(STORE,'readonly'),r=t.objectStore(STORE).get(key);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
@@ -7,9 +8,7 @@ export async function passwordRecord(password,salt){if(typeof password!=='string
 export async function passwordMatches(password,record){if(typeof password!=='string'||password.length<4)return false;const result=await passwordRecord(password,record.salt);let difference=0;for(let i=0;i<record.hash.length;i++)difference|=record.hash[i]^result.hash[i];return difference===0;}
 export class ArtStore{
  constructor(){this.unlocked=false;}
- async hasPassword(){return !!(await read('password'));}
- async login(password){const record=await read('password');if(!record||!await passwordMatches(password,record))throw new Error('비밀번호가 맞지 않아.');this.unlocked=true;}
- async setup(password){if(await this.hasPassword())throw new Error('이미 비밀번호가 있어. 로그인해줘.');await write('password',await passwordRecord(password));this.unlocked=true;}
+ async login(password){if(!await passwordMatches(password,ADMIN_PASSWORD))throw new Error('비밀번호가 맞지 않아.');this.unlocked=true;}
  lock(){this.unlocked=false;}
  async stage(stage){if(!Number.isInteger(stage)||stage<1||stage>5)throw new Error('스테이지가 올바르지 않아.');return await read('stage-'+stage)??{};}
  async save(stage,images){if(!this.unlocked)throw new Error('관리자 비밀번호로 먼저 로그인해줘.');await this.stage(stage);for(const key of Object.keys(images))if(!['base','bonus'].includes(key)||!(images[key] instanceof Blob))throw new Error('올바른 그림 파일을 선택해줘.');await write('stage-'+stage,images);}
