@@ -1,5 +1,5 @@
-import {defaultRounds,validateRounds} from './rounds.js?v=7';
-import {ArtStore,prepareImage} from './admin-storage.js?v=7';
+import {defaultRounds,validateRounds} from './rounds.js?v=8';
+import {ArtStore,prepareImage} from './admin-storage.js?v=8';
 export const artStore=new ArtStore();
 export function setupAdmin({onOpen,onSave}){
  const $=s=>document.querySelector(s),dialog=$('#admin-dialog');let stage=1,draft={},previewUrls=[],selection=0,session=0,pending=0,rounds=defaultRounds();
@@ -17,6 +17,6 @@ export function setupAdmin({onOpen,onSave}){
  $('#round-add').addEventListener('click',async()=>{if(rounds.length>=20)return status('최대 20라운드야.');try{readFields();rounds.push({...rounds.at(-1)});stage=rounds.length;roundOptions();await loadStage();status('라운드 추가됨 · 저장을 눌러야 적용돼.');}catch(e){status(e.message);}});
  $('#round-remove').addEventListener('click',async()=>{if(rounds.length<=1)return status('라운드가 하나는 있어야 해.');rounds.pop();stage=Math.min(stage,rounds.length);roundOptions();await loadStage();status('마지막 라운드 제외됨 · 저장을 눌러야 적용돼.');});
  for(const key of ['base','bonus'])$('#upload-'+key).addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;const token=selection;pending++;$('#save-art').disabled=true;$('#admin-stage').disabled=true;$('#restore-art').disabled=true;$('#round-add').disabled=true;$('#round-remove').disabled=true;status('그림 준비 중…');try{const blob=await prepareImage(file);if(token!==selection||!artStore.unlocked)return;draft={...draft,[key]:blob};preview();status('미리보기 확인 후 저장을 눌러줘.');}catch(error){status(error.message);}finally{if(token===selection){pending--;$('#save-art').disabled=pending>0;$('#admin-stage').disabled=pending>0;$('#restore-art').disabled=pending>0;$('#round-add').disabled=pending>0;$('#round-remove').disabled=pending>0;}}});
- $('#save-art').addEventListener('click',async()=>{$('#save-art').disabled=true;try{readFields();await artStore.save(stage,draft);await artStore.saveRounds(rounds);await onSave(stage);status(stage+'라운드 저장 완료 · 설정은 새 게임부터 적용돼.');}catch(e){status('저장 실패: '+e.message);}finally{$('#save-art').disabled=false;}});
+ $('#save-art').addEventListener('click',async()=>{$('#save-art').disabled=true;try{readFields();await artStore.save(stage,draft,rounds);if(!artStore.remote)await artStore.saveRounds(rounds);await onSave(stage);status(stage+'라운드 '+(artStore.remote?'서버 저장':'이 기기 저장')+' 완료 · 설정은 새 게임부터 적용돼.');}catch(e){status('저장 실패: '+e.message);}finally{$('#save-art').disabled=false;}});
  $('#restore-art').addEventListener('click',async()=>{try{await artStore.restore(stage);await loadStage();await onSave(stage);status(stage+'스테이지를 기본 그림으로 바꿨어.');}catch(e){status(e.message);}});
 }

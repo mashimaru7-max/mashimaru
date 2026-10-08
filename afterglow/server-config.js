@@ -1,2 +1,1 @@
-// Set this to the deployed HTTPS API origin to enable shared server storage.
-export const API_URL='';
+export const API_URL='https://afterglow-storage.maru77777.chatgpt.site';
