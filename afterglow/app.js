@@ -1,6 +1,6 @@
-import {Game,W,H,EMPTY,SAFE,TRAIL} from './engine.js?v=14';
-import {FloatingStick} from './joystick.js?v=3';
-import {artStore,setupAdmin} from './admin.js?v=11';
+import {Game,W,H,EMPTY,SAFE,TRAIL} from './engine.js';
+import {FloatingStick} from './joystick.js';
+import {artStore,setupAdmin} from './admin.js';
 const $=s=>document.querySelector(s),game=new Game(),canvas=$('#canvas'),ctx=canvas.getContext('2d'),art=new Image();art.src='pool.jpg';let loaded=false,renderPlayer={x:1,y:45},last=0,flash=0,sound=false,audio=null,activePointer=null,direction=null;
 art.onload=()=>{loaded=true;};art.onerror=()=>{$('#overlay-copy').textContent='그림을 불러오지 못했어. 새로고침해서 다시 해보자.';$('#primary').disabled=true;};
 const bonusArt=new Image();let bonusLoaded=false;bonusArt.onload=()=>{bonusLoaded=true;};bonusArt.src='bonus.jpg';bonusArt.onerror=()=>{bonusLoaded=false;if(game.bonusUnlocked)message('보너스 그림을 불러오지 못했어. 새로고침해줘.');};

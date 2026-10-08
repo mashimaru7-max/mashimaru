@@ -1,4 +1,4 @@
-import {defaultRounds,validateRounds} from './rounds.js?v=11';
+import {defaultRounds,validateRounds} from './rounds.js';
 export const W=60,H=90,EMPTY=0,SAFE=1,TRAIL=2;
 export class Game {
  constructor(){this.rounds=defaultRounds();this.stage=1;this.lives=3;this.score=0;this.speed=1;this.events=[];this.status='ready';this.init();}

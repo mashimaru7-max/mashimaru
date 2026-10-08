@@ -1,4 +1,4 @@
-import {defaultRounds,validateRounds,validateRound} from './rounds.js?v=11';
+import {defaultRounds,validateRounds,validateRound} from './rounds.js';
 export function parseArtFiles(files){
  if(!Array.isArray(files))throw new Error('그림 목록이 올바르지 않아.');
  const art=new Map();
