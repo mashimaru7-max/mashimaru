@@ -1,4 +1,4 @@
-import {defaultRounds,validateRounds,validateRound} from './rounds.js?v=10';
+import {defaultRounds,validateRounds,validateRound} from './rounds.js?v=11';
 export function parseArtFiles(files){
  if(!Array.isArray(files))throw new Error('그림 목록이 올바르지 않아.');
  const art=new Map();
@@ -6,7 +6,7 @@ export function parseArtFiles(files){
  return art;
 }
 export function roundNumbers(art){return [...art.entries()].filter(([,images])=>images.base).map(([number])=>number).sort((a,b)=>a-b);}
-export function catalogRounds(art,settings){settings=validateRounds(settings);const count=roundNumbers(art).length;if(!count)throw new Error('images 폴더에 기본 라운드 그림을 하나 이상 넣어줘.');return Array.from({length:count},(_,i)=>validateRound(settings[i]??{target:95,timeLimit:0,enemyCount:Math.min(12,2+Math.floor(i/2)),enemySpeed:1}));}
+export function catalogRounds(art,settings){settings=validateRounds(settings);const count=roundNumbers(art).length;if(!count)throw new Error('images 폴더에 기본 라운드 그림을 하나 이상 넣어줘.');return Array.from({length:count},(_,i)=>validateRound(settings[i]??{target:90,timeLimit:0,enemyCount:Math.min(12,2+Math.floor(i/2)),enemySpeed:1}));}
 export class GitArtStore{
  constructor(){this.data=null;this.loading=null;}
  async load(force=false){if(force)this.data=null;if(this.data)return this.data;if(this.loading)return this.loading;

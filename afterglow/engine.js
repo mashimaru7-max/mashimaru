@@ -1,4 +1,4 @@
-import {defaultRounds,validateRounds} from './rounds.js?v=7';
+import {defaultRounds,validateRounds} from './rounds.js?v=11';
 export const W=60,H=90,EMPTY=0,SAFE=1,TRAIL=2;
 export class Game {
  constructor(){this.rounds=defaultRounds();this.stage=1;this.lives=3;this.score=0;this.speed=1;this.events=[];this.status='ready';this.init();}
@@ -8,9 +8,9 @@ export class Game {
  cell(x,y){return x<0||y<0||x>=W||y>=H?SAFE:this.grid[this.index(x,y)];}
  init(){this.grid=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(x<2||y<2||x>=W-2||y>=H-2)this.grid[this.index(x,y)]=SAFE;this.player={x:1,y:45};this.lastSafe={...this.player};this.trail=[];this.returning=false;this.bonusChallenge=false;this.bonusUnlocked=false;this.milestoneReached=false;this.dir=null;this.acc=0;this.cooldown=0;this.elapsed=0;this.combo=0;this.comboAt=-100;const n=this.round.enemyCount;this.enemies=Array.from({length:n},(_,i)=>({x:10+(i%4)*12,y:16+Math.floor(i/4)*24,vx:(i%2?-1:1)*(5.2+this.stage*.7)*this.round.enemySpeed,vy:(i%2?1:-1)*(4.4+this.stage*.6)*this.round.enemySpeed,kind:i%2?'roamer':'hunter',phase:i*2.1,turnIn:.8+i*.2,hunting:false}));this.initialArea=this.area();}
  area(){let n=0;for(const c of this.grid)if(c===SAFE)n++;return n/(W*H)*100;}
- get target(){return this.bonusChallenge?99:this.round.target;}
+ get target(){return this.bonusChallenge?95:this.round.target;}
  continueBonus(){if(this.status!=='clear'||this.bonusUnlocked)return false;this.bonusChallenge=true;this.status='playing';this.events=[];return true;}
- checkProgress(){const area=this.area();if(area>=99){if(!this.bonusUnlocked){this.bonusUnlocked=true;this.score+=5000;this.events.push({type:'bonus'});}if(!this.milestoneReached){this.milestoneReached=true;this.score+=Math.max(0,Math.round(3000-this.elapsed*8));}this.bonusChallenge=false;this.status='clear';this.stop();this.events.push({type:'clear'});}else if(area>=this.round.target&&!this.milestoneReached){this.milestoneReached=true;this.status='clear';this.stop();this.score+=Math.max(0,Math.round(3000-this.elapsed*8));this.events.push({type:'clear'});}}
+ checkProgress(){const area=this.area();if(area>=95){if(!this.bonusUnlocked){this.bonusUnlocked=true;this.score+=5000;this.events.push({type:'bonus'});}if(!this.milestoneReached){this.milestoneReached=true;this.score+=Math.max(0,Math.round(3000-this.elapsed*8));}this.bonusChallenge=false;this.status='clear';this.stop();this.events.push({type:'clear'});}else if(area>=this.round.target&&!this.milestoneReached){this.milestoneReached=true;this.status='clear';this.stop();this.score+=Math.max(0,Math.round(3000-this.elapsed*8));this.events.push({type:'clear'});}}
  start(){this.stage=1;this.lives=3;this.score=0;this.init();this.status='playing';this.events=[];}
  next(){if(this.status!=='clear')return;if(this.stage>=this.rounds.length){this.status='complete';return;}this.stage++;this.lives=Math.min(3,this.lives+1);this.init();this.status='playing';}
  direction(d){if(this.status==='playing'&&!this.cooldown){if(!d){this.release();return;}this.returning=false;this.dir=d;}}
