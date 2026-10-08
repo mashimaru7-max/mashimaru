@@ -1,5 +1,5 @@
-import {validateRounds} from './rounds.js?v=9';
-import {ArtStore} from './admin-storage.js?v=9';
+import {validateRounds} from './rounds.js?v=10';
+import {ArtStore} from './admin-storage.js?v=10';
 export const artStore=new ArtStore();
 export function setupAdmin({onOpen}){
  const $=s=>document.querySelector(s),dialog=$('#admin-dialog');let stage=1,rounds=[],session=0,selection=0;
