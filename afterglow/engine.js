@@ -24,10 +24,17 @@ export class Game {
   if(this.trail.length===1&&p.x===this.lastSafe.x&&p.y===this.lastSafe.y){this.returnStep();return;}
   this.player=p;if(c===SAFE){if(this.trail.length)this.capture();this.lastSafe={...p};}else{this.grid[this.index(p.x,p.y)]=TRAIL;this.trail.push(p);}
  }
- capture(){const before=this.area();for(const p of this.trail)this.grid[this.index(p.x,p.y)]=SAFE;this.trail=[];const seen=new Uint8Array(W*H),queue=[];
-  for(const e of this.enemies){const x=Math.floor(e.x),y=Math.floor(e.y);for(let yy=y-1;yy<=y+1;yy++)for(let xx=x-1;xx<=x+1;xx++){if(xx<0||yy<0||xx>=W||yy>=H)continue;const i=this.index(xx,yy);if(this.grid[i]===EMPTY&&!seen[i]){seen[i]=1;queue.push(i);}}}
-  for(let head=0;head<queue.length;head++){const i=queue[head],x=i%W,y=Math.floor(i/W);for(const [xx,yy] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){if(xx<0||yy<0||xx>=W||yy>=H)continue;const j=this.index(xx,yy);if(this.grid[j]===EMPTY&&!seen[j]){seen[j]=1;queue.push(j);}}}
-  for(let i=0;i<this.grid.length;i++)if(this.grid[i]===EMPTY&&!seen[i])this.grid[i]=SAFE;
+ capture(){const before=this.area();for(const p of this.trail)this.grid[this.index(p.x,p.y)]=SAFE;this.trail=[];
+  // Label whole regions. An enemy protects only the region containing its center,
+  // never cells across a captured wall. Keep one playable region after each cut.
+  const labels=new Int32Array(W*H);labels.fill(-1);const regions=[];
+  for(let i=0;i<this.grid.length;i++){if(this.grid[i]!==EMPTY||labels[i]!==-1)continue;const id=regions.length,cells=[i];labels[i]=id;
+   for(let head=0;head<cells.length;head++){const j=cells[head],x=j%W,y=Math.floor(j/W);for(const [xx,yy] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){if(xx<0||yy<0||xx>=W||yy>=H)continue;const k=this.index(xx,yy);if(this.grid[k]===EMPTY&&labels[k]===-1){labels[k]=id;cells.push(k);}}}regions.push(cells);
+  }
+  const enemyRegions=this.enemies.map(e=>labels[this.index(Math.floor(e.x),Math.floor(e.y))]??-1);
+  let keep=-1;for(const id of enemyRegions)if(id>=0&&(keep<0||regions[id].length>regions[keep].length))keep=id;
+  for(let id=0;id<regions.length;id++)if(id!==keep)for(const i of regions[id])this.grid[i]=SAFE;
+  if(keep>=0)for(let n=0;n<this.enemies.length;n++){if(enemyRegions[n]===keep)continue;const e=this.enemies[n];let closest=regions[keep][0],distance=Infinity;for(const i of regions[keep]){const x=i%W+.5,y=Math.floor(i/W)+.5,d=(x-e.x)**2+(y-e.y)**2;if(d<distance){distance=d;closest=i;}}e.x=closest%W+.5;e.y=Math.floor(closest/W)+.5;e.turnIn=0;e.hunting=false;}
   const gained=this.area()-before;this.combo=this.elapsed-this.comboAt<8?Math.min(3,this.combo+1):1;this.comboAt=this.elapsed;const points=Math.round(gained*100*(gained>=10?1.5:1)*this.combo);this.score+=points;this.events.push({type:'capture',gained,points,combo:this.combo});this.checkProgress();
  }
  blocked(x,y){const r=.28;for(const dx of [-r,r])for(const dy of [-r,r])if(this.cell(Math.floor(x+dx),Math.floor(y+dy))===SAFE)return true;return false;}
