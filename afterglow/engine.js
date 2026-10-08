@@ -23,7 +23,16 @@ export class Game {
   if(c===TRAIL){const back=this.trail[this.trail.length-2];if(back&&back.x===p.x&&back.y===p.y){const removed=this.trail.pop();this.grid[this.index(removed.x,removed.y)]=EMPTY;this.player=p;return;}this.hit();return;}
   this.player=p;if(c===SAFE){if(this.trail.length)this.capture();this.lastSafe={...p};}else{this.grid[this.index(p.x,p.y)]=TRAIL;this.trail.push(p);}
  }
- capture(){const before=this.area();for(const p of this.trail)this.grid[this.index(p.x,p.y)]=SAFE;this.trail=[];const seen=new Uint8Array(W*H),queue=[];
+ separatesRegion(){
+  if(!this.trail.length)return false;
+  const origin=this.index(this.trail[0].x,this.trail[0].y),region=new Uint8Array(W*H),queue=[origin];region[origin]=1;
+  const neighbors=i=>{const x=i%W,y=Math.floor(i/W);return [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1];};
+  for(let head=0;head<queue.length;head++)for(const i of neighbors(queue[head]))if(i>=0&&!region[i]&&this.grid[i]!==SAFE){region[i]=1;queue.push(i);}
+  const seen=new Uint8Array(W*H);let components=0;
+  for(const start of queue){if(this.grid[start]!==EMPTY||seen[start])continue;if(++components>=2)return true;const flood=[start];seen[start]=1;for(let head=0;head<flood.length;head++)for(const i of neighbors(flood[head]))if(i>=0&&region[i]&&!seen[i]&&this.grid[i]===EMPTY){seen[i]=1;flood.push(i);}}
+  return false;
+ }
+ capture(){if(!this.separatesRegion()){for(const p of this.trail)this.grid[this.index(p.x,p.y)]=EMPTY;this.trail=[];this.returning=false;this.events.push({type:'returned'});return;}const before=this.area();for(const p of this.trail)this.grid[this.index(p.x,p.y)]=SAFE;this.trail=[];const seen=new Uint8Array(W*H),queue=[];
   for(const e of this.enemies){const x=Math.floor(e.x),y=Math.floor(e.y);for(let yy=y-1;yy<=y+1;yy++)for(let xx=x-1;xx<=x+1;xx++){if(xx<0||yy<0||xx>=W||yy>=H)continue;const i=this.index(xx,yy);if(this.grid[i]===EMPTY&&!seen[i]){seen[i]=1;queue.push(i);}}}
   for(let head=0;head<queue.length;head++){const i=queue[head],x=i%W,y=Math.floor(i/W);for(const [xx,yy] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){if(xx<0||yy<0||xx>=W||yy>=H)continue;const j=this.index(xx,yy);if(this.grid[j]===EMPTY&&!seen[j]){seen[j]=1;queue.push(j);}}}
   for(let i=0;i<this.grid.length;i++)if(this.grid[i]===EMPTY&&!seen[i])this.grid[i]=SAFE;
