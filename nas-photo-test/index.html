@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>NAS 사진 연결 테스트</title><style>
+:root{font-family:system-ui,-apple-system,sans-serif;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#10141f;color:#f2f5fc}main{max-width:780px;margin:35px auto;padding:0 18px}h1{font-size:27px}p{color:#abb8cc;line-height:1.65}.panel{background:#1b2435;border:1px solid #34435a;border-radius:17px;padding:20px;margin:17px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:block;font-size:13px;color:#bac9dd;margin-bottom:6px}input{width:100%;padding:12px;background:#101827;color:white;border:1px solid #4c5b72;border-radius:9px;font:inherit}button{border:0;background:#80b8ff;color:#0b1930;padding:12px 18px;border-radius:9px;font-weight:700;cursor:pointer}button:disabled{opacity:.5}.warn{color:#ffd39c}.muted{font-size:13px}.status{white-space:pre-wrap;word-break:break-word;background:#111a29;padding:13px;border-radius:9px;min-height:56px}ul{list-style:none;padding:0}li{padding:10px;border-bottom:1px solid #34435a;overflow-wrap:anywhere}.tag{color:#9ddab6}a{color:#9bc7ff}@media(max-width:580px){.grid{grid-template-columns:1fr}}
+</style></head><body><main><h1>📷 NAS 사진 연결 테스트</h1><p>Synology DS218+ · 공유 공간 <code>/photo</code> · 읽기 전용 목록 조회</p>
+<section class="panel"><strong>먼저 알아둘 점</strong><p class="warn">GitHub Pages에서 NAS에 직접 접속하면 CORS·인증 쿠키·QuickConnect 제한으로 실패할 수 있어요. 실패하더라도 NAS 자체가 연동 불가능하다는 뜻은 아닙니다.</p><p class="muted">이 페이지는 NAS 주소와 계정 정보를 저장하거나 외부 서버로 전송하지 않습니다. 다만 로그인 시 입력한 정보는 지정한 NAS 주소로 전송됩니다. 반드시 본인이 관리하는 HTTPS 주소와 전용 읽기 계정만 사용하세요. 관리자 계정은 사용하지 마세요.</p></section>
+<section class="panel"><form id="form"><label for="host">NAS HTTPS 주소 (QuickConnect URL 대신 직접 접근 가능한 HTTPS DSM 주소)</label><input id="host" type="url" placeholder="https://nas.example.com:5001" required autocomplete="off"><div class="grid" style="margin-top:12px"><div><label for="user">읽기 전용 사용자</label><input id="user" required autocomplete="off"></div><div><label for="pass">비밀번호</label><input id="pass" type="password" required autocomplete="off"></div></div><p class="muted">조회 경로: <code>/photo</code> · 최대 50개 항목 · 변경/삭제 요청 없음</p><button id="connect" type="submit">연결 및 목록 확인</button> <button type="button" id="clear">화면 지우기</button></form></section>
+<section class="panel"><strong>연결 결과</strong><pre id="status" class="status" role="status">대기 중</pre><ul id="list"></ul></section>
+<p class="muted">실제 사진 파일과 썸네일은 표시하지 않습니다. 1차 검증은 폴더·파일명 조회까지만 수행합니다. 이 테스트는 정적 웹사이트에서 브라우저 직접 연결이 가능한지 확인하는 용도입니다.</p></main>
+<script>
+const $=id=>document.getElementById(id), status=s=>$('status').textContent=s;
+$('clear').onclick=()=>{ $('pass').value=''; $('list').replaceChildren(); status('대기 중'); };
+$('form').onsubmit=async e=>{
+ e.preventDefault(); $('connect').disabled=true; $('list').replaceChildren();
+ let base, sid=null;
+ try{
+  base=new URL($('host').value.trim());
+  if(base.protocol!=='https:') throw Error('HTTPS 주소만 허용합니다.');
+  if(base.username||base.password||base.search||base.hash) throw Error('주소에는 계정·쿼리·해시를 넣지 마세요.');
+  base.pathname='/webapi/entry.cgi';
+  const endpoint=base.toString();
+  const call=async params=>{
+   const url=new URL(endpoint);
+   Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
+   try{const res=await fetch(url,{method:'GET',mode:'cors',credentials:'omit',cache:'no-store',signal:controller.signal,referrerPolicy:'no-referrer'});if(!res.ok)throw Error('HTTP '+res.status);return await res.json();}finally{clearTimeout(timer);}
+  };
+  status('1/2 NAS 로그인 API 요청 중…');
+  const auth=await call({api:'SYNO.API.Auth',version:'6',method:'login',account:$('user').value,passwd:$('pass').value,session:'FileStation',format:'sid'});
+  if(!auth.success)throw Error('로그인 실패 (Synology 오류 코드 '+(auth.error?.code??'?')+')');
+  sid=auth.data?.sid;if(!sid)throw Error('세션 ID를 받지 못했습니다.');
+  $('pass').value='';
+  status('2/2 /photo 폴더 목록 조회 중…');
+  const data=await call({api:'SYNO.FileStation.List',version:'2',method:'list',folder_path:'/photo',limit:'50',offset:'0',additional:'["time","size"]',_sid:sid});
+  if(!data.success)throw Error('목록 조회 실패 (Synology 오류 코드 '+(data.error?.code??'?')+'). photo 공유 폴더 권한을 확인하세요.');
+  const files=data.data?.files??[];
+  files.forEach(f=>{const li=document.createElement('li');const name=document.createElement('span');name.textContent=(f.isdir?'📁 ':'🖼️ ')+f.name;li.append(name);$('list').append(li);});
+  status('성공! /photo 항목 '+files.length+'개 표시 (전체 '+(data.data?.total??'미확인')+'개).\n폴더 안 사진은 다음 단계에서 재귀 조회할 수 있어요.');
+ }catch(err){
+  const msg=err instanceof TypeError?'네트워크/CORS 오류: 브라우저에서 NAS에 직접 접근할 수 없습니다. 별도 인증 프록시 방식이 필요할 수 있습니다.':err.name==='AbortError'?'12초 시간 초과: 주소·네트워크·외부 접속 설정을 확인하세요.':err.message;
+  status('연결 실패: '+msg+'\n※ 이것만으로 NAS API 연동 자체가 불가능하다는 뜻은 아닙니다.');
+ }finally{
+  if(sid&&base){try{const u=new URL(base);u.search=new URLSearchParams({api:'SYNO.API.Auth',version:'6',method:'logout',session:'FileStation',_sid:sid}).toString();await fetch(u,{mode:'cors',credentials:'omit',referrerPolicy:'no-referrer'});}catch(_){}}
+  $('pass').value='';$('connect').disabled=false;
+ }
+};
+</script></body></html>
