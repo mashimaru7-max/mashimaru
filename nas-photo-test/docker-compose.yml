@@ -7,6 +7,7 @@ services:
     command: ["python", "-B", "server.py"]
     volumes:
       - ./server.py:/app/server.py:ro
+      - /volume1/docker/family-photo-test/auth-data:/data:rw
       - /volume1/photo:/photos:ro
     environment:
       PHOTO_API_TOKEN: "${PHOTO_API_TOKEN}"
