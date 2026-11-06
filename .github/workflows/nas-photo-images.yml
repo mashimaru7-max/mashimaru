@@ -1,0 +1,26 @@
+name: Build NAS Docker images for mobile upload
+on:
+  push:
+    paths:
+      - '.github/workflows/nas-photo-images.yml'
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Pull exact amd64 images and export
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 python:3.12-alpine
+          docker pull --platform linux/amd64 cloudflare/cloudflared:latest
+          docker save -o nas-photo-images-amd64.tar python:3.12-alpine cloudflare/cloudflared:latest
+          ls -lh nas-photo-images-amd64.tar
+      - name: Upload image archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: nas-photo-images-amd64
+          path: nas-photo-images-amd64.tar
+          retention-days: 3
+          compression-level: 0
