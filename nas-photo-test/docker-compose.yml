@@ -1,0 +1,25 @@
+services:
+  api:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    user: "1024:100"
+    working_dir: /app
+    command: ["python", "-B", "server.py"]
+    volumes:
+      - ./server.py:/app/server.py:ro
+      - /volume1/photo:/photos:ro
+    environment:
+      PHOTO_API_TOKEN: "${PHOTO_API_TOKEN}"
+    mem_limit: 96m
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://api:8080"]
+    depends_on:
+      - api
+    mem_limit: 96m
+    security_opt:
+      - no-new-privileges:true
