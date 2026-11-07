@@ -5,3 +5,6 @@ Follow the user's supplied layout and interaction reference: responsive and card
 
 ## Nunsongi mascot
 The board-game mascot is the user's crested gecko 눈송이: caramel brown head, cream dorsal stripe, chocolate flank markings, eyelash crests, pale curled tail. Reuse assets/nunsongi.webp for new games. Keep original pet photos out of the public repository. Use the mascot in welcoming, waiting, help and celebration moments, with concise contextual copy. Avoid covering playable cards, symbols, controls or score text; hide waiting art when a card is revealed. Respect reduced motion and decorative alt="" for repeated illustrations.
+
+## Catalog artwork
+Keep game-selection covers in the illustrated Nunsongi mascot style, with thematic outfits and props. Use assets/nunsongi-football.webp for the Suwon lineup cover. Human player and coach photography belongs inside the lineup game, not on its catalog cover.
