@@ -1,287 +1,330 @@
 {
   "verifiedAt": "2026-11-07",
   "source": "https://www.bluewings.kr/player/pro",
-  "photoSource": "https://www.kleague.com/club/club.do?teamId=K02",
+  "photoSource": "https://www.bluewings.kr/player/pro",
   "players": [
     {
       "id": 1,
       "name": "김민준",
       "position": "GK",
-      "photo": "assets/1.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20210155.png"
+      "photo": "assets/suwon-2026/1.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20210155.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 21,
       "name": "양형모",
       "position": "GK",
-      "photo": "assets/21.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20140081.png"
+      "photo": "assets/suwon-2026/21.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20140081.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 30,
       "name": "김준홍",
       "position": "GK",
-      "photo": "assets/30.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20210291.png"
+      "photo": "assets/suwon-2026/30.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20210291.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 31,
       "name": "이경준",
       "position": "GK",
-      "photo": "assets/31.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240322.png"
+      "photo": "assets/suwon-2026/31.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240322.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 3,
       "name": "모경빈",
       "position": "DF",
-      "photo": "assets/3.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260240.png"
+      "photo": "assets/suwon-2026/3.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20260240.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 4,
       "name": "송주훈",
       "position": "DF",
-      "photo": "assets/4.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20190049.png"
+      "photo": "assets/suwon-2026/4.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20190049.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 5,
       "name": "고종현",
       "position": "DF",
-      "photo": "assets/5.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20230340.png"
+      "photo": "assets/suwon-2026/5.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20230340.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 11,
       "name": "이준재",
       "position": "DF",
-      "photo": "assets/11.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20220152.png"
+      "photo": "assets/suwon-2026/11.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20220152.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 13,
       "name": "여민준",
       "position": "DF",
-      "photo": "assets/13.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260241.png"
+      "photo": "assets/suwon-2026/13.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20269997.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 15,
       "name": "정성민",
       "position": "DF",
-      "photo": "assets/15.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240222.png"
+      "photo": "assets/suwon-2026/15.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240222.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 18,
       "name": "최지묵",
       "position": "DF",
-      "photo": "assets/18.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20200162.png"
+      "photo": "assets/suwon-2026/18.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20200162.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 20,
       "name": "홍정호",
       "position": "DF",
-      "photo": "assets/20.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20100163.png"
+      "photo": "assets/suwon-2026/20.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20100163.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 27,
       "name": "이건희",
       "position": "DF",
-      "photo": "assets/27.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240152.png"
+      "photo": "assets/suwon-2026/27.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240152.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 28,
       "name": "윤근영",
       "position": "DF",
-      "photo": "assets/28.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260242.png"
+      "photo": "assets/suwon-2026/28.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20269996.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 32,
       "name": "정동윤",
       "position": "DF",
-      "photo": "assets/32.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20160236.png"
+      "photo": "assets/suwon-2026/32.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20160236.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 33,
       "name": "박대원",
       "position": "DF",
-      "photo": "assets/33.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20190142.png"
+      "photo": "assets/suwon-2026/33.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20190142.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 44,
       "name": "홍상원",
       "position": "DF",
-      "photo": "assets/44.svg",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net"
+      "photo": "assets/suwon-2026/44.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1787044030297_선수단-홈페이지-프로필-반영-홍상원.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 66,
       "name": "한현서",
       "position": "DF",
-      "photo": "assets/66.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/player_20250017.png"
+      "photo": "assets/suwon-2026/66.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1785144078893_한현서-홈페이지.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 6,
       "name": "임지훈",
       "position": "MF",
-      "photo": "assets/6.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240151.png"
+      "photo": "assets/suwon-2026/6.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240151.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 10,
       "name": "헤이스",
       "position": "MF",
-      "photo": "assets/10.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20210261.png"
+      "photo": "assets/suwon-2026/10.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20210261.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 14,
       "name": "정호연",
       "position": "MF",
-      "photo": "assets/14.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20220145.png"
+      "photo": "assets/suwon-2026/14.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20220145.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 16,
       "name": "박현빈",
       "position": "MF",
-      "photo": "assets/16.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20220114.png"
+      "photo": "assets/suwon-2026/16.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20220114.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 17,
       "name": "강현묵",
       "position": "MF",
-      "photo": "assets/17.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20200035.png"
+      "photo": "assets/suwon-2026/17.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20200035.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 19,
       "name": "김성주",
       "position": "MF",
-      "photo": "assets/19.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20230342.png"
+      "photo": "assets/suwon-2026/19.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20230342.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 23,
       "name": "김민우",
       "position": "MF",
-      "photo": "assets/23.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240297.png"
+      "photo": "assets/suwon-2026/23.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240297.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 24,
       "name": "고승범",
       "position": "MF",
-      "photo": "assets/24.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20160115.png"
+      "photo": "assets/suwon-2026/24.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20160115.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 42,
       "name": "이준우",
       "position": "MF",
-      "photo": "assets/42.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260271.png"
+      "photo": "assets/suwon-2026/42.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20269995.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 80,
       "name": "김지성",
       "position": "MF",
-      "photo": "assets/80.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260272.png"
+      "photo": "assets/suwon-2026/80.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20269994.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 7,
       "name": "페신",
       "position": "FW",
-      "photo": "assets/7.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20230163.png"
+      "photo": "assets/suwon-2026/7.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20230163.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 8,
       "name": "르본",
       "position": "FW",
-      "photo": "assets/8.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/player_20250343.png"
+      "photo": "assets/suwon-2026/8.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1782466118412_르본.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 22,
       "name": "강성진",
       "position": "FW",
-      "photo": "assets/22.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20210079.png"
+      "photo": "assets/suwon-2026/22.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20210079.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 37,
       "name": "김주찬",
       "position": "FW",
-      "photo": "assets/37.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K35/player_20230103.png"
+      "photo": "assets/suwon-2026/37.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1791332209189_김주찬-홈페이지-반영.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 58,
       "name": "브루노 실바",
       "position": "FW",
-      "photo": "assets/58.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20240190.png"
+      "photo": "assets/suwon-2026/58.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20240190.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 70,
       "name": "루이스",
       "position": "FW",
-      "photo": "assets/70.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K36/player_20230147.png"
+      "photo": "assets/suwon-2026/70.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1787229197635_루이스-홈페이지.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 71,
       "name": "김지호",
       "position": "FW",
-      "photo": "assets/71.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/player_20240309.png"
+      "photo": "assets/suwon-2026/71.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1783664636918_김지호-누끼-680x992.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 77,
       "name": "김지현",
       "position": "FW",
-      "photo": "assets/77.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20180118.png"
+      "photo": "assets/suwon-2026/77.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20180118.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 90,
       "name": "김결",
       "position": "FW",
-      "photo": "assets/90.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/player_20240191.png"
+      "photo": "assets/suwon-2026/90.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1785399484634_김결.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 92,
       "name": "이상민",
       "position": "FW",
-      "photo": "assets/92.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20220340.png"
+      "photo": "assets/suwon-2026/92.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20220340.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 98,
       "name": "두비츠카스",
       "position": "FW",
-      "photo": "assets/98.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/player_20260364.png"
+      "photo": "assets/suwon-2026/98.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/1785143444910_선수단-홈페이지-프로필-반영.png",
+      "photoVerifiedAt": "2026-11-08"
     },
     {
       "id": 99,
       "name": "김도연",
       "position": "FW",
-      "photo": "assets/99.webp",
-      "sourcePhoto": "https://d2tfp74nsbbrkr.cloudfront.net/v1/player/2026/K02/player_20260243.png"
+      "photo": "assets/suwon-2026/99.webp",
+      "sourcePhoto": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/player/2026/20269993.png",
+      "photoVerifiedAt": "2026-11-08"
     }
-  ]
+  ],
+  "photoApi": "https://www.bluewings.kr/api/player?type=position",
+  "photosVerifiedAt": "2026-11-08",
+  "coachPhotoSource": "https://ssfc-public-s3.s3.ap-northeast-2.amazonaws.com/staff/2026/26headcoach_LEEJEONGHYO.png"
 }

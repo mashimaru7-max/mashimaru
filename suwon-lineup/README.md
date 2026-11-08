@@ -3,8 +3,9 @@
 GitHub Pages 정적 앱. `../boardgames/`의 카탈로그에서 진입한다.
 
 - 명단: 구단 공식 `https://www.bluewings.kr/player/pro`, 2026-11-07 확인. GK 4 / DF 14 / MF 10 / FW 12, 총 40명.
-- 사진: K리그 공식 `https://www.kleague.com/club/club.do?teamId=K02`에 연결된 선수·감독 사진. 원본 URL은 `roster.json`에 기록. 일부 원본 사진은 이전 소속팀 유니폼이다. 홍상원은 사진 대신 44번 유니폼을 사용.
-- 명단 갱신: `roster.json`과 `assets/`를 함께 갱신한다. 실시간 명단 동기화나 실제 경기 출전명단 예측 기능은 없다.
+- 사진: 구단 공식 `https://www.bluewings.kr/player/pro` 및 `/api/player?type=position`, 감독은 `/api/player/staff/coach`. 2026-11-08 확인한 구단 자체 프로필로 선수 40명과 감독 모두 갱신. 원본 URL은 `roster-20261108.json`에 기록하고, 로컬 이미지는 `assets/suwon-2026/`에 보관. 연맹 프로필은 이전 소속팀 사진이 섞일 수 있으므로 사진 출처로 사용하지 않는다.
+- 호환성: `roster.json`은 이전 앱을 위한 같은 내용의 호환 파일이다. 명단 수정 시 날짜가 붙은 런타임 파일과 함께 갱신한다.
+- 명단 갱신: `roster-20261108.json`과 `assets/suwon-2026/`를 함께 갱신한다. 실시간 명단 동기화나 실제 경기 출전명단 예측 기능은 없다.
 - 6개 포메이션, 선발 교체·이동(중복 방지), 포메이션 변경 시 선수 유지, 랜덤 배치, 되돌리기, 초기화.
 - 브라우저 localStorage로 현재 명단 자동 보관 및 명시적 저장 1개. 계정/기기간 동기화 없음.
 - Canvas PNG 다운로드. 사진을 같은 경로에 보관해 CORS 없이 내보낸다.
