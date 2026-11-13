@@ -1,10 +1,11 @@
-import {growthTabs,childJournal,journalPreview} from './growth-journal.mjs?v=20261113-journalforms2';
+import {JournalController} from './journal-controller.mjs?v=20261114-records1';
+import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-records1';
 import {icon} from "./icons.js?v=20261113-albumlook2";
-import { FamilySettings } from './nas-shared.mjs?v=20261113-login1';
-import { NasAlbums } from "./nas-albums.js?v=20261113-journal1";
-import { NasHome } from "./nas-home.js?v=20261113-login1";
+import { FamilySettings } from './nas-shared.mjs?v=20261114-records1';
+import { NasAlbums } from "./nas-albums.js?v=20261114-records1";
+import { NasHome } from "./nas-home.js?v=20261114-records1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-login1";
+import { NasGallery } from "./nas-gallery.js?v=20261114-records1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -69,6 +70,7 @@ const albums = new NasAlbums(nas, {
   },
 });
 const homePhoto = new NasHome(nas, notify, {vault:familySettings.homeVault,automatic:()=>albums.collection('home')});
+const journal = new JournalController(nas,{dialog,modal,notify});
 let liveConnection=false;
 function syncNasChrome() {
   familySettings.sync();
@@ -299,6 +301,7 @@ function sampleGrowthPage() {
 function growthPage() {
   if(state.child!=='함께'){
     main.innerHTML=childJournal(state.child,`${toolbar('growth')}<div id="growth-list" class="record-list">${growthList()}</div>`);
+    journal.mount(main.querySelector('#journal-real-records'),state.child);
     return;
   }
   sampleGrowthPage();
@@ -369,6 +372,7 @@ function form(type, id) {
   );
 }
 function render() {
+  journal.release();
   albums.beginVisit(state.page+(state.page==='growth'?':'+state.child:''));
   albums.release();
   main.classList.toggle("nas-live",nas.connected);
@@ -454,14 +458,14 @@ document.addEventListener("click", (e) => {
   const { action: a, type, id, value } = b.dataset;
   if (a === "close") dialog.close();
   if (a === "nas-settings") nas.settings();
-  if (a === "journal-preview") modal(journalPreview(state.child,value));
+  if (a === "journal-new") void journal.open(value);
   if (a === "gallery-source") {
     state.galleryView = value === "nas" ? "nas" : "sample";
     render();
   }
   if (a === "about")
     modal(
-      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>여행·성장 기록은 예시입니다. 갤러리에서는 기존 사진 API에 연결하여 NAS 원본을 읽기 전용으로 볼 수 있어요. 가족 계정·초대·공동 작성·영구 저장은 아직 준비 중입니다.</p>',
+      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>여행·성장 기록은 예시입니다. 갤러리에서는 기존 사진 API에 연결하여 NAS 원본을 읽기 전용으로 볼 수 있어요. 가족 공용 로그인과 개인 성장 기록의 NAS 저장을 지원해요. 초대·가족별 권한과 여행 이야기 영구 저장은 아직 준비 중입니다.</p>',
     );
   if (a === "credits")
     modal(

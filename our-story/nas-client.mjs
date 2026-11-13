@@ -129,6 +129,13 @@ export function validateSharedAlbum(data) {
   return {...data,search:{limited:false,canContinue:false,folders:data.matchedFolders.length}};
 }
 
+export function validateJournalItem(item) {
+  const r=item?.record;
+  if(!item || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(item.id) || !Number.isSafeInteger(item.revision) || item.revision<1 || typeof item.deleted!=='boolean' || typeof item.createdAt!=='string' || typeof item.updatedAt!=='string' || !r || !['다온','라온','함께'].includes(r.target) || !['diary','words','letter','measure'].includes(r.kind) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(r.date) || !['엄마','아빠','엄마와 아빠','가족'].includes(r.author) || !Array.isArray(r.attachments) || r.attachments.length>6)throw fail('FORMAT','성장 기록 응답을 확인할 수 없어요.');
+  for(const ref of r.attachments){safePath(ref.path);if(!/^[a-f0-9]{64}$/.test(ref.revision))throw fail('FORMAT','첨부 사진 정보를 확인할 수 없어요.');}
+  return item;
+}
+
 export class NasClient {
   #fetch;
   #timeout;
@@ -348,12 +355,35 @@ export class NasClient {
     this.#assertAuth();
     return this.#list(path, offset);
   }
-  async image(path) {
+  async image(path, expectedRevision='') {
     this.#assertAuth();
     safePath(path);
     if (!/\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(path))
       throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
-    return this.#request("/api/image", { params: { path }, image: true });
+    return this.#request("/api/image", { params: { path,...(expectedRevision?{revision:expectedRevision}:{}) }, image: true });
+  }
+  async journalList({target,kind='',year='',q='',trash=false,offset=0}) {
+    this.#assertAuth();
+    const data=await this.#request('/api/journal',{params:{target,kind,year,q,trash:trash?'1':'0',offset}});
+    if(!data || !Array.isArray(data.items) || data.items.length>10 || !Number.isSafeInteger(data.total) || data.total<0 || !(data.next===null || Number.isSafeInteger(data.next)&&data.next>offset) || !Array.isArray(data.years))throw fail('FORMAT','기록 목록 응답을 확인할 수 없어요.');
+    data.items.forEach(validateJournalItem);return data;
+  }
+  async journalGet(id) {
+    this.#assertAuth();return validateJournalItem(await this.#request('/api/journal',{params:{id}}));
+  }
+  async journalWrite(data) {
+    this.#assertAuth();
+    try{return validateJournalItem(await this.#request('/api/journal',{body:data,timeoutMs:30000}));}
+    catch(e){
+      if(e.code==='HTTP_409')throw fail(e.code,'기록이나 첨부 사진이 변경됐어요. 입력 내용은 유지했으니 최신 기록을 확인해 주세요.');
+      if(e.code==='HTTP_403')throw fail(e.code,'NAS 기록 저장 폴더의 쓰기 권한을 확인해 주세요.');
+      if(e.code==='HTTP_400')throw fail(e.code,'입력값이나 첨부 사진 정보를 확인해 주세요.');
+      if(e.code==='HTTP_404')throw fail(e.code,'기록 또는 연결할 사진을 찾지 못했어요. 최신 목록을 확인해 주세요.');
+      throw e;
+    }
+  }
+  async journalBackup() {
+    this.#assertAuth();return this.#request('/api/journal-backup',{binary:true,maxBytes:64*1024*1024,timeoutMs:120000});
   }
   async createFamilyAccount(password) {
     this.#assertAuth();
@@ -373,7 +403,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -381,10 +411,10 @@ export class NasClient {
       throw e;
     }
   }
-  async thumbnail(path) {
+  async thumbnail(path, expectedRevision='') {
     this.#assertAuth();safePath(path);
     return new Promise((resolve,reject)=>{
-      this.#thumbQueue.push({path,resolve,reject,epoch:this.#epoch});this.#drainThumbnails();
+      this.#thumbQueue.push({path,expectedRevision,resolve,reject,epoch:this.#epoch});this.#drainThumbnails();
     });
   }
   #drainThumbnails() {
@@ -392,7 +422,7 @@ export class NasClient {
       const task=this.#thumbQueue.shift();
       if(task.epoch!==this.#epoch){task.reject(fail("ABORT","요청을 취소했어요."));continue;}
       this.#thumbActive++;
-      this.#request("/api/thumbnail",{params:{path:task.path},image:true})
+      this.#request("/api/thumbnail",{params:{path:task.path,...(task.expectedRevision?{revision:task.expectedRevision}:{})},image:true})
         .then(task.resolve,task.reject).finally(()=>{this.#thumbActive--;this.#drainThumbnails();});
     }
   }
@@ -422,7 +452,7 @@ export class NasClient {
   }
   async #request(
     route,
-    { body, raw, params = {}, image = false, auth = true, maxBytes, timeoutMs } = {},
+    { body, raw, params = {}, image = false, binary = false, auth = true, maxBytes, timeoutMs } = {},
   ) {
     if (auth) this.#assertAuth();
     const epoch = this.#epoch,
@@ -454,6 +484,7 @@ export class NasClient {
       });
       if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
       if (!res.ok) {
+        if(res.status===409 && ["/api/image","/api/thumbnail"].includes(route))throw fail("HTTP_409","기록에 연결한 사진이 변경됐어요. 사진 연결을 다시 확인해 주세요.");
         if (res.status === 401 && auth) {
           const wasConnected = this.#ready;
           this.#clear();
@@ -468,6 +499,7 @@ export class NasClient {
       const limit = maxBytes || (image ? 15 * 1024 * 1024 : 2 * 1024 * 1024);
       const payload = await readBounded(res, limit);
       if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
+      if(binary)return new Blob([payload],{type:'application/octet-stream'});
       if (image) {
         const type = (res.headers.get("content-type") || "")
           .split(";")[0]

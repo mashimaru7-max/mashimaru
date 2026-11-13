@@ -253,4 +253,37 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(self.request('/api/account','POST',payload)[0],400)
         self.assertFalse(self.server.auth.configured())
 
+    def test_journal_http_requires_login_supports_crud_and_private_backup(self):
+        import uuid
+        self.assertEqual(self.request('/api/journal?target=다온'.replace('다온','%EB%8B%A4%EC%98%A8'))[0],409)
+        credentials={'username':'오니둥이','password':'fixture password 12345'}
+        self.assertEqual(self.request('/api/account','POST',credentials)[0],201)
+        session=json.loads(self.request('/api/login','POST',credentials)[1])['session'];headers={'Authorization':'Bearer '+session}
+        self.store.writable=False
+        record={'target':'다온','kind':'words','date':'2026-11-14','author':'아빠','quote':'할 수 있어!','listener':'엄마','context':'학교에 가는 길','attachments':[]}
+        payload={'action':'save','id':str(uuid.uuid4()),'revision':0,'record':record}
+        self.assertEqual(self.request('/api/journal','POST',payload)[0],401)
+        self.assertEqual(self.request('/api/journal','POST',payload,{**headers,'Origin':'https://evil.example'})[0],403)
+        status,raw,_=self.request('/api/journal','POST',payload,headers);self.assertEqual(status,200)
+        saved=json.loads(raw);self.assertEqual(saved['record'],record)
+        url='/api/journal?target=%EB%8B%A4%EC%98%A8'
+        self.assertEqual(json.loads(self.request(url,headers=headers)[1])['total'],1)
+        stale={**payload,'revision':1,'record':{**record,'quote':'수정한 말'}}
+        self.assertEqual(self.request('/api/journal','POST',stale,headers)[0],200)
+        self.assertEqual(self.request('/api/journal','POST',stale,headers)[0],409)
+        status,raw,heads=self.request('/api/journal-backup',headers=headers)
+        self.assertEqual(status,200);self.assertTrue(raw.startswith(b'SQLite format 3'))
+        self.assertEqual(heads['Cache-Control'],'no-store');self.assertNotIn(session.encode(),raw)
+        self.assertFalse(list(self.settings_dir.glob('.journal-backup-*')))
+        self.assertEqual(self.request('/api/logout','POST',{},headers)[0],200)
+        self.assertEqual(self.request(url,headers=headers)[0],401)
+
+    def test_record_photo_reference_rejects_replaced_file_before_returning_bytes(self):
+        rev=self.item()['revision']
+        (self.root/'one.jpg').write_bytes(PHOTO)
+        for route in ['image','thumbnail']:
+            self.assertEqual(self.request('/api/'+route+'?path=one.jpg&revision='+rev)[0],409)
+        new=self.item()['revision']
+        self.assertEqual(self.request('/api/image?path=one.jpg&revision='+new)[0],200)
+
 if __name__=='__main__':unittest.main()

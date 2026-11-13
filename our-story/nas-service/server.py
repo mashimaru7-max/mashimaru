@@ -2,6 +2,9 @@
 Linux only: descriptor-relative paths, no symlink traversal, read-only by default.
 """
 import contextlib
+import datetime
+import math
+import tempfile
 import hashlib
 import hmac
 import io
@@ -442,6 +445,118 @@ class FamilyAuth:
     def logout(self,secret):
         with self.db() as db: db.execute('DELETE FROM sessions WHERE digest=?',(hashlib.sha256(secret.encode()).hexdigest(),))
 
+class JournalStore:
+    """Family records only. This database never contains photo binaries or credentials."""
+    KINDS={'diary','words','letter','measure'}
+    TARGETS={'다온','라온','함께'}
+    AUTHORS={'엄마','아빠','엄마와 아빠','가족'}
+    def __init__(self,root,photos):
+        self.root=Path(root);self.photos=photos;self.lock=threading.RLock()
+    @contextlib.contextmanager
+    def db(self):
+        with self.lock, contextlib.closing(sqlite3.connect(self.root/'journal.sqlite3',timeout=10)) as db:
+            os.chmod(self.root/'journal.sqlite3',0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY,revision INTEGER,payload TEXT,deleted INTEGER,created TEXT,updated TEXT)')
+            db.commit()
+            with db: yield db
+    @staticmethod
+    def text(value,maximum,required=False):
+        if not isinstance(value,str) or len(value)>maximum or '\x00' in value or (required and not value.strip()): raise APIError(400)
+        return value.strip()
+    @staticmethod
+    def date(value,optional=False):
+        if optional and value=='': return ''
+        if not isinstance(value,str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}',value): raise APIError(400)
+        datetime.date.fromisoformat(value)
+        return value
+    @staticmethod
+    def ident(value):
+        if not isinstance(value,str) or str(uuid.UUID(value))!=value: raise APIError(400)
+        return value
+    def validate(self,value):
+        if not isinstance(value,dict): raise APIError(400)
+        target=value.get('target');kind=value.get('kind');author=value.get('author')
+        if not isinstance(target,str) or target not in self.TARGETS or not isinstance(kind,str) or kind not in self.KINDS or not isinstance(author,str) or author not in self.AUTHORS: raise APIError(400)
+        fields={'diary':{'title','topic','body','feeling'},'words':{'quote','listener','context'},'letter':{'body','readOn'},'measure':{'height','weight','note'}}[kind]
+        if set(value)-({'target','kind','date','author','attachments'}|fields): raise APIError(400)
+        out={'target':target,'kind':kind,'date':self.date(value.get('date')),'author':author}
+        if kind=='diary':
+            for key,limit,required in [('title',100,True),('topic',40,True),('body',6000,True),('feeling',2000,False)]:out[key]=self.text(value.get(key,''),limit,required)
+        elif kind=='words':
+            for key,limit,required in [('quote',1000,True),('listener',100,False),('context',3000,False)]:out[key]=self.text(value.get(key,''),limit,required)
+        elif kind=='letter':
+            out['body']=self.text(value.get('body'),10000,True);out['readOn']=self.date(value.get('readOn',''),True)
+        else:
+            for key,low,high in [('height',20,250),('weight',1,200)]:
+                number=value.get(key)
+                if number is not None and (type(number) not in (int,float) or not math.isfinite(number) or not low<=number<=high): raise APIError(400)
+                out[key]=number
+            if out['height'] is None and out['weight'] is None: raise APIError(400)
+            out['note']=self.text(value.get('note',''),1000)
+        refs=value.get('attachments',[])
+        if not isinstance(refs,list) or len(refs)>6: raise APIError(400)
+        out['attachments']=[];seen=set()
+        for ref in refs:
+            if not isinstance(ref,dict) or set(ref)!={'path','revision'}: raise APIError(400)
+            path=ref['path'];rev=ref['revision']
+            if not isinstance(path,str) or len(path)>1024 or path in seen or not isinstance(rev,str) or not re.fullmatch(r'[a-f0-9]{64}',rev): raise APIError(400)
+            with self.photos.photo(path) as (fd,st):
+                if rev!=revision(st): raise APIError(409)
+            seen.add(path);out['attachments'].append({'path':path,'revision':rev})
+        return out
+    @staticmethod
+    def unpack(row):
+        return {'id':row[0],'revision':row[1],'record':json.loads(row[2]),'deleted':bool(row[3]),'createdAt':row[4],'updatedAt':row[5]}
+    def get(self,ident):
+        ident=self.ident(ident)
+        with self.db() as db:
+            row=db.execute('SELECT * FROM records WHERE id=?',(ident,)).fetchone()
+            if row is None: raise APIError(404)
+            return self.unpack(row)
+    def listing(self,target,kind='',year='',query='',trash=False,offset=0):
+        if target not in self.TARGETS or (kind and kind not in self.KINDS) or (year and not re.fullmatch(r'[0-9]{4}',year)) or len(query)>100 or offset<0 or offset>1000000: raise APIError(400)
+        with self.db() as db:
+            where='deleted=? AND json_extract(payload,\'$.target\')=?';args=[int(trash),target]
+            years=[r[0] for r in db.execute('SELECT DISTINCT substr(json_extract(payload,\'$.date\'),1,4) FROM records WHERE '+where+' ORDER BY 1 DESC',args)]
+            if kind:where+=' AND json_extract(payload,\'$.kind\')=?';args.append(kind)
+            if year:where+=' AND substr(json_extract(payload,\'$.date\'),1,4)=?';args.append(year)
+            if query:
+                # instr uses literal text; wildcard characters never change the query scope.
+                where+=' AND instr(lower(payload),lower(?))>0';args.append(query)
+            total=db.execute('SELECT count(*) FROM records WHERE '+where,args).fetchone()[0]
+            rows=db.execute('SELECT * FROM records WHERE '+where+' ORDER BY json_extract(payload,\'$.date\') DESC,id DESC LIMIT 10 OFFSET ?',args+[offset]).fetchall()
+            end=offset+len(rows)
+            return {'items':[self.unpack(r) for r in rows],'total':total,'next':end if end<total else None,'years':years}
+    def mutate(self,data):
+        if not isinstance(data,dict) or set(data)-{'action','id','revision','record'}: raise APIError(400)
+        action=data.get('action');ident=self.ident(data.get('id'));expected=data.get('revision')
+        if action not in ('save','trash','restore') or type(expected) is not int or expected<0: raise APIError(400)
+        record=self.validate(data.get('record')) if action=='save' else None
+        if action!='save' and 'record' in data: raise APIError(400)
+        now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT * FROM records WHERE id=?',(ident,)).fetchone()
+            if row is None:
+                if action!='save' or expected!=0: raise APIError(404)
+                db.execute('INSERT INTO records VALUES (?,?,?,?,?,?)',(ident,1,json.dumps(record,ensure_ascii=False),0,now,now))
+            else:
+                if action=='save' and expected==0 and row[1]==1 and not row[3] and json.loads(row[2])==record:return self.unpack(row)
+                if row[1]!=expected or (action=='restore')!=bool(row[3]): raise APIError(409)
+                if action=='save':
+                    previous=json.loads(row[2])
+                    if record['target']!=previous['target'] or record['kind']!=previous['kind']: raise APIError(400)
+                payload=json.dumps(record,ensure_ascii=False) if action=='save' else row[2]
+                db.execute('UPDATE records SET revision=?,payload=?,deleted=?,updated=? WHERE id=?',(expected+1,payload,int(action=='trash'),now,ident))
+            return self.unpack(db.execute('SELECT * FROM records WHERE id=?',(ident,)).fetchone())
+    def backup(self):
+        fd,path=tempfile.mkstemp(prefix='.journal-backup-',suffix='.sqlite3',dir=self.root);os.close(fd)
+        try:
+            with self.db() as source, contextlib.closing(sqlite3.connect(path)) as dest:source.backup(dest)
+            return Path(path)
+        except Exception:
+            Path(path).unlink(missing_ok=True);raise
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -482,13 +597,29 @@ class Handler(BaseHTTPRequestHandler):
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
+            if route.path in ('/api/journal','/api/journal-backup'):
+                if self.server.journal is None or not self.server.auth.configured(): raise APIError(409)
+                if route.path=='/api/journal-backup':
+                    if post: raise APIError(405)
+                    self.send_journal_backup();return
+                if post:
+                    if self.headers.get('Transfer-Encoding'): raise APIError(400)
+                    length=int(self.headers.get('Content-Length','0'))
+                    if length<=0 or length>131072 or self.headers.get_content_type()!='application/json': raise APIError(400)
+                    self.reply(200,self.server.journal.mutate(json.loads(self.rfile.read(length))));return
+                if set(query)-{'id','target','kind','year','q','trash','offset'}: raise APIError(400)
+                if 'id' in query:
+                    if len(query)!=1: raise APIError(400)
+                    self.reply(200,self.server.journal.get(q('id')));return
+                if q('trash','0') not in ('0','1'): raise APIError(400)
+                self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
                 if route.path in ('/api/image','/api/download','/api/thumbnail'):
-                    self.send_photo(q('path'),route.path); return
+                    self.send_photo(q('path'),route.path,q('revision')); return
             else:
                 if self.headers.get('Transfer-Encoding'): raise APIError(400)
                 length=int(self.headers.get('Content-Length','0'))
@@ -525,14 +656,30 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError,TimeoutError): pass
         except OSError: self.reply(400,{'error':'filesystem_request_rejected'})
         except Exception: self.reply(500,{'error':'internal_error'})
+    def send_journal_backup(self):
+        path=self.server.journal.backup()
+        try:
+            size=path.stat().st_size
+            if size>64*1024*1024: raise APIError(413)
+            self.send_response(200);self.cors();self.send_header('Content-Type','application/octet-stream')
+            self.send_header('Content-Disposition','attachment; filename="family-journal-backup.sqlite3"')
+            self.send_header('Content-Length',str(size));self.end_headers()
+            with open(path,'rb') as f:
+                while True:
+                    chunk=f.read(65536)
+                    if not chunk:break
+                    self.wfile.write(chunk)
+        finally:path.unlink(missing_ok=True)
     def read_auth_body(self):
         if self.headers.get('Transfer-Encoding'): raise APIError(400)
         length=int(self.headers.get('Content-Length','0'))
         if length<=0 or length>2048 or self.headers.get_content_type()!='application/json': raise APIError(400)
         return json.loads(self.rfile.read(length))
-    def send_photo(self,path,route):
+    def send_photo(self,path,route,expected=''):
+        if expected and not re.fullmatch(r'[a-f0-9]{64}',expected): raise APIError(400)
         store=self.server.store
         with store.photo(path) as (fd,st):
+            if expected and revision(st)!=expected: raise APIError(409)
             limit=MAX_DOWNLOAD if route=='/api/download' else 15*1024*1024
             mime=mimetypes.guess_type(path)[0] or {'heic':'image/heic','heif':'image/heif','avif':'image/avif'}.get(path.rsplit('.',1)[-1].lower(),'application/octet-stream')
             if route=='/api/thumbnail':
@@ -551,8 +698,17 @@ class Handler(BaseHTTPRequestHandler):
                       raw=out.getvalue()
                 except Exception: raise APIError(415)
                 finally: store.image_slots.release()
+                if expected and revision(os.fstat(fd))!=expected: raise APIError(409)
                 self.send_response(200); self.cors(); self.send_header('Content-Type','image/jpeg'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw); return
             if st.st_size>limit: raise APIError(413)
+            if expected and route=='/api/image':
+                raw=bytearray()
+                while len(raw)<st.st_size:
+                    chunk=os.read(fd,min(65536,st.st_size-len(raw)))
+                    if not chunk:break
+                    raw.extend(chunk)
+                if revision(os.fstat(fd))!=expected or len(raw)!=st.st_size: raise APIError(409)
+                self.send_response(200);self.cors();self.send_header('Content-Type',mime);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             self.send_response(200); self.cors(); self.send_header('Content-Type',mime); self.send_header('Content-Length',str(st.st_size))
             if route=='/api/download': self.send_header('Content-Disposition',"attachment; filename=photo; filename*=UTF-8''"+quote(path.split('/')[-1]))
             self.end_headers()
@@ -570,6 +726,7 @@ class Server(ThreadingHTTPServer):
         self.store=store; self.token=token; self.origin=origin; self.settings=settings
         self.archive=SharedArchive(settings,store) if settings is not None else None
         self.auth=FamilyAuth(settings.root) if settings is not None else None
+        self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
     def process_request(self,request,client_address):

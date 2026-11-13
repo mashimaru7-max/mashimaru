@@ -1,7 +1,7 @@
 import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import { NasActions } from "./nas-actions.js?v=20261113-shared1";
-import { NasClient } from "./nas-client.mjs?v=20261113-login1";
+import { NasClient } from "./nas-client.mjs?v=20261114-records1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
@@ -599,7 +599,7 @@ export class NasGallery {
     this.actions.bindViewer(item);
     this.dialog.showModal();
     try {
-      const blob = await (this.features.thumbnails ? this.client.thumbnail(item.path) : this.client.image(item.path));
+      const blob = await (this.features.thumbnails ? this.client.thumbnail(item.path,item.expectedRevision) : this.client.image(item.path,item.expectedRevision));
       if (
         version !== this.viewerVersion ||
         !this.dialog.open ||

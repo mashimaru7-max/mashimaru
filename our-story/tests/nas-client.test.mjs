@@ -144,3 +144,14 @@ test('family account setup sends Korean username and password only in an authent
  assert.deepEqual(JSON.parse(call.init.body),{username:'오니둥이',password:'fixture password 12345'});
  assert.ok(call.init.headers.Authorization.startsWith('Bearer '));
 });
+test('journal writes preserve conflict errors without changing the submitted draft',async()=>{
+ const f=fixture(url=>url.pathname==='/api/journal'?json({error:'conflict'},409):json(root));await connect(f.client);
+ const draft={action:'save',id:'11111111-1111-4111-8111-111111111111',revision:2,record:{body:'keep this'}};
+ await assert.rejects(()=>f.client.journalWrite(draft),e=>e.code==='HTTP_409'&&e.message.includes('입력 내용은 유지'));
+ assert.equal(draft.record.body,'keep this');assert.deepEqual(JSON.parse(f.calls.at(-1).init.body),draft);
+});
+test('journal backup uses an authenticated bounded binary response',async()=>{
+ const f=fixture(url=>url.pathname==='/api/journal-backup'?new Response('SQLite format 3\0fixture',{headers:{'content-type':'application/octet-stream'}}):json(root));
+ await connect(f.client);const blob=await f.client.journalBackup();assert.equal(blob.type,'application/octet-stream');assert.ok((await blob.text()).startsWith('SQLite format 3'));
+ assert.ok(f.calls.at(-1).init.headers.Authorization.startsWith('Bearer '));assert.equal(new URL(f.calls.at(-1).url).search,'');
+});
