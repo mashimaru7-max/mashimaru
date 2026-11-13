@@ -1,6 +1,7 @@
-import { NasHome } from "./nas-home.js?v=20261113-cleanbuttons1";
+import { NasAlbums } from "./nas-albums.js?v=20261113-autoalbums1";
+import { NasHome } from "./nas-home.js?v=20261113-autoalbums1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-cleanbuttons1";
+import { NasGallery } from "./nas-gallery.js?v=20261113-autoalbums1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -44,12 +45,27 @@ const nas = new NasGallery({
   onState: syncNasChrome,
   onConnected() {
     state.galleryView = "nas";
-    if (state.page !== "gallery") location.hash = "nas";
-    else render();
+    render();
   },
 });
-const homePhoto = new NasHome(nas, notify);
+const albums = new NasAlbums(nas, {
+  notify,
+  onChange(rebuild) { if(rebuild) render(); else if(state.page==='home') void homePhoto.paint(); },
+  onBrowse(path) {
+    nas.pendingAlbumPath=path; state.galleryView='nas';
+    if(state.page==='gallery')render(); else location.hash='nas';
+  },
+});
+const homePhoto = new NasHome(nas, notify, {automatic:()=>albums.collection('home')});
+let liveConnection=false;
 function syncNasChrome() {
+  albums.sync();
+  if(liveConnection!==nas.connected) {
+    liveConnection=nas.connected;
+    if(nas.connected){state.galleryView='nas';state.tab='photos';}
+    else if(state.tab==='photos')state.tab='world';
+    if(main.childElementCount)render();
+  }
   void homePhoto.paint();
   const profile = document.querySelector(".profile");
   profile.classList.toggle("connected", nas.connected);
@@ -59,7 +75,7 @@ function syncNasChrome() {
       ? "NAS 재연결 중"
       : "NAS 연결";
   document.querySelector(".demo-banner").innerHTML = nas.connected
-    ? "<span>NAS 사진 연결됨</span> 갤러리에서 우리 사진을 보고 홈 대표 사진도 고를 수 있어요. 여행·성장 기록은 계속 예시 모드예요."
+    ? "<span>우리 사진 자동 연결</span> 홈은 자동으로, 여행·성장앨범은 연결한 폴더의 사진으로 채워져요."
     : "<span>예시 모드</span> 여행·성장 기록은 디자인 확인용이에요. NAS 사진은 연결 후 갤러리에서 볼 수 있어요.";
 }
 function modal(html) {
@@ -72,7 +88,7 @@ function stats() {
 function card(r, type) {
   return `<button class="memory" data-action="detail" data-type="${type}" data-id="${r.id}">${img(r.image, 'loading="lazy"')}<h3>${esc(r.title)}</h3><small>${fmt(r.date)} · ${type === "trip" ? esc(r.city) : esc(r.target)} · 예시</small></button>`;
 }
-function home() {
+function sampleHome() {
   main.innerHTML = `<section class="hero">${img("lake", 'fetchpriority="high"')}<div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<br>이야기<span class="hand"> ♡</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#travel">우리의 추억 산책하기</a></div><span class="photo-note">풍경 사진 · 디자인 예시</span></section><section><div class="section-head"><div><span class="eyebrow">TWO CHAPTERS, ONE FAMILY</span><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">❧</span></h2></div></div><div class="gateway"><a href="#travel" class="album-card">${img("beach")}<div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>낯선 곳에서도, 함께라서 우리 집</p></div></div></a><a href="#growth" class="album-card">${img("season")}<div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div></div></a></div></section><section><div class="section-head"><h2>요즘, 우리의 순간들</h2><a href="#gallery">추억 모두 보기</a></div><div class="recent-grid">${[
     ...trips.map((r) => ({ ...r, type: "trip" })),
     ...growth.map((r) => ({ ...r, type: "growth" })),
@@ -85,6 +101,13 @@ function home() {
   shelf.className="nas-home-shelf";
   shelf.innerHTML='<span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>사진 한 장에서, 우리 이야기로</h2><p>NAS 사진을 둘러보고 마음에 드는 순간을 홈 대표 사진으로 골라 보세요.</p><a class="primary" href="#nas">우리 사진 보관함 열기</a>';
   main.querySelector(".hero").after(shelf);
+  void homePhoto.paint();
+}
+function home() {
+  if(!nas.connected){sampleHome();return;}
+  main.innerHTML=`<section class="hero"><img hidden alt="NAS에서 자동으로 불러오는 우리 사진"><div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<br>이야기<span class="hand"> ♡</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#nas">우리 사진 둘러보기</a></div><span class="photo-note">우리 사진을 불러오는 중</span></section><section class="nas-home-shelf"><span class="eyebrow">CONNECTED TO OUR FAMILY</span><h2>사진은 저절로 모이고, 추억은 더 가까이</h2><p>홈 사진은 NAS에서 자동으로 불러와요. 여행과 성장앨범은 사진 폴더를 한 번만 연결해 주세요.</p><button data-home-folder>홈 사진 폴더 변경</button></section><section><div class="section-head"><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">❧</span></h2></div><div class="gateway"><a href="#travel" class="album-card"><div class="nas-cover" data-album-cover="travel"><span>여행 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>폴더 하나로 이어지는 우리 여행</p></div></div></a><a href="#growth" class="album-card"><div class="nas-cover" data-album-cover="growth"><span>성장 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div></div></a></div></section><section id="home-nas-album"></section>`;
+  main.querySelector('[data-home-folder]').onclick=()=>void albums.pick('home');
+  albums.mount(main.querySelector('#home-nas-album'),'home');
   void homePhoto.paint();
 }
 function title(eye, title, sub, type) {
@@ -134,10 +157,11 @@ function travel() {
       "trip",
     ) +
     `<div class="tabs" aria-label="여행 보기">${[
-      ["world", "세계지도"],
-      ["korea", "국내지도"],
-      ["list", "여행기록"],
-      ["wish", "버킷리스트"],
+      ...(nas.connected ? [["photos","우리 여행 사진"]] : []),
+      ["world", nas.connected ? "예시 세계지도" : "세계지도"],
+      ["korea", nas.connected ? "예시 국내지도" : "국내지도"],
+      ["list", nas.connected ? "예시 여행기록" : "여행기록"],
+      ["wish", nas.connected ? "예시 버킷리스트" : "버킷리스트"],
     ]
       .map(
         ([id, t]) =>
@@ -145,8 +169,12 @@ function travel() {
       )
       .join(
         "",
-      )}</div>${state.tab === "wish" ? `<p class="muted">아직 떠나지 않은 여행, 언젠가 함께할 우리.</p><form id="wish-form" class="toolbar"><input name="title" maxlength="80" required placeholder="가고 싶은 곳을 적어 보세요 (예시)" aria-label="버킷리스트 제목"><button class="primary">＋ 추가</button></form><div class="wish-list">${wishes.map((w) => `<div class="wish-row"><input type="checkbox" aria-label="${esc(w.title)} 완료" data-wish="${w.id}" ${w.done ? "checked" : ""}><label style="${w.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(w.title)} <small>예시</small></label><button data-action="wish-delete" data-id="${w.id}" aria-label="${esc(w.title)} 삭제">×</button></div>`).join("") || empty("꿈꾸는 여행을 추가해 주세요.")}</div>` : `${state.tab !== "list" ? '<div class="map-layout"><div class="map-wrap"><div id="map" aria-label="예시 여행지도"></div><p class="map-hint">핀을 눌러 추억을 열어 보세요. 지도는 드래그·확대할 수 있어요.</p></div><aside id="map-preview" hidden></aside></div>' : ""}${toolbar("trip")}<div id="trip-list" class="record-list">${tripList()}</div>`}`;
+      )}</div>${state.tab === "photos" && nas.connected ? '<section id="travel-nas-album"></section>' : state.tab === "wish" ? `<p class="muted">아직 떠나지 않은 여행, 언젠가 함께할 우리.</p><form id="wish-form" class="toolbar"><input name="title" maxlength="80" required placeholder="가고 싶은 곳을 적어 보세요 (예시)" aria-label="버킷리스트 제목"><button class="primary">＋ 추가</button></form><div class="wish-list">${wishes.map((w) => `<div class="wish-row"><input type="checkbox" aria-label="${esc(w.title)} 완료" data-wish="${w.id}" ${w.done ? "checked" : ""}><label style="${w.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(w.title)} <small>예시</small></label><button data-action="wish-delete" data-id="${w.id}" aria-label="${esc(w.title)} 삭제">×</button></div>`).join("") || empty("꿈꾸는 여행을 추가해 주세요.")}</div>` : `${state.tab !== "list" ? '<div class="map-layout"><div class="map-wrap"><div id="map" aria-label="예시 여행지도"></div><p class="map-hint">핀을 눌러 추억을 열어 보세요. 지도는 드래그·확대할 수 있어요.</p></div><aside id="map-preview" hidden></aside></div>' : ""}${toolbar("trip")}<div id="trip-list" class="record-list">${tripList()}</div>`}`;
   if ($("#map")) initMap();
+  if ($("#travel-nas-album")) {
+    main.querySelector('.page-title > button')?.remove();
+    albums.mount($("#travel-nas-album"),'travel');
+  }
 }
 function initMap() {
   if (!window.L) {
@@ -224,7 +252,7 @@ function growthList() {
         .join("")
     : empty("이 시기의 예시 기록이 없어요.");
 }
-function growthPage() {
+function sampleGrowthPage() {
   let records = filteredGrowth(),
     r = records[0];
   main.innerHTML =
@@ -248,6 +276,19 @@ function growthPage() {
       .join(
         "",
       )}</aside><div>${r ? `<div class="scrapbook"><a href="#" class="polaroid" data-action="detail" data-type="growth" data-id="${r.id}">${img(r.image)}<h2>${esc(r.title)}</h2><small>${esc(r.target)} · ${fmt(r.date)} · 예시</small></a><div class="scrap-side">${img(records[1]?.image || "forest")}${img(records[2]?.image || "beach")}<span class="hand muted">나란히, 천천히 ♡</span></div></div><blockquote>“${esc(r.quote || "너희의 오늘을 오래오래 기억할게.")}”</blockquote>` : empty("아직 펼쳐지지 않은 계절이에요.")}</div></div><div class="section-head"><h2>시간을 따라, 한 장씩</h2><small>생년월일 미설정 · 예시 나이 구간</small></div>${toolbar("growth")}<div id="growth-list" class="record-list">${growthList()}</div>`;
+}
+function growthPage() {
+  sampleGrowthPage();
+  if(!nas.connected)return;
+  const heading=main.querySelector('.page-title'),chips=main.querySelector('.chips');
+  const demo=document.createElement('details');demo.className='sample-stories';
+  demo.open=!!state.growthExamplesOpen;demo.ontoggle=()=>{state.growthExamplesOpen=demo.open;};
+  const summary=document.createElement('summary');summary.textContent='성장 기록과 나이별 타임라인 예시 보기';demo.append(summary);
+  const add=heading.querySelector('button');if(add)demo.append(add);
+  for(const child of [...main.children])if(child!==heading && child!==chips)demo.append(child);
+  const host=document.createElement('section');host.id='growth-nas-album';
+  main.replaceChildren(heading,chips,host,demo);
+  albums.mount(host,'growth:'+state.child);
 }
 function gallery() {
   const heading = `<div class="page-title"><div><span class="eyebrow">COLLECTED LITTLE MOMENTS</span><h1>추억의 조각들 <span class="leaf">❧</span></h1><p>한 장의 사진 속에, 그날의 마음이 남아 있어요.</p></div></div>`;
@@ -305,6 +346,8 @@ function form(type, id) {
   );
 }
 function render() {
+  albums.release();
+  main.classList.toggle("nas-live",nas.connected);
   homePhoto.release();
   const active = document.activeElement;
   const focusData = main.contains(active)

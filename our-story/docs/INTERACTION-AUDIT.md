@@ -12,7 +12,7 @@
 | Sticky header | 스크롤 중 상단 메뉴 유지 |
 | Split layout | 여행 지도/프리뷰, 성장 대표 사진/타임라인 |
 | Tabs | 여행 보기, 다온/라온/함께, 예시/NAS 앨범 전환 |
-| Accordion | 미구현 |
+| Accordion | 성장 예시 영역에 기본 details 펼치기/접기 추가. 여러 항목의 전용 아코디언은 미구현 |
 | Modal / dialog | 기록 상세/입력, NAS 연결/사진 확대/관리 확인창 |
 | Drawer | 독립적인 옆 슬라이드 패널은 미구현. 모바일 지도 프리뷰는 하단 시트 |
 | Dropdown | 연도·카테고리·연결 방식의 기본 select |

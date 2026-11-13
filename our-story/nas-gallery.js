@@ -1,6 +1,6 @@
-import { NasActions } from "./nas-actions.js?v=20261113-cleanbuttons1";
-import { NasClient } from "./nas-client.mjs?v=20261113-cleanbuttons1";
-import { ConnectionVault } from "./nas-vault.mjs?v=20261113-cleanbuttons1";
+import { NasActions } from "./nas-actions.js?v=20261113-autoalbums1";
+import { NasClient } from "./nas-client.mjs?v=20261113-autoalbums1";
+import { ConnectionVault } from "./nas-vault.mjs?v=20261113-autoalbums1";
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -386,7 +386,9 @@ export class NasGallery {
     };
     void this.refreshFeatures();
     this.render();
-    if (this.connected && !this.loaded && !this.loading) void this.load("");
+    if (this.connected && this.pendingAlbumPath !== undefined) {
+      const path=this.pendingAlbumPath;delete this.pendingAlbumPath;void this.load(path);
+    } else if (this.connected && !this.loaded && !this.loading) void this.load("");
   }
   unmount() {
     if (this.host) this.host.onclick = null;
