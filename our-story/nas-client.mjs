@@ -420,7 +420,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -459,6 +459,16 @@ export class NasClient {
     return this.#request("/api/trash", {body:{path:item.path,revision:item.revision,...(item.dir?{kind:"folder"}:{})},timeoutMs:item.dir?120000:20000});
   }
   trashList() { return this.#request("/api/trash"); }
+  async purgePrepare(items,password) {
+    this.#assertAuth();
+    try { return await this.#request('/api/trash-purge/prepare',{body:{items:items.map(({id,revision})=>({id,revision})),password},timeoutMs:60000}); }
+    catch(error){if(error.code==='HTTP_422')throw fail(error.code,'공용 비밀번호가 맞지 않아요. 다시 입력해 주세요.');if(error.code==='HTTP_409')throw fail(error.code,'선택한 항목이 바뀌었어요. 휴지통을 새로 열어 다시 선택해 주세요.');throw error;}
+  }
+  async purgeCommit(ticket) {
+    this.#assertAuth();
+    try{return await this.#request('/api/trash-purge/commit',{body:{ticket,confirm:true},timeoutMs:120000});}
+    catch(error){if(error.code==='HTTP_410')throw fail(error.code,'확인 시간이 지났어요. 휴지통에서 다시 선택해 주세요.');if(error.code==='HTTP_409')throw fail(error.code,'확인 이후 파일이 바뀌어 삭제하지 않았어요. 다시 선택해 주세요.');throw error;}
+  }
   restoreTrash(id) {
     if (!/^[a-f0-9]{32}$/.test(id)) throw fail("TRASH", "휴지통 항목이 올바르지 않아요.");
     return this.#request("/api/restore", {body:{id}}).catch(error=>{if(error.code==="HTTP_409")throw fail(error.code,"원래 위치에 같은 이름이 있어 복원하지 않았어요. 덮어쓰지 않고 보관 중이에요.");if(error.code==="HTTP_501")throw fail(error.code,"이 NAS에서 안전한 복원을 지원하지 않아 작업하지 않았어요.");if(error.code==="HTTP_404")throw fail(error.code,"원래 상위 폴더나 휴지통 항목이 없어요. 상위 폴더를 먼저 복원하고 목록을 확인해 주세요.");throw error;});

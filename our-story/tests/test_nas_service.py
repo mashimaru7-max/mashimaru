@@ -46,6 +46,22 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(self.request(path,headers={'Origin':'https://evil.example'})[0],403)
         self.assertEqual(self.request('/api/upload?name=a.jpg','POST',PHOTO,{'Authorization':'','Content-Type':'application/octet-stream'})[0],401)
         self.assertFalse((self.root/'a.jpg').exists())
+    def test_permanent_delete_http_requires_session_origin_password_and_confirmation(self):
+        for route in ['/api/trash-purge/prepare','/api/trash-purge/commit']:
+            self.assertEqual(self.request(route,'POST',{}, {'Authorization':'Bearer wrong'})[0],401)
+            self.assertEqual(self.request(route,'POST',{}, {'Origin':'https://evil.example'})[0],403)
+        self.server.auth.setup({'username':'오니둥이','password':'fixture-password'})
+        session=self.server.auth.login({'username':'오니둥이','password':'fixture-password'})['session'];headers={'Authorization':'Bearer '+session}
+        item=next(i for i in json.loads(self.request('/api/list',headers=headers)[1])['items'] if i['name']=='one.jpg')
+        self.assertEqual(self.request('/api/trash','POST',{'path':item['path'],'revision':item['revision']},headers)[0],200)
+        trash=json.loads(self.request('/api/trash',headers=headers)[1])['items'][0];items=[{'id':trash['id'],'revision':trash['revision']}]
+        self.assertEqual(self.request('/api/trash-purge/prepare','POST',{'items':items,'password':'wrong'},headers)[0],422)
+        self.assertEqual(self.request('/api/list',headers=headers)[0],200)
+        self.assertEqual(self.request('/api/trash-purge/prepare','POST',{'items':items,'password':'fixture-password','all':True},headers)[0],400)
+        status,raw,_=self.request('/api/trash-purge/prepare','POST',{'items':items,'password':'fixture-password'},headers);self.assertEqual(status,200);ticket=json.loads(raw)['ticket']
+        self.assertEqual(self.request('/api/trash-purge/commit','POST',{'ticket':ticket,'confirm':False},headers)[0],400)
+        self.assertEqual(self.request('/api/trash-purge/commit','POST',{'ticket':ticket,'confirm':True},headers)[0],200)
+        self.assertEqual(json.loads(self.request('/api/trash',headers=headers)[1])['items'],[])
     def test_shared_family_settings_persist_and_preserve_originals(self):
         self.store.writable=False
         status,raw,_=self.request('/api/settings')

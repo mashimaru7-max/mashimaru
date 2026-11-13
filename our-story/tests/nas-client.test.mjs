@@ -177,3 +177,10 @@ test('folder trash sends an explicit kind without changing ordinary photo reques
  assert.deepEqual(JSON.parse(f.calls.at(-1).init.body),{path:'여행',revision:'a'.repeat(64),kind:'folder'});
  await f.client.trash({path:'one.jpg',dir:false,revision:'a'.repeat(64)});assert.ok(!('kind'in JSON.parse(f.calls.at(-1).init.body)));
 });
+
+test('permanent trash uses POST bodies and incorrect reauthentication preserves login',async()=>{
+ const {client,calls}=fixture((u,init)=>u.pathname==='/api/trash-purge/prepare'?json({},422):u.pathname==='/api/trash-purge/commit'?json({deleted:[],incomplete:[],unprocessed:[]}):json(root));
+ await connect(client);await assert.rejects(client.purgePrepare([{id:'a'.repeat(32),revision:'b'.repeat(64),path:'private.jpg'}],'fixture-password'),e=>e.code==='HTTP_422');assert(client.connected);
+ const call=calls.at(-1),body=JSON.parse(call.init.body);assert.deepEqual(Object.keys(body.items[0]),['id','revision']);assert.equal(body.password,'fixture-password');assert(!call.url.includes('fixture-password'));assert.equal(call.init.method,'POST');
+ await client.purgeCommit('c'.repeat(43));assert.deepEqual(JSON.parse(calls.at(-1).init.body),{ticket:'c'.repeat(43),confirm:true});
+});

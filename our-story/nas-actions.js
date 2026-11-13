@@ -1,4 +1,4 @@
-import {trashSelection} from './nas-selection.mjs?v=20261114-selection1';
+import {trashSelection} from './nas-selection.mjs?v=20261114-purge1';
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 export class NasActions {
   constructor(gallery, onHomePhoto) {
@@ -139,19 +139,46 @@ export class NasActions {
   }
   async trashList() {
     if(!this.g.features.trash) { this.unavailable(); return; }
-    const version=this.show("잠시 보관한 사진과 폴더", '<p>사진은 자동으로 영구 삭제되지 않아요.</p><div class="nas-trash-items">불러오는 중…</div>');
+    const version=this.show('잠시 보관한 사진과 폴더', '<p>자동으로 영구삭제하지 않아요. 복원하거나 삭제할 항목을 선택해 주세요.</p><div class="nas-trash-items">불러오는 중…</div><button class="nas-danger" data-purge-start disabled hidden>선택 항목 영구삭제</button>');
     try {
       const data=await this.g.client.trashList();
       if(version!==this.generation || !this.dialog.open) return;
-      if(!Array.isArray(data.items) || data.items.length>1000) throw new Error("휴지통 목록을 확인할 수 없어요.");
-      const list=this.dialog.querySelector('.nas-trash-items');
-      list.innerHTML=data.items.length ? data.items.map(i=>`<div class="nas-trash-row"><span>${i.kind==='folder'?'폴더 · ':'사진 · '}${esc(i.path)}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id) ? i.id : ""}">복원</button></div>`).join("") : '<p>휴지통이 비어 있어요.</p>';
+      if(!Array.isArray(data.items) || data.items.length>1000) throw new Error('휴지통 목록을 확인할 수 없어요.');
+      const list=this.dialog.querySelector('.nas-trash-items'),purge=this.dialog.querySelector('[data-purge-start]'),selected=new Map();
+      const enabled=this.g.features.permanentTrash===true;purge.hidden=!enabled;
+      list.innerHTML=data.items.length ? data.items.map((i,index)=>`<div class="nas-trash-row">${enabled?`<input type="checkbox" data-trash-index="${index}" aria-label="${esc(i.path)} 선택">`:''}<span>${i.kind==='folder'?'폴더 · ':'사진 · '}${esc(i.path)}${i.permanentPartial?'<small>영구삭제 중단 · 일부 파일이 삭제됐을 수 있어요.</small>':''}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id)?i.id:''}">복원</button></div>`).join('') : '<p>휴지통이 비어 있어요.</p>';
+      list.onchange=e=>{const input=e.target.closest('[data-trash-index]');if(!input)return;const item=data.items[Number(input.dataset.trashIndex)];if(input.checked&&selected.size>=50){input.checked=false;this.message('한 번에 최대 50개 항목을 선택해 주세요.');return;}if(input.checked)selected.set(item.id,item);else selected.delete(item.id);purge.disabled=!selected.size;purge.textContent=`선택 ${selected.size}개 영구삭제`;};
+      purge.onclick=()=>this.permanentDelete([...selected.values()]);
       list.onclick=async e=>{
-        const b=e.target.closest('[data-restore-id]'); if(!b || !b.dataset.restoreId) return;
-        b.disabled=true;
-        try { await this.g.client.restoreTrash(b.dataset.restoreId); if(version!==this.generation) return; b.closest('.nas-trash-row').remove(); this.message("원래 폴더로 복원했어요."); void this.g.load(this.g.path); }
-        catch(err) { if(version===this.generation) {this.message(err.message); b.disabled=false;} }
+        const b=e.target.closest('[data-restore-id]'); if(!b || !b.dataset.restoreId || this.busy) return;
+        this.busy=true;b.disabled=true;purge.disabled=true;
+        try { await this.g.client.restoreTrash(b.dataset.restoreId); if(version!==this.generation)return;this.busy=false;void this.g.load(this.g.path);void this.trashList(); }
+        catch(err) {if(version===this.generation){this.message(err.message);b.disabled=false;purge.disabled=!selected.size;}}
+        finally{this.busy=false;}
       };
     } catch(err) { if(version===this.generation) this.message(err.message); }
+  }
+  permanentDelete(items) {
+    const version=this.show('영구삭제 전 비밀번호 확인',`<p>선택한 ${items.length}개 항목의 NAS 원본을 삭제해요. 폴더는 하위 사진·영상·파일을 모두 포함하며 웹에서 복원할 수 없어요.</p><ul class="nas-purge-list">${items.map(i=>`<li>${esc(i.path)}</li>`).join('')}</ul><form class="form-grid"><label class="full">가족 공용 비밀번호<input name="password" type="password" required autocomplete="current-password" maxlength="128"></label><button class="primary full" type="submit">삭제할 내용 확인</button></form>`);
+    const form=this.dialog.querySelector('form');form.onsubmit=async e=>{
+      e.preventDefault();if(this.busy)return;let password=form.elements.password.value;form.elements.password.value='';this.busy=true;form.querySelector('button').disabled=true;this.message('비밀번호와 삭제할 파일을 확인하고 있어요…');
+      try{const prepared=await this.g.client.purgePrepare(items,password);if(version!==this.generation||!this.g.connected)return;this.busy=false;this.confirmPermanent(prepared);}
+      catch(error){if(version===this.generation){this.message(error.message);form.querySelector('button').disabled=false;}}
+      finally{password='';this.busy=false;}
+    };
+  }
+  confirmPermanent(prepared) {
+    const version=this.show('마지막으로 확인해 주세요',`<p>아래 항목을 NAS 휴지통에서 영구삭제해요. 백업·스냅샷은 별도로 남을 수 있어요.</p><ul class="nas-purge-list">${prepared.items.map(i=>`<li><strong>${esc(i.path)}</strong><small>파일 ${Number(i.counts.files)}개 · 폴더 ${Number(i.counts.folders)}개 · 바로가기 ${Number(i.counts.links)}개</small></li>`).join('')}</ul><label class="nas-purge-consent"><input type="checkbox" data-purge-consent>하위 파일을 포함해 삭제하며 웹에서 복원할 수 없음을 확인했어요.</label><button class="nas-danger" data-purge-confirm disabled>영구삭제 실행</button>`);
+    const button=this.dialog.querySelector('[data-purge-confirm]');this.dialog.querySelector('[data-purge-consent]').onchange=e=>{button.disabled=!e.target.checked;};
+    button.onclick=async()=>{
+      if(this.busy)return;this.busy=true;button.disabled=true;this.dialog.querySelector('[data-purge-consent]').disabled=true;this.message('영구삭제 중이에요. 완료될 때까지 기다려 주세요.');
+      try{
+        const result=await this.g.client.purgeCommit(prepared.ticket);if(version!==this.generation||!this.g.connected)return;
+        this.message(`영구삭제 완료 ${result.deleted.length}개 · 중단 ${result.incomplete.length}개 · 미처리 ${result.unprocessed.length}개.${result.incomplete.length?' 중단된 폴더는 일부 파일이 이미 삭제됐을 수 있어요.':''}`);
+      }catch(error){if(version===this.generation)this.message(error.message+' 요청이 끊긴 경우 일부 또는 전체가 삭제됐을 수 있어요. 휴지통을 다시 확인해 주세요.');}
+      finally{
+        this.busy=false;if(version===this.generation&&this.dialog.open){const refresh=document.createElement('button');refresh.textContent='휴지통 다시 확인';refresh.onclick=()=>this.trashList();button.replaceWith(refresh);void this.g.load(this.g.path);}
+      }
+    };
   }
 }

@@ -15,6 +15,7 @@ import mimetypes
 import os
 import re
 import secrets
+import shutil
 import stat
 import sqlite3
 import unicodedata
@@ -195,7 +196,7 @@ class PhotoStore:
                         data=self.read_meta(fd)
                         mode=os.stat('photo',dir_fd=fd,follow_symlinks=False).st_mode
                         if not (stat.S_ISDIR(mode) if data.get('kind')=='folder' else stat.S_ISREG(mode)):continue
-                        rows.append({'id':ident,'path':data['path'],'deletedAt':data['deletedAt'],'kind':data.get('kind','photo')})
+                        rows.append({'id':ident,'path':data['path'],'deletedAt':data['deletedAt'],'kind':data.get('kind','photo'),'revision':revision(os.stat('photo',dir_fd=fd,follow_symlinks=False))})
                     finally: os.close(fd)
                 except (OSError,APIError,ValueError,KeyError): continue
             return {'items':sorted(rows,key=lambda x:x['deletedAt'],reverse=True)[:1000]}
@@ -420,7 +421,7 @@ class FamilyAuth:
                 salt=secrets.token_bytes(16)
                 db.execute('INSERT INTO account VALUES (1,?,?,?)',(self.USERNAME,salt,self.derive(password,salt)))
         finally: self.hash_slot.release()
-    def login(self,data):
+    def login(self,data,verify_only=False):
         if not isinstance(data,dict) or set(data)!={'username','password'}: raise APIError(400)
         username=data['username'];password=data['password']
         if not isinstance(username,str) or len(username)>80 or not isinstance(password,str) or len(password)>128: raise APIError(400)
@@ -437,6 +438,7 @@ class FamilyAuth:
                     db.execute('INSERT INTO failures VALUES (?)',(now,))
                     # Commit failed attempts before returning an authentication error.
                     db.commit();raise APIError(401)
+                if verify_only:return {'verified':True}
                 session=secrets.token_urlsafe(32)
                 db.execute('DELETE FROM sessions WHERE expires<=?',(now,))
                 db.execute('DELETE FROM sessions WHERE digest IN (SELECT digest FROM sessions ORDER BY created DESC LIMIT -1 OFFSET 19)')
@@ -840,6 +842,164 @@ class FileManager:
             plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
             return self.execute(opid,plan)
 
+class PermanentTrash:
+    """Password-confirmed, session-bound deletion of explicitly selected trash IDs only."""
+    def __init__(self,store,settings,journal):
+        self.store=store;self.settings=settings;self.journal=journal
+        self.path=settings.root/'permanent-trash.sqlite3';self.tickets={};self.blocked=False
+    @staticmethod
+    def mount_id(fd):
+        try:
+            with open('/proc/self/fdinfo/'+str(fd)) as f:
+                for line in f:
+                    if line.startswith('mnt_id:'):return line.split(':',1)[1].strip()
+        except OSError:pass
+        raise APIError(501)
+    def supported(self):
+        if not getattr(shutil.rmtree,'avoids_symlink_attacks',False):return False
+        try:self.mount_id(self.store.root);return True
+        except APIError:return False
+    @contextlib.contextmanager
+    def db(self):
+        with contextlib.closing(sqlite3.connect(self.path,timeout=10)) as db,db:
+            os.chmod(self.path,0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY,state TEXT,payload TEXT)')
+            yield db
+    def job(self,ident,state,data):
+        with self.db() as db:db.execute('INSERT OR REPLACE INTO jobs VALUES (?,?,?)',(ident,state,json.dumps(data,ensure_ascii=False)))
+    @contextlib.contextmanager
+    def entry(self,ident):
+        if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):raise APIError(400)
+        with self.store.trash_root() as root:
+            fd=os.open(ident,DIR_FLAGS,dir_fd=root)
+            try:yield root,fd
+            finally:os.close(fd)
+    def inspect(self,ident,deadline,expected=None):
+        with self.entry(ident) as (root,fd):
+            meta=self.store.read_meta(fd);st=os.stat('photo',dir_fd=fd,follow_symlinks=False)
+            folder=meta.get('kind')=='folder'
+            if not (stat.S_ISDIR(st.st_mode) if folder else stat.S_ISREG(st.st_mode)):raise APIError(409)
+            if expected is not None and revision(st)!=expected:raise APIError(409)
+            digest=hashlib.sha256(json.dumps(meta,sort_keys=True,ensure_ascii=False).encode());counts={'files':0,'folders':0,'links':0,'bytes':0};base_mount=self.mount_id(fd)
+            def record(path,info):
+                if sum(counts[k] for k in ('files','folders','links'))>=100000 or time.monotonic()>deadline:raise APIError(413)
+                digest.update(os.fsencode(path));digest.update(f'{info.st_dev}:{info.st_ino}:{info.st_mode}:{info.st_uid}:{info.st_gid}:{info.st_size}:{info.st_mtime_ns}:{info.st_ctime_ns}'.encode())
+            def walk(parent,name,path,depth=0):
+                if depth>64:raise APIError(413)
+                info=os.stat(name,dir_fd=parent,follow_symlinks=False);record(path,info)
+                owner=os.fstat(parent)
+                if owner.st_mode & stat.S_ISVTX and os.geteuid() not in (owner.st_uid,info.st_uid):raise APIError(403)
+                if not os.access('.',os.W_OK|os.X_OK,dir_fd=parent):raise APIError(403)
+                if stat.S_ISDIR(info.st_mode):
+                    child=os.open(name,DIR_FLAGS,dir_fd=parent)
+                    try:
+                        if self.mount_id(child)!=base_mount:raise APIError(501)
+                        counts['folders']+=1
+                        for filename in sorted(os.listdir(child)):walk(child,filename,path+'/'+filename,depth+1)
+                        if revision(os.fstat(child))!=revision(info):raise APIError(409)
+                    finally:os.close(child)
+                elif stat.S_ISREG(info.st_mode):counts['files']+=1;counts['bytes']+=info.st_size
+                elif stat.S_ISLNK(info.st_mode):counts['links']+=1;digest.update(os.fsencode(os.readlink(name,dir_fd=parent)))
+                else:raise APIError(400)
+            walk(fd,'photo','photo')
+            return {'id':ident,'path':meta['path'],'kind':meta.get('kind','photo'),'signature':digest.hexdigest(),'metadata':meta,'counts':counts}
+    def prepare(self,items,password,session,auth):
+        self.store.write_check()
+        if not self.supported():raise APIError(501)
+        if not isinstance(items,list) or not 1<=len(items)<=50:raise APIError(400)
+        seen=set()
+        for item in items:
+            if not isinstance(item,dict) or set(item)!={'id','revision'} or not isinstance(item['id'],str) or not re.fullmatch(r'[a-f0-9]{32}',item['id']) or item['id'] in seen or not isinstance(item['revision'],str) or not re.fullmatch(r'[a-f0-9]{64}',item['revision']):raise APIError(400)
+            seen.add(item['id'])
+        try:auth.login({'username':FamilyAuth.USERNAME,'password':password},verify_only=True)
+        except APIError as error:
+            if error.status==401:raise APIError(422)
+            raise
+        deadline=time.monotonic()+30
+        snapshots=[self.inspect(item['id'],deadline,item['revision']) for item in items]
+        now=time.time();self.tickets={key:value for key,value in self.tickets.items() if value['expires']>now}
+        if len(self.tickets)>=16:raise APIError(429)
+        ticket=secrets.token_urlsafe(32);self.tickets[hashlib.sha256(ticket.encode()).hexdigest()]={'session':hashlib.sha256(session.encode()).hexdigest(),'expires':now+120,'items':snapshots}
+        return {'ticket':ticket,'expiresIn':120,'items':[{k:v for k,v in item.items() if k in ('id','path','kind','counts')} for item in snapshots]}
+    def cleanup(self,ident,data):
+        meta=data['metadata']
+        try:
+            with self.entry(ident) as (root,fd):
+                try:os.stat('photo',dir_fd=fd,follow_symlinks=False)
+                except FileNotFoundError:pass
+                else:raise APIError(409)
+                if self.store.read_meta(fd)!=meta:raise APIError(503)
+        except FileNotFoundError:pass
+        if meta.get('kind')=='folder':pairs={(r['path'],r['revision']) for r in meta.get('references',[])}
+        else:pairs={(meta['path'],meta.get('originalRevision'))}
+        if (self.settings.root/'journal.sqlite3').exists():
+            with self.journal.db() as db:
+                db.execute('BEGIN IMMEDIATE')
+                for row in db.execute('SELECT id,revision,payload FROM records').fetchall():
+                    record=json.loads(row[2]);refs=record.get('attachments',[]);remaining=[ref for ref in refs if (ref['path'],ref['revision']) not in pairs]
+                    if len(remaining)!=len(refs):
+                        record['attachments']=remaining
+                        db.execute('UPDATE records SET revision=?,payload=?,updated=? WHERE id=?',(row[1]+1,json.dumps(record,ensure_ascii=False),datetime.datetime.now(datetime.timezone.utc).isoformat(),row[0]))
+        try:
+            with self.entry(ident) as (root,fd):
+                try:os.stat('photo',dir_fd=fd,follow_symlinks=False)
+                except FileNotFoundError:pass
+                else:raise APIError(409)
+                current=self.store.read_meta(fd)
+                if current!=meta:raise APIError(503)
+                os.unlink('metadata.json',dir_fd=fd);os.fsync(fd)
+                if os.stat(ident,dir_fd=root,follow_symlinks=False).st_ino==os.fstat(fd).st_ino:os.rmdir(ident,dir_fd=root);os.fsync(root)
+        except FileNotFoundError:pass
+        compact={'id':ident,'path':data['path'],'kind':data['kind'],'counts':data['counts'],'at':data['at']}
+        self.job(ident,'done',compact)
+    def recover(self):
+        if not self.path.exists():return
+        try:
+            with self.db() as db:rows=db.execute("SELECT id,state,payload FROM jobs WHERE state IN ('deleting','cleanup')").fetchall()
+            for ident,state,raw in rows:
+                data=json.loads(raw)
+                if state=='deleting':
+                    try:
+                        with self.entry(ident) as (root,fd):
+                            try:os.stat('photo',dir_fd=fd,follow_symlinks=False)
+                            except FileNotFoundError:state='cleanup'
+                    except FileNotFoundError:state='partial'
+                    if state!='cleanup':self.job(ident,'partial',data);continue
+                    self.job(ident,'cleanup',data)
+                self.cleanup(ident,data)
+            self.blocked=False
+        except Exception:self.blocked=True;raise APIError(503)
+    def partial_ids(self):
+        if not self.path.exists():return set()
+        with self.db() as db:return {row[0] for row in db.execute("SELECT id FROM jobs WHERE state='partial'")}
+    def commit(self,ticket,confirm,session):
+        self.store.write_check()
+        if confirm is not True or not isinstance(ticket,str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}',ticket):raise APIError(400)
+        key=hashlib.sha256(ticket.encode()).hexdigest();grant=self.tickets.get(key)
+        if not grant or grant['expires']<=time.time():self.tickets.pop(key,None);raise APIError(410)
+        if not hmac.compare_digest(grant['session'],hashlib.sha256(session.encode()).hexdigest()):raise APIError(403)
+        deadline=time.monotonic()+30
+        current=[self.inspect(item['id'],deadline) for item in grant['items']]
+        if any(now['signature']!=before['signature'] for now,before in zip(current,grant['items'])):self.tickets.pop(key,None);raise APIError(409)
+        if grant['expires']<=time.time():self.tickets.pop(key,None);raise APIError(410)
+        self.tickets.pop(key,None);deleted=[];incomplete=[]
+        for index,item in enumerate(current):
+            ident=item['id'];data={**item,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+            self.job(ident,'deleting',data)
+            try:
+                with self.entry(ident) as (root,fd):
+                    if item['kind']=='folder':shutil.rmtree('photo',dir_fd=fd)
+                    else:os.unlink('photo',dir_fd=fd)
+                    os.fsync(fd)
+                self.job(ident,'cleanup',data);self.cleanup(ident,data);deleted.append(ident)
+            except Exception:
+                self.recover()
+                with self.db() as db:state=db.execute('SELECT state FROM jobs WHERE id=?',(ident,)).fetchone()[0]
+                if state=='done':deleted.append(ident)
+                else:incomplete.append(ident)
+                break
+        return {'deleted':deleted,'incomplete':incomplete,'unprocessed':[item['id'] for item in current if item['id'] not in deleted+incomplete]}
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -867,7 +1027,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
         route=urlsplit(self.path).path
-        metadata={'/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files'}
+        metadata={'/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
         if route=='/api/upload':
             # Long transfers serialize file writes without holding up record reads/writes.
             with self.server.store.lock:
@@ -875,15 +1035,17 @@ class Handler(BaseHTTPRequestHandler):
                     try:
                         self.authorized()
                         if self.server.files is not None:self.server.files.recover()
+                        if self.server.permanent is not None:self.server.permanent.recover()
                     except APIError as error:self.reply(error.status,{'error':'request_rejected'});return
                 self.dispatch_request(post)
         elif route in metadata:
             # File operations take the photo lock first; a slow upload must not freeze records.
-            context=self.server.store.lock if route in ('/api/trash','/api/restore','/api/files') else contextlib.nullcontext()
+            context=self.server.store.lock if route in ('/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit') else contextlib.nullcontext()
             with context,self.server.metadata_lock:
                 try:
                     self.authorized()
                     if self.server.files is not None:self.server.files.recover()
+                    if self.server.permanent is not None:self.server.permanent.recover()
                 except APIError as error:self.reply(error.status,{'error':'request_rejected'});return
                 self.dispatch_request(post)
         else:self.dispatch_request(post)
@@ -902,6 +1064,18 @@ class Handler(BaseHTTPRequestHandler):
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
+            if route.path in ('/api/trash-purge/prepare','/api/trash-purge/commit'):
+                if not post:raise APIError(405)
+                if self.server.permanent is None or not self.server.auth.configured():raise APIError(409)
+                length=int(self.headers.get('Content-Length','0'))
+                if self.headers.get('Transfer-Encoding') or length<=0 or length>16384 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                data=json.loads(self.rfile.read(length));session=self.headers.get('Authorization','')[7:]
+                if not isinstance(data,dict):raise APIError(400)
+                if route.path.endswith('/prepare'):
+                    if set(data)!={'items','password'}:raise APIError(400)
+                    self.reply(200,self.server.permanent.prepare(data['items'],data['password'],session,self.server.auth));return
+                if set(data)!={'ticket','confirm'}:raise APIError(400)
+                self.reply(200,self.server.permanent.commit(data['ticket'],data['confirm'],session));return
             if route.path=='/api/files':
                 if not post:raise APIError(405)
                 if self.server.files is None or not self.server.auth.configured():raise APIError(409)
@@ -926,10 +1100,12 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
-                if route.path=='/api/trash': self.reply(200,store.trash_list()); return
+                if route.path=='/api/trash':
+                    data=store.trash_list();partial=self.server.permanent.partial_ids() if self.server.permanent is not None else set()
+                    self.reply(200,{'items':[{**item,'permanentPartial':item['id'] in partial} for item in data['items']]});return
                 if route.path in ('/api/image','/api/download','/api/thumbnail'):
                     self.send_photo(q('path'),route.path,q('revision')); return
             else:
@@ -1051,8 +1227,9 @@ class Server(ThreadingHTTPServer):
         self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.metadata_lock=threading.RLock()
         self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None
+        self.permanent=PermanentTrash(store,settings,self.journal) if settings is not None else None
         if self.files is not None:
-            try:self.files.recover()
+            try:self.files.recover();self.permanent.recover()
             except APIError:pass
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
