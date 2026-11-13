@@ -37,3 +37,13 @@
 - 최초 배포 커밋 diff: `our-story/` 내부 신규 13개 파일, 기존 파일 변경 0개.
 
 브라우저 콘솔에 관찰된 확장 프로그램 메타데이터 오류는 chrome-extension 출처이며 앱 오류와 구분한다. 전체 오류 부재나 실제 기기 호환성을 보장하는 검증은 수행하지 않았다.
+
+## 인터랙션 / NAS 계약 점검 — 후속 수정
+
+- Leaflet 위치 transform과 핀 그래픽을 분리. SVG 핀·하트에 회전 transform 없음, 좌표는 Leaflet의 translate만 사용함을 브라우저 computed style로 확인.
+- 세계지도/국내지도 전환, 확대, 독립된 스위스 핀 클릭→미리보기 내용 변경 확인.
+- 국내지도 탭 재렌더 후 선택한 탭에 키보드 포커스가 유지되는 것을 확인.
+- 참고 이미지의 패턴을 기준으로 sticky header, hover/press 피드백, 모달·시트·토스트 등장, 홈 스크롤 reveal 및 stagger를 적용. reduced-motion에서는 효과를 끈다.
+- NAS 계약 단위 시험 12개 통과. 실제 NAS 접속 검증과 구분하며 자세한 결과는 `docs/NAS-INTEGRATION.md` 참고.
+- 390px 모바일 폭: 하트 방향 정상, 핀 클릭 하단 시트와 닫기 동작 확인, 콘텐츠 너비 375px/scrollWidth 375px으로 가로 넘침 없음.
+- 모바일 홈 스크롤 후 사진 6개 reveal 완료, sticky header top=0 확인.

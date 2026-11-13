@@ -13,7 +13,8 @@ const state = {
   selected: null,
 };
 let map = null,
-  toastTimer;
+  toastTimer,
+  revealObserver;
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -147,9 +148,11 @@ function initMap() {
       title: t.title,
       icon: L.divIcon({
         className: "pin",
-        html: "<span>♡</span>",
-        iconSize: [30, 30],
-        iconAnchor: [15, 30],
+        // Leaflet owns the outer element's transform. Draw the upright pin
+        // inside it instead of rotating the position-controlled element.
+        html: '<svg viewBox="0 0 36 46" aria-hidden="true" focusable="false"><path class="pin-shape" d="M18 44C15 39 2 27 2 18a16 16 0 1 1 32 0c0 9-13 21-16 26Z"/><path class="pin-heart" d="m18 25-6.5-6.2a4 4 0 0 1 5.6-5.7l.9.9.9-.9a4 4 0 0 1 5.6 5.7Z"/></svg>',
+        iconSize: [34, 44],
+        iconAnchor: [17, 44],
       }),
     })
       .addTo(map)
@@ -260,6 +263,11 @@ function form(type, id) {
   );
 }
 function render() {
+  const active = document.activeElement;
+  const focusData = main.contains(active)
+    ? { domId: active.id, data: { ...active.dataset } }
+    : null;
+  revealObserver?.disconnect();
   map?.remove();
   map = null;
   document.querySelectorAll("nav a").forEach((a) => {
@@ -268,6 +276,41 @@ function render() {
     else a.removeAttribute("aria-current");
   });
   (({ home, travel, growth: growthPage, gallery })[state.page] || home)();
+  if (focusData) {
+    const target = [...main.querySelectorAll("button, select, input")].find(
+      (el) =>
+        focusData.domId
+          ? el.id === focusData.domId
+          : focusData.data.action &&
+            el.dataset.action === focusData.data.action &&
+            el.dataset.value === focusData.data.value &&
+            el.dataset.id === focusData.data.id &&
+            el.dataset.type === focusData.data.type,
+    );
+    target?.focus({ preventScroll: true });
+  }
+  if (
+    state.page === "home" &&
+    "IntersectionObserver" in window &&
+    !matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    revealObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries)
+          if (entry.isIntersecting) {
+            entry.target.classList.remove("reveal-pending");
+            entry.target.classList.add("reveal-enter");
+            revealObserver.unobserve(entry.target);
+          }
+      },
+      { threshold: 0.08 },
+    );
+    main.querySelectorAll(".album-card, .memory").forEach((el, i) => {
+      el.style.setProperty("--reveal-delay", `${(i % 4) * 45}ms`);
+      el.classList.add("reveal-pending");
+      revealObserver.observe(el);
+    });
+  }
 }
 function route() {
   const page = location.hash.slice(1) || "home";

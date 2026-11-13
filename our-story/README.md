@@ -39,3 +39,7 @@ Leaflet 1.9.4: https://leafletjs.com (BSD-2-Clause, `vendor/LEAFLET-LICENSE`). �
 - forest.jpg: 이미지 ID photo-1472396961693-142e6e269027
 
 원본 이미지 URL 형식: `https://images.unsplash.com/<이미지 ID>` . 스톡 풍경은 해당 예시 여행지의 실촬영 인증 사진이 아니다. 한글 폰트는 Google Fonts의 Noto Sans KR / Gowun Batang / Nanum Pen Script (OFL)이며 로딩 실패 시 시스템 폰트로 대체된다.
+
+## 후속 점검
+
+사용자 인터랙션 참고 기준은 `AGENTS.md`에 유지한다. 하트 핀은 Leaflet 위치 transform과 분리한 SVG로 교체했다. NAS 연동의 구현 필요 사항과 로컬 검증 범위는 `docs/NAS-INTEGRATION.md`, 계약 테스트는 `tests/test_nas_contract.py`에 있다. 실제 NAS에 연결한 것으로 간주하지 않는다.
