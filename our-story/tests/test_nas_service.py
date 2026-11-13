@@ -139,7 +139,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.request('/api/restore','POST',{'id':ident})[0],409)
         self.assertEqual((self.root/'one.jpg').read_bytes(),b'new');self.assertEqual((self.root/api.TRASH/ident/'photo').read_bytes(),PHOTO)
     def test_no_permanent_delete_or_setup_routes(self):
-        for route in ['/api/delete','/api/purge','/api/setup','/api/login']:
+        for route in ['/api/delete','/api/purge','/api/setup']:
             self.assertEqual(self.request(route,'POST',{})[0],404)
         self.assertEqual(self.request('/api/restore','POST',{'id':'../x'})[0],400)
     def test_duplicate_queries_rejected(self):self.assertEqual(self.request('/api/list?path=&path=other')[0],400)
@@ -213,5 +213,44 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.request('/api/album-index','POST',{'key':'home','seed':'bad'})[0],400)
         status,raw,_=self.request('/api/album-index','POST',{'key':'home','seed':seed})
         self.assertEqual(status,200);self.assertEqual(json.loads(raw)['items'],first['items'])
+
+    def test_family_account_bootstrap_korean_login_restart_and_logout(self):
+        password='fixture password 12345'
+        data={'username':'오니둥이','password':password}
+        self.assertEqual(self.request('/api/account','POST',data,{'Authorization':'wrong'})[0],401)
+        self.assertEqual(self.request('/api/login','POST',data)[0],409)
+        self.assertEqual(self.request('/api/account','POST',data)[0],201)
+        self.assertEqual(self.request('/api/list')[0],401) # Old token loses access.
+        self.assertEqual(self.request('/api/login','POST',data,{'Origin':'https://evil.example'})[0],403)
+        status,raw,_=self.request('/api/login','POST',data)
+        self.assertEqual(status,200);session=json.loads(raw)['session'];headers={'Authorization':'Bearer '+session}
+        self.assertEqual(self.request('/api/list',headers=headers)[0],200)
+        self.server.auth=api.FamilyAuth(self.settings_dir)
+        self.assertEqual(self.request('/api/list',headers=headers)[0],200)
+        caps=json.loads(self.request('/api/capabilities',headers=headers)[1])
+        self.assertTrue(caps['familyLogin']);self.assertFalse(caps['accountSetup'])
+        self.assertEqual(self.request('/api/account','POST',data,headers)[0],409)
+        rawdb=(self.settings_dir/'auth.sqlite3').read_bytes()
+        for secret in [password,session,TOKEN]:self.assertNotIn(secret.encode(),rawdb)
+        self.assertEqual(self.request('/api/logout','POST',{},headers)[0],200)
+        self.assertEqual(self.request('/api/list',headers=headers)[0],401)
+    def test_family_account_wrong_password_rate_limit_and_expiry(self):
+        from unittest.mock import patch
+        auth=self.server.auth
+        auth.setup({'username':'오니둥이','password':'fixture password 12345'})
+        session=auth.login({'username':'오니둥이','password':'fixture password 12345'})['session']
+        with auth.db() as db:db.execute('UPDATE sessions SET expires=0')
+        self.assertFalse(auth.valid(session))
+        with patch.object(auth,'derive',return_value=b'bad digest'):
+            for _ in range(10):
+                with self.assertRaises(api.APIError) as error:auth.login({'username':'오니둥이','password':'wrong'})
+                self.assertEqual(error.exception.status,401)
+            with self.assertRaises(api.APIError) as error:auth.login({'username':'오니둥이','password':'wrong'})
+            self.assertEqual(error.exception.status,429)
+        self.assertEqual(self.request('/api/login','POST',{'username':'오니둥이','password':'wrong'})[0],429)
+    def test_family_setup_requires_fixed_name_and_strong_length(self):
+        for payload in [{'username':'other','password':'fixture password 12345'},{'username':'오니둥이','password':'short'},{'username':'오니둥이','password':'x'*129}]:
+            self.assertEqual(self.request('/api/account','POST',payload)[0],400)
+        self.assertFalse(self.server.auth.configured())
 
 if __name__=='__main__':unittest.main()

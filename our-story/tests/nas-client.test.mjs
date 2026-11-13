@@ -135,3 +135,12 @@ test('disconnect cancels queued thumbnails without sending them under another co
  const work=[f.client.thumbnail('a.jpg'),f.client.thumbnail('b.jpg'),f.client.thumbnail('c.jpg')];const finished=Promise.allSettled(work);await f.client.disconnect();
  const result=await finished;assert(result.every(r=>r.status==='rejected'&&r.reason.code==='ABORT'));assert.equal(f.calls.length,3);
 });
+
+test('family account setup sends Korean username and password only in an authenticated POST body',async()=>{
+ const f=fixture(url=>url.pathname==='/api/account'?json({username:'오니둥이'},201):json(root));
+ await connect(f.client);await f.client.createFamilyAccount('fixture password 12345');
+ const call=f.calls.at(-1);assert.equal(new URL(call.url).pathname,'/api/account');
+ assert.equal(new URL(call.url).search,'');assert.equal(call.init.method,'POST');
+ assert.deepEqual(JSON.parse(call.init.body),{username:'오니둥이',password:'fixture password 12345'});
+ assert.ok(call.init.headers.Authorization.startsWith('Bearer '));
+});

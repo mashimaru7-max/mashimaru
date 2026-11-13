@@ -9,6 +9,7 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import stat
 import sqlite3
 import unicodedata
@@ -374,6 +375,73 @@ class SharedArchive:
                 p.unlink(missing_ok=True);size-=n
             return raw
 
+class FamilyAuth:
+    USERNAME='오니둥이'
+    SESSION_SECONDS=30*86400
+    def __init__(self, root):
+        self.path=Path(root)/'auth.sqlite3'
+        self.lock=threading.RLock()
+        self.hash_slot=threading.BoundedSemaphore(1)
+    @contextlib.contextmanager
+    def db(self):
+        with self.lock, contextlib.closing(sqlite3.connect(self.path,timeout=10)) as db, db:
+            os.chmod(self.path,0o600)
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS account (id INTEGER PRIMARY KEY CHECK(id=1),username TEXT,salt BLOB,digest BLOB);
+                CREATE TABLE IF NOT EXISTS sessions (digest TEXT PRIMARY KEY,expires REAL,created REAL);
+                CREATE TABLE IF NOT EXISTS failures (at REAL);
+            """)
+            yield db
+    def configured(self):
+        if not self.path.exists(): return False
+        with self.db() as db: return db.execute('SELECT 1 FROM account WHERE id=1').fetchone() is not None
+    @staticmethod
+    def password(value):
+        if not isinstance(value,str) or not 10<=len(value)<=128: raise APIError(400)
+        return value.encode('utf-8')
+    @staticmethod
+    def derive(password,salt):
+        return hashlib.scrypt(password,salt=salt,n=131072,r=8,p=1,dklen=32,maxmem=256*1024*1024)
+    def setup(self,data):
+        if not isinstance(data,dict) or set(data)!={'username','password'} or data['username']!=self.USERNAME: raise APIError(400)
+        password=self.password(data['password'])
+        if not self.hash_slot.acquire(blocking=False): raise APIError(429)
+        try:
+            with self.db() as db:
+                if db.execute('SELECT 1 FROM account WHERE id=1').fetchone(): raise APIError(409)
+                salt=secrets.token_bytes(16)
+                db.execute('INSERT INTO account VALUES (1,?,?,?)',(self.USERNAME,salt,self.derive(password,salt)))
+        finally: self.hash_slot.release()
+    def login(self,data):
+        if not isinstance(data,dict) or set(data)!={'username','password'}: raise APIError(400)
+        username=data['username'];password=data['password']
+        if not isinstance(username,str) or len(username)>80 or not isinstance(password,str) or len(password)>128: raise APIError(400)
+        if not self.hash_slot.acquire(blocking=False): raise APIError(429)
+        try:
+            with self.db() as db:
+                now=time.time();db.execute('DELETE FROM failures WHERE at<?',(now-60,))
+                if db.execute('SELECT count(*) FROM failures').fetchone()[0]>=10: raise APIError(429)
+                row=db.execute('SELECT username,salt,digest FROM account WHERE id=1').fetchone()
+                if not row: raise APIError(409)
+                actual=self.derive(password.encode('utf-8'),row[1])
+                good=hmac.compare_digest(unicodedata.normalize('NFC',username).encode(),row[0].encode()) & hmac.compare_digest(actual,row[2])
+                if not good:
+                    db.execute('INSERT INTO failures VALUES (?)',(now,))
+                    # Commit failed attempts before returning an authentication error.
+                    db.commit();raise APIError(401)
+                session=secrets.token_urlsafe(32)
+                db.execute('DELETE FROM sessions WHERE expires<=?',(now,))
+                db.execute('DELETE FROM sessions WHERE digest IN (SELECT digest FROM sessions ORDER BY created DESC LIMIT -1 OFFSET 19)')
+                db.execute('INSERT INTO sessions VALUES (?,?,?)',(hashlib.sha256(session.encode()).hexdigest(),now+self.SESSION_SECONDS,now))
+                return {'session':session,'expiresIn':self.SESSION_SECONDS}
+        finally: self.hash_slot.release()
+    def valid(self,secret):
+        if not isinstance(secret,str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}',secret): return False
+        with self.db() as db:
+            return db.execute('SELECT 1 FROM sessions WHERE digest=? AND expires>?',(hashlib.sha256(secret.encode()).hexdigest(),time.time())).fetchone() is not None
+    def logout(self,secret):
+        with self.db() as db: db.execute('DELETE FROM sessions WHERE digest=?',(hashlib.sha256(secret.encode()).hexdigest(),))
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -391,7 +459,9 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self):
         if self.headers.get('Origin')!=self.server.origin: raise APIError(403)
         value=self.headers.get('Authorization','')
-        if not hmac.compare_digest(value.encode(),('Bearer '+self.server.token).encode()): raise APIError(401)
+        if self.server.auth is not None and self.server.auth.configured():
+            if not value.startswith('Bearer ') or not self.server.auth.valid(value[7:]): raise APIError(401)
+        elif not hmac.compare_digest(value.encode(),('Bearer '+self.server.token).encode()): raise APIError(401)
     def do_OPTIONS(self):
         if self.headers.get('Origin')!=self.server.origin: self.reply(403,{'error':'forbidden'}); return
         self.send_response(204); self.cors(); self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers','Authorization, Content-Type'); self.end_headers()
@@ -399,13 +469,21 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
         try:
+            route=urlsplit(self.path)
+            if post and route.path=='/api/login' and self.server.auth is not None:
+                if self.headers.get('Origin')!=self.server.origin: raise APIError(403)
+                self.reply(200,self.server.auth.login(self.read_auth_body()));return
             self.authorized()
+            if post and route.path=='/api/account' and self.server.auth is not None:
+                self.server.auth.setup(self.read_auth_body());self.reply(201,{'username':FamilyAuth.USERNAME});return
+            if post and route.path=='/api/logout' and self.server.auth is not None:
+                self.server.auth.logout(self.headers.get('Authorization','')[7:]);self.reply(200,{'ok':True});return
             route=urlsplit(self.path); query=parse_qs(route.query,keep_blank_values=True,strict_parsing=True)
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
@@ -447,6 +525,11 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError,ConnectionResetError,TimeoutError): pass
         except OSError: self.reply(400,{'error':'filesystem_request_rejected'})
         except Exception: self.reply(500,{'error':'internal_error'})
+    def read_auth_body(self):
+        if self.headers.get('Transfer-Encoding'): raise APIError(400)
+        length=int(self.headers.get('Content-Length','0'))
+        if length<=0 or length>2048 or self.headers.get_content_type()!='application/json': raise APIError(400)
+        return json.loads(self.rfile.read(length))
     def send_photo(self,path,route):
         store=self.server.store
         with store.photo(path) as (fd,st):
@@ -486,6 +569,7 @@ class Server(ThreadingHTTPServer):
         if not re.fullmatch(r'[!-~]{32,512}',token): raise ValueError('NAS_TOKEN must contain 32–512 printable ASCII characters')
         self.store=store; self.token=token; self.origin=origin; self.settings=settings
         self.archive=SharedArchive(settings,store) if settings is not None else None
+        self.auth=FamilyAuth(settings.root) if settings is not None else None
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
     def process_request(self,request,client_address):

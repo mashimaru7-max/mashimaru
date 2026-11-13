@@ -1,6 +1,7 @@
+import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import { NasActions } from "./nas-actions.js?v=20261113-shared1";
-import { NasClient } from "./nas-client.mjs?v=20261113-random1";
+import { NasClient } from "./nas-client.mjs?v=20261113-login1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
@@ -30,8 +31,8 @@ export class NasGallery {
     this.remembered = false;
     this.restoring = false;
     this.persistMessage = "";
-    this.savedBase = "";
-    this.savedMode = "token";
+    this.savedBase = FAMILY_API;
+    this.savedMode = "login";
     this.onState = onState;
     this.onConnected = onConnected;
     this.notify = notify;
@@ -113,7 +114,7 @@ export class NasGallery {
       return false;
     }
   }
-  async restoreRemembered({ base, navigate = false } = {}) {
+  async restoreRemembered({ base=FAMILY_API, navigate = false } = {}) {
     const attempt = ++this.connectVersion;
     this.restoring = true;
     this.error = "";
@@ -158,7 +159,7 @@ export class NasGallery {
       ? '<div class="nas-saved-actions"><button id="nas-restore-saved" type="button">저장된 연결로 다시 연결</button><button id="nas-forget" type="button">저장 정보 지우기</button></div>'
       : "";
     const savedToken = this.remembered && this.savedMode === "token";
-    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>NAS 사진 보관함</h2>${this.connected ? `<p>${connectedNote}</p><div class="nas-saved-actions">${this.remembered ? '<button class="primary" id="nas-forget">저장 정보 지우고 연결 해제</button>' : '<button class="primary" id="nas-remember-now">이 기기에 연결 기억</button>'}<button id="nas-pause">연결만 끊기</button></div><p class="fine">사진 관리 권한은 연결된 API 설정을 따라요. 연결 정보는 이 브라우저에 암호화해서 보관해요.</p>` : `${savedActions}<p>${this.remembered ? "터널 주소가 바뀌었으면 주소만 수정해 주세요. 토큰 칸을 비우면 저장된 정보를 사용해요." : "기존 사진 테스트에서 사용했던 주소와 연결 정보를 입력해 주세요."}</p><form id="nas-connect-form" class="form-grid" method="post" autocomplete="off"><label class="full">사진 API 터널 주소<input name="base" type="url" required maxlength="250" value="${esc(this.savedBase)}" placeholder="https://…trycloudflare.com" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label class="full">연결 방식<select name="mode" aria-label="연결 방식"><option value="token" ${this.savedMode === "token" ? "selected" : ""}>기존 사진 조회 토큰</option><option value="login" ${this.savedMode === "login" ? "selected" : ""}>사진 API 로그인 (설정한 경우)</option></select></label><label class="full" id="nas-token-row">사진 조회 토큰<input name="token" type="password" maxlength="512" autocomplete="off" spellcheck="false" autocapitalize="none" ${savedToken ? 'placeholder="비워두면 저장된 토큰 사용"' : "required"}></label><label id="nas-user-row" hidden>사진 API 아이디<input name="username" maxlength="80" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label id="nas-password-row" hidden>사진 API 비밀번호<input name="password" type="password" maxlength="128" autocomplete="off"></label><label class="full nas-remember"><input name="remember" type="checkbox" checked>이 기기에서 연결 기억</label><p class="fine full">주소와 토큰은 이 브라우저에 암호화해 보관해요. DSM 비밀번호는 입력하지 마세요. 사진과 기록은 여기에 저장하지 않아요.</p><p class="nas-message full" id="nas-connect-error" role="alert"></p><button class="primary full" type="submit">사진 보관함 연결</button></form>`}<p class="nas-message" id="nas-storage-message" role="alert">${esc(this.persistMessage)}</p>`;
+    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>우리 가족 로그인</h2>${this.connected ? `<p>${connectedNote}</p><div class="nas-saved-actions">${this.remembered ? '<button class="primary" id="nas-forget">로그아웃 · 이 기기에서 로그인 지우기</button>' : '<button class="primary" id="nas-remember-now">이 기기에 연결 기억</button>'}<button id="nas-pause">연결만 끊기</button></div><p class="fine">비밀번호는 저장하지 않고 로그인 연결 정보만 이 기기에 암호화해 보관해요.</p>${this.features.accountSetup?`<form id="nas-family-setup" class="form-grid"><h3 class="full">가족 공용 로그인 만들기</h3><p class="full">아이디: ${FAMILY_USERNAME} · 처음 한 번만 비밀번호를 설정해요.</p><label class="full">새 비밀번호<input name="newPassword" type="password" minlength="10" maxlength="128" required autocomplete="new-password"></label><label class="full">비밀번호 확인<input name="confirmPassword" type="password" minlength="10" maxlength="128" required autocomplete="new-password"></label><p class="fine full">10~128자로 설정해 주세요. DSM 비밀번호와 별도로 사용해요. 설정 후 기존 토큰 접속은 종료돼요.</p><p class="full" role="alert"></p><button class="primary full">공용 로그인 설정</button></form>`:""}` : `${savedActions}<p>${this.remembered ? "저장된 로그인으로 다시 연결하거나 가족 계정으로 로그인해 주세요." : "가족 공용 계정으로 로그인해 주세요."}</p><form id="nas-connect-form" class="form-grid" method="post" autocomplete="off"><details class="full"><summary>연결 관리 · 관리자용</summary><label class="full">사진 API 터널 주소<input name="base" type="url" required maxlength="250" value="${esc(this.savedBase)}" placeholder="https://…trycloudflare.com" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label class="full">연결 방식<select name="mode" aria-label="연결 방식"><option value="token" ${this.savedMode === "token" ? "selected" : ""}>기존 사진 조회 토큰</option><option value="login" ${this.savedMode === "login" ? "selected" : ""}>가족 아이디·비밀번호</option></select></label></details><label class="full" id="nas-token-row">사진 조회 토큰<input name="token" type="password" maxlength="512" autocomplete="off" spellcheck="false" autocapitalize="none" ${savedToken ? 'placeholder="비워두면 저장된 토큰 사용"' : "required"}></label><label id="nas-user-row" hidden>아이디<input name="username" value="${FAMILY_USERNAME}" maxlength="80" autocomplete="username" spellcheck="false" autocapitalize="none"></label><label id="nas-password-row" hidden>비밀번호<input name="password" type="password" maxlength="128" autocomplete="current-password"></label><label class="full nas-remember"><input name="remember" type="checkbox" checked>로그인 유지</label><p class="fine full">비밀번호는 저장하지 않아요. 로그인 유지 시 연결 정보만 이 기기에 암호화해 보관해요.</p><p class="nas-message full" id="nas-connect-error" role="alert"></p><button class="primary full" type="submit">로그인</button></form>`}<p class="nas-message" id="nas-storage-message" role="alert">${esc(this.persistMessage)}</p>`;
     this.dialog.showModal();
     const forget = this.dialog.querySelector("#nas-forget");
     if (forget)
@@ -172,6 +173,26 @@ export class NasGallery {
         );
       };
     if (this.connected) {
+      const setup=this.dialog.querySelector('#nas-family-setup');
+      if(setup)setup.onsubmit=async e=>{
+        e.preventDefault();
+        const password=setup.elements.newPassword.value, confirmation=setup.elements.confirmPassword.value;
+        const status=setup.querySelector('[role=alert]'), button=setup.querySelector('button');
+        if(password!==confirmation){status.textContent='비밀번호가 서로 달라요.';return;}
+        button.disabled=true;status.textContent='공용 로그인을 설정하는 중이에요…';
+        const base=this.client.origin;let created=false;
+        try {
+          await this.client.createFamilyAccount(password);created=true;
+          const listing=await this.client.connect({base,mode:'login',username:FAMILY_USERNAME,password});
+          const saved=await this.rememberCurrent(true);
+          this.applyListing(listing);await this.refreshFeatures();
+          this.dialog.close();this.onState();this.onConnected();
+          this.notify(saved?'공용 로그인을 만들었어요. 다른 기기에서도 오니둥이 계정으로 로그인하면 돼요.':'공용 로그인은 만들어졌지만 이 기기의 로그인 유지는 저장하지 못했어요.');
+        } catch(error) {
+          status.textContent=(created?'계정 생성은 완료됐어요. 설정 창을 닫고 가족 계정으로 다시 로그인해 주세요. ':'')+error.message;
+          button.disabled=false;
+        } finally {setup.elements.newPassword.value='';setup.elements.confirmPassword.value='';}
+      };
       this.dialog.querySelector("#nas-pause").onclick = () => {
         this.dialog.close();
         void this.disconnect({ forget: false, revoke: !this.remembered });
@@ -328,8 +349,8 @@ export class NasGallery {
     let removed = true;
     if (forget) {
       this.remembered = false;
-      this.savedBase = "";
-      this.savedMode = "token";
+      this.savedBase = FAMILY_API;
+      this.savedMode = "login";
       try {
         await this.vault.clear();
         this.persistMessage = "";
@@ -349,8 +370,8 @@ export class NasGallery {
     this.actions.cancel();
     if (this.actions.dialog.open) this.actions.dialog.close();
     this.remembered = false;
-    this.savedBase = "";
-    this.savedMode = "token";
+    this.savedBase = FAMILY_API;
+    this.savedMode = "login";
     void this.vault.clear().catch(() => {
       this.persistMessage =
         "저장된 인증 정보를 지우지 못했어요. 연결 설정에서 다시 지워 주세요.";

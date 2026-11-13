@@ -1,9 +1,9 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
-import { FamilySettings } from './nas-shared.mjs?v=20261113-random1';
-import { NasAlbums } from "./nas-albums.js?v=20261113-random1";
-import { NasHome } from "./nas-home.js?v=20261113-random1";
+import { FamilySettings } from './nas-shared.mjs?v=20261113-login1';
+import { NasAlbums } from "./nas-albums.js?v=20261113-login1";
+import { NasHome } from "./nas-home.js?v=20261113-login1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-random1";
+import { NasGallery } from "./nas-gallery.js?v=20261113-login1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -82,10 +82,10 @@ function syncNasChrome() {
   const profile = document.querySelector(".profile");
   profile.classList.toggle("connected", nas.connected);
   profile.querySelector("span").textContent = nas.connected
-    ? "NAS 연결됨"
+    ? (nas.client.mode==='login'?'오니둥이':'NAS 연결됨')
     : nas.restoring
-      ? "NAS 재연결 중"
-      : "NAS 연결";
+      ? "로그인 확인 중"
+      : "가족 로그인";
   document.querySelector(".demo-banner").innerHTML = nas.connected
     ? (familySettings.unsupported
       ? "<span>NAS 업데이트 필요</span> 사진은 볼 수 있지만, 현재 서버는 가족 공통 설정 저장을 지원하지 않아요."

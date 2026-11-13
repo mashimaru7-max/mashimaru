@@ -355,6 +355,10 @@ export class NasClient {
       throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
     return this.#request("/api/image", { params: { path }, image: true });
   }
+  async createFamilyAccount(password) {
+    this.#assertAuth();
+    return this.#request('/api/account',{body:{username:'오니둥이',password},timeoutMs:30000});
+  }
   async sharedSettings(patch) {
     this.#assertAuth();
     try { return await this.#request("/api/settings", patch === undefined ? {} : {body: patch}); }
@@ -369,7 +373,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {

@@ -1,5 +1,5 @@
 import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-random1';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-login1';
 export class NasHome {
   constructor(gallery, notify, {vault,automatic=async()=>({items:[]})} = {}) {
     this.automatic=automatic;
