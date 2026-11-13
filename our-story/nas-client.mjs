@@ -1,4 +1,4 @@
-import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-video1';
+import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-thumb1';
 // Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
 export const isVideo=path=>/\.(mp4|m4v|mov|webm)$/i.test(path);
@@ -250,7 +250,7 @@ export class NasClient {
     for(const task of this.#thumbQueue)task.reject(fail("ABORT","요청을 취소했어요."));
     this.#thumbQueue=[];
     for (const [ctrl, route] of this.#requests)
-      if (["/api/image", "/api/thumbnail"].includes(route)) ctrl.abort();
+      if (["/api/image", "/api/thumbnail", "/api/video-thumbnail"].includes(route)) ctrl.abort();
   }
   async disconnect({ revoke = true } = {}) {
     // Capture only for best-effort revocation; clear local state immediately.
@@ -423,7 +423,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.video===true?{video:true,videoUpload:d.videoUpload===true,maxVideo:Math.min(4*1024**3,Number(d.maxVideo)||0)}:{}), ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.video===true?{video:true,videoThumbnails:d.videoThumbnails===true,videoUpload:d.videoUpload===true,maxVideo:Math.min(4*1024**3,Number(d.maxVideo)||0)}:{}), ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -454,7 +454,11 @@ export class NasClient {
     if(epoch!==this.#epoch){await release();throw fail('ABORT','연결을 취소했어요.');}
     return {url:new URL('./nas-private-media/'+id,import.meta.url).href,release};
   }
-  async videoPoster(path,revision,signal){return firstFrame(await this.videoHandle(path,revision),signal);}
+  async videoPoster(path,revision,signal,server=false){
+    if(!server)return firstFrame(await this.videoHandle(path,revision),signal);
+    this.#assertAuth();safePath(path);if(signal?.aborted)throw fail('ABORT','미리보기를 취소했어요.');
+    return this.#request('/api/video-thumbnail',{params:{path,revision},image:true,timeoutMs:60000});
+  }
   async downloadVideo(item){
     const handle=await this.videoHandle(item.path,item.revision,true),a=document.createElement('a');a.href=handle.url;a.download=item.name;document.body.append(a);a.click();a.remove();
     // Keep the stream grant alive for a long download. Logout revokes it immediately.

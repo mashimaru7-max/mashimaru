@@ -1,8 +1,8 @@
-import {selectLoaded} from './nas-selection.mjs?v=20261114-video1';
+import {selectLoaded} from './nas-selection.mjs?v=20261114-thumb1';
 import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
-import {icon} from "./icons.js?v=20261114-video1";
-import { NasActions } from "./nas-actions.js?v=20261114-video1";
-import { NasClient } from "./nas-client.mjs?v=20261114-video1";
+import {icon} from "./icons.js?v=20261114-thumb1";
+import { NasActions } from "./nas-actions.js?v=20261114-thumb1";
+import { NasClient } from "./nas-client.mjs?v=20261114-thumb1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
@@ -576,7 +576,7 @@ export class NasGallery {
       if (!this.near.has(path)) { this.requested.delete(path); continue; }
       this.active++;
       this.updateThumb(path, null, true);
-      (this.items.find(item=>item.path===path)?.video ? this.client.videoPoster(path,this.items.find(item=>item.path===path).revision,this.videoPreviews.signal) : this.features.thumbnails ? this.client.thumbnail(path) : this.client.image(path))
+      (this.items.find(item=>item.path===path)?.video ? this.client.videoPoster(path,this.items.find(item=>item.path===path).revision,this.videoPreviews.signal,this.features.videoThumbnails) : this.features.thumbnails ? this.client.thumbnail(path) : this.client.image(path))
         .then((blob) => {
           if (version !== this.imageVersion || !this.host || !this.connected)
             return;

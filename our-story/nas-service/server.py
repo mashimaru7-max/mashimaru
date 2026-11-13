@@ -16,6 +16,7 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
 import stat
 import sqlite3
 import unicodedata
@@ -846,6 +847,74 @@ class FileManager:
             plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
             return self.execute(opid,plan)
 
+class VideoThumbnails:
+    """One software decoder at a time; source videos stay read-only and JPEGs persist separately."""
+    def __init__(self,settings):
+        self.cache=settings.root/'video-thumbnails';self.decode=threading.Lock();self.waiters=threading.BoundedSemaphore(3);self.failures={};self.cache_lock=threading.RLock()
+    def executable(self):
+        native=shutil.which('ffmpeg')
+        if native:return [native]
+        root=Path('/ffmpeg-runtime');loader=root/'lib/ld-linux-x86-64.so.2';binary=root/'bin/ffmpeg'
+        if loader.is_file() and os.access(loader,os.X_OK) and binary.is_file():return [str(loader),'--library-path',str(root/'lib'),str(binary)]
+        return None
+    def available(self):return bool(Image and self.executable())
+    def cached(self,key):
+        with self.cache_lock:
+            target=self.cache/(key+'.jpg')
+            try:
+                if target.stat().st_size>2*1024*1024:target.unlink();return None
+                raw=target.read_bytes()
+                if not raw.startswith(b'\xff\xd8\xff'):target.unlink();return None
+                os.utime(target,None);return raw
+            except FileNotFoundError:return None
+    def save(self,key,raw):
+        with self.cache_lock:
+            self.cache.mkdir(mode=0o700,parents=True,exist_ok=True);temp=self.cache/('.'+uuid.uuid4().hex)
+            try:
+                with open(temp,'xb') as output:os.chmod(temp,0o600);output.write(raw);output.flush();os.fsync(output.fileno())
+                os.replace(temp,self.cache/(key+'.jpg'))
+            finally:temp.unlink(missing_ok=True)
+            files=[(p.stat().st_mtime,p.stat().st_size,p) for p in self.cache.glob('vt1-*.jpg')];size=sum(n for _,n,_ in files)
+            for _,n,path in sorted(files):
+                if size<=256*1024*1024:break
+                path.unlink(missing_ok=True);size-=n
+    def thumbnail(self,fd,st,path):
+        expected=revision(st);key='vt1-'+expected;raw=self.cached(key)
+        if raw is not None:
+            if revision(os.fstat(fd))!=expected:raise APIError(409)
+            return raw
+        executable=self.executable()
+        if not Image or not executable:raise APIError(501)
+        if not self.waiters.acquire(blocking=False):raise APIError(429)
+        try:
+            if not self.decode.acquire(timeout=25):raise APIError(429)
+            try:
+                raw=self.cached(key)
+                if raw is not None:
+                    if revision(os.fstat(fd))!=expected:raise APIError(409)
+                    return raw
+                self.failures={k:until for k,until in self.failures.items() if until>time.monotonic()}
+                if key in self.failures:raise APIError(415)
+                # Force a local media demuxer. External MOV data references and network protocols are disabled.
+                source=['-f','matroska'] if path.lower().endswith('.webm') else ['-f','mov','-enable_drefs','0','-use_absolute_path','0']
+                command=executable+['-hide_banner','-nostdin','-loglevel','error','-max_alloc','67108864','-threads','1','-filter_threads','1','-max_pixels','16777216','-probesize','8388608','-analyzeduration','5000000','-protocol_whitelist','file']+source+['-i','/proc/self/fd/'+str(fd),'-map','0:v:0','-an','-sn','-dn','-frames:v','1','-vf','scale=640:640:force_original_aspect_ratio=decrease,setsar=1','-c:v','mjpeg','-threads','1','-q:v','5','-f','image2pipe','pipe:1']
+                nice=shutil.which('nice')
+                if nice:command=[nice,'-n','10']+command
+                try:
+                    result=subprocess.run(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,pass_fds=(fd,),close_fds=True,cwd='/',env={'PATH':'/usr/bin:/bin','LANG':'C','HOME':'/nonexistent'},timeout=20)
+                    raw=result.stdout
+                    if result.returncode or not 0<len(raw)<=2*1024*1024:raise ValueError('no frame')
+                    with Image.open(io.BytesIO(raw)) as image:
+                        if image.format!='JPEG' or image.width>640 or image.height>640:raise ValueError('invalid frame')
+                        image.verify()
+                except (subprocess.TimeoutExpired,OSError,ValueError):
+                    if len(self.failures)<1000:self.failures[key]=time.monotonic()+600
+                    raise APIError(415)
+                if revision(os.fstat(fd))!=expected:raise APIError(409)
+                self.save(key,raw);return raw
+            finally:self.decode.release()
+        finally:self.waiters.release()
+
 class VideoUploads:
     """Session-owned, durable 8MiB chunks. Only complete videos are published, never overwritten."""
     def __init__(self,store,settings):self.store=store;self.path=settings.root/'video-uploads.sqlite3'
@@ -1207,6 +1276,16 @@ class Handler(BaseHTTPRequestHandler):
                     if self.server.files is not None:self.server.files.invalidate()
                 else:raise APIError(400)
                 self.reply(200,result);return
+            if route.path=='/api/video-thumbnail':
+                if post or set(query)!={'path','revision'}:raise APIError(400)
+                if self.server.video_thumbs is None:raise APIError(501)
+                path=q('path');expected=q('revision')
+                if not VIDEO.search(path) or not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
+                with store.photo(path,media=True) as (fd,st):
+                    if revision(st)!=expected:raise APIError(409)
+                    raw=self.server.video_thumbs.thumbnail(fd,st,path)
+                    if revision(os.fstat(fd))!=expected:raise APIError(409)
+                self.send_response(200);self.cors();self.send_header('Content-Type','image/jpeg');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             if route.path in ('/api/video','/api/video-download'):
                 if post or set(query)!={'path','revision'}:raise APIError(400)
                 self.send_video(q('path'),q('revision'),route.path.endswith('download'));return
@@ -1246,7 +1325,7 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'video':True,'videoUpload':store.writable and self.server.videos is not None and self.server.auth.configured(),'maxVideo':MAX_VIDEO,'videoChunk':VIDEO_CHUNK,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'video':True,'videoThumbnails':self.server.video_thumbs is not None and self.server.video_thumbs.available(),'videoUpload':store.writable and self.server.videos is not None and self.server.auth.configured(),'maxVideo':MAX_VIDEO,'videoChunk':VIDEO_CHUNK,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash':
@@ -1400,6 +1479,7 @@ class Server(ThreadingHTTPServer):
         self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.metadata_lock=threading.RLock()
         self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None
+        self.video_thumbs=VideoThumbnails(settings) if settings is not None else None
         self.videos=VideoUploads(store,settings) if settings is not None else None
         self.permanent=PermanentTrash(store,settings,self.journal) if settings is not None else None
         if self.files is not None:

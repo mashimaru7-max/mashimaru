@@ -1,4 +1,4 @@
-import {trashSelection} from './nas-selection.mjs?v=20261114-video1';
+import {trashSelection} from './nas-selection.mjs?v=20261114-thumb1';
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 export class NasActions {
   constructor(gallery, onHomePhoto) {

@@ -184,3 +184,10 @@ test('permanent trash uses POST bodies and incorrect reauthentication preserves 
  const call=calls.at(-1),body=JSON.parse(call.init.body);assert.deepEqual(Object.keys(body.items[0]),['id','revision']);assert.equal(body.password,'fixture-password');assert(!call.url.includes('fixture-password'));assert.equal(call.init.method,'POST');
  await client.purgeCommit('c'.repeat(43));assert.deepEqual(JSON.parse(calls.at(-1).init.body),{ticket:'c'.repeat(43),confirm:true});
 });
+
+test('server video poster uses authenticated JPEG endpoint without browser playback',async()=>{
+ const {client,calls}=fixture(u=>u.pathname==='/api/video-thumbnail'?new Response(new Uint8Array([255,216,255]),{headers:{'content-type':'image/jpeg'}}):u.pathname==='/api/capabilities'?json({version:2,video:true,videoThumbnails:true}):json(root));
+ await connect(client);assert.equal((await client.capabilities()).videoThumbnails,true);
+ const blob=await client.videoPoster('film.mp4','a'.repeat(64),new AbortController().signal,true);assert.equal(blob.type,'image/jpeg');
+ const call=calls.at(-1);assert.match(call.url,/\/api\/video-thumbnail\?/);assert.equal(call.init.headers.Authorization,'Bearer '+token);assert(!call.url.includes(token));
+});
