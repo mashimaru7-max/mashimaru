@@ -144,4 +144,57 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.request('/api/restore','POST',{'id':'../x'})[0],400)
     def test_duplicate_queries_rejected(self):self.assertEqual(self.request('/api/list?path=&path=other')[0],400)
 
+    def test_shared_index_same_order_persistent_and_name_rules(self):
+        rule={'type':'name','text':'오니둥이','mode':'numbered','root':''}
+        for folder in ['2019/오니둥이','2020/오니둥이1','2021/오니둥이친구','2022/오니둥이2']:
+            directory=self.root/folder;directory.mkdir(parents=True)
+            (directory/'a.jpg').write_bytes(PHOTO)
+        self.store.writable=False
+        self.settings.patch({'revision':0,'albums':{'growth:함께':rule}})
+        status,raw,_=self.request('/api/album-index','POST',{'key':'growth:함께'})
+        self.assertEqual(status,200);data=json.loads(raw)
+        self.assertEqual(data['total'],3);self.assertFalse(data['indexing'])
+        self.assertEqual([i['folderYear'] for i in data['items']],['2022','2020','2019'])
+        restarted=api.SharedArchive(api.SharedSettings(self.settings_dir),self.store)
+        self.assertEqual(restarted.collection('growth:함께',rule)['items'],data['items'])
+        self.assertEqual(restarted.collection('growth:함께',rule,'2020')['total'],1)
+        self.assertEqual(json.loads(self.request('/api/album-index','POST',{'key':'travel'})[1])['unbound'],True)
+    def test_shared_index_resumes_and_preserves_snapshot_until_complete(self):
+        archive=self.server.archive
+        for n in range(4):
+            d=self.root/str(n);d.mkdir();(d/'a.jpg').write_bytes(PHOTO)
+        data=archive.collection('home','',budget=1)
+        self.assertTrue(data['indexing']);self.assertEqual(data['items'],[])
+        archive=api.SharedArchive(self.settings,self.store)
+        data=archive.collection('home','',budget=20)
+        self.assertFalse(data['indexing']);self.assertEqual(data['total'],5)
+        (self.root/'new.jpg').write_bytes(PHOTO)
+        building=archive.collection('home','',refresh=True,budget=1)
+        self.assertTrue(building['indexing']);self.assertEqual(building['items'],data['items'])
+        finished=archive.collection('home','',budget=20)
+        self.assertEqual(finished['total'],6)
+        self.assertNotEqual(finished['snapshot'],data['snapshot'])
+    def test_index_auth_schema_and_missing_source_preserves_last_good(self):
+        self.assertEqual(self.request('/api/album-index','POST',{'key':'home'},headers={'Authorization':'wrong'})[0],401)
+        for payload in [{'key':'../x'},{'key':'home','year':'<bad>'},{'key':'home','refresh':'yes'},{'key':[]}]:
+            self.assertEqual(self.request('/api/album-index','POST',payload)[0],400)
+        archive=self.server.archive
+        good=archive.collection('home','기억')
+        (self.root/'기억').rmdir()
+        bad=archive.collection('home','기억',refresh=True)
+        self.assertEqual(bad['snapshot'],good['snapshot']);self.assertEqual(bad['issues'],1)
+    @unittest.skipIf(api.Image is None,'Pillow required')
+    def test_thumbnail_persists_reuses_and_invalidates_without_editing_source(self):
+        from unittest.mock import patch
+        original=(self.root/'one.jpg').read_bytes()
+        self.assertEqual(self.request('/api/thumbnail?path=one.jpg')[0],200)
+        cache=list((self.settings_dir/'thumbnails').glob('v1-*.jpg'));self.assertEqual(len(cache),1)
+        self.server.archive=api.SharedArchive(self.settings,self.store)
+        with patch.object(api.Image,'open',side_effect=AssertionError('must use saved thumbnail')):
+            self.assertEqual(self.request('/api/thumbnail?path=one.jpg')[0],200)
+        (self.root/'one.jpg').write_bytes(original)
+        self.assertEqual(self.request('/api/thumbnail?path=one.jpg')[0],200)
+        self.assertEqual(len(list((self.settings_dir/'thumbnails').glob('v1-*.jpg'))),2)
+        self.assertEqual((self.root/'one.jpg').read_bytes(),original)
+
 if __name__=='__main__':unittest.main()

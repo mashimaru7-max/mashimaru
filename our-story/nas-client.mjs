@@ -105,6 +105,30 @@ const messages = {
   409: "사진 API의 로그인 설정이 완료되지 않았어요. 기존 토큰 방식을 확인해 주세요.",
   413: "15MB를 넘는 사진은 현재 미리보기에서 지원하지 않아요.",
 };
+export function validateSharedAlbum(data) {
+  const invalid=()=>{throw fail('FORMAT','가족 공통 사진 목록을 확인할 수 없어요.');};
+  if(!data || data.shared!==true || !Array.isArray(data.items) || data.items.length>12)invalid();
+  if(data.unbound===true && data.items.length===0)return {items:[],unbound:true,shared:true};
+  if(!Number.isSafeInteger(data.total) || data.total<0 || typeof data.indexing!=='boolean' || !Number.isSafeInteger(data.issues) || data.issues<0 ||
+      !(data.snapshot===null || Number.isSafeInteger(data.snapshot)&&data.snapshot>0) ||
+      !Array.isArray(data.matchedFolders) || data.matchedFolders.length>5000 ||
+      !['', 'other'].includes(data.selectedYear) && !/^(19|20)[0-9]{2}$/.test(data.selectedYear))invalid();
+  safePath(data.path);
+  if(data.rule!==null && (!data.rule || data.rule.type!=='name' || typeof data.rule.text!=='string' || !['numbered','exact','contains'].includes(data.rule.mode)))invalid();
+  const seen=new Set();
+  for(const item of data.items) {
+    if(!item || typeof item.name!=='string' || safePath(item.path).split('/').at(-1)!==item.name ||
+       !/\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(item.path) || !/^[a-f0-9]{64}$/.test(item.revision) ||
+       !/^(?:(?:19|20)[0-9]{2})?$/.test(item.folderYear) || seen.has(item.path))invalid();
+    seen.add(item.path);safePath(item.albumFolder);
+  }
+  for(const f of data.matchedFolders) {
+    if(!f || typeof f.name!=='string' || !/^(?:(?:19|20)[0-9]{2})?$/.test(f.year))invalid();
+    safePath(f.path);
+  }
+  return {...data,search:{limited:false,canContinue:false,folders:data.matchedFolders.length}};
+}
+
 export class NasClient {
   #fetch;
   #timeout;
@@ -336,12 +360,16 @@ export class NasClient {
     try { return await this.#request("/api/settings", patch === undefined ? {} : {body: patch}); }
     catch(e) {if(e.code==="HTTP_409")throw fail(e.code,"가족 설정이 다른 기기에서 변경됐어요. 다시 시도해 주세요.");throw e;}
   }
+  async sharedAlbum(key, year='', refresh=false) {
+    this.#assertAuth();
+    return validateSharedAlbum(await this.#request('/api/album-index',{body:{key,year,refresh},timeoutMs:30000}));
+  }
   async capabilities() {
     this.#assertAuth();
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {

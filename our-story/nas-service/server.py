@@ -10,6 +10,8 @@ import mimetypes
 import os
 import re
 import stat
+import sqlite3
+import unicodedata
 import threading
 import time
 import uuid
@@ -258,6 +260,116 @@ class SharedSettings:
                 if temp.exists(): temp.unlink()
             return updated
 
+class SharedArchive:
+    """Persistent, deterministic family photo index. Originals are always read-only here."""
+    def __init__(self, settings, store):
+        self.root=settings.root
+        self.store=store
+        self.lock=threading.RLock()
+        self.cache_lock=threading.Lock()
+        self.root.mkdir(parents=True,exist_ok=True)
+    def connect(self):
+        db=sqlite3.connect(self.root/'archive.sqlite3',timeout=10)
+        os.chmod(self.root/'archive.sqlite3',0o600)
+        db.executescript("""
+                CREATE TABLE IF NOT EXISTS collections (id TEXT PRIMARY KEY, state TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS photos (collection TEXT, generation INTEGER, path TEXT,
+                    name TEXT, revision TEXT, year TEXT, folder TEXT,
+                    PRIMARY KEY(collection,generation,path));
+                CREATE INDEX IF NOT EXISTS photo_order ON photos(collection,generation,year DESC,path);
+            """)
+        return db
+    @staticmethod
+    def year(path):
+        return next((p[:4] for p in path.split('/') if re.fullmatch(r'(19|20)[0-9]{2}년?',p)),'')
+    @staticmethod
+    def matches(name, rule):
+        name=unicodedata.normalize('NFC',name).strip().casefold()
+        text=unicodedata.normalize('NFC',rule['text']).strip().casefold()
+        return (text in name if rule['mode']=='contains' else name==text or
+                (rule['mode']=='numbered' and name.startswith(text) and bool(re.fullmatch(r'\s*[0-9]+',name[len(text):]))))
+    def collection(self, key, binding, year='', refresh=False, budget=20):
+        ident=hashlib.sha256(json.dumps([key,binding],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+        named=isinstance(binding,dict)
+        root=binding['root'] if named else binding
+        with self.lock, contextlib.closing(self.connect()) as db, db:
+            row=db.execute('SELECT state FROM collections WHERE id=?',(ident,)).fetchone()
+            state=json.loads(row[0]) if row else {'active':None,'generation':0,'queue':[],'updated':0}
+            if not state['queue'] and (not state['generation'] or refresh or time.time()-state['updated']>300):
+                state.update(generation=state['generation']+1,issues=0,matches=[],updated=time.time())
+                include=not named or bool(root and self.matches(root.split('/')[-1],binding))
+                state['queue']=[[root,0,include,root if include and named else '',0]]
+                if include and named: state['matches']=[{'path':root,'name':root.split('/')[-1],'year':self.year(root)}]
+            started=time.monotonic()
+            for _ in range(budget):
+                if not state['queue'] or time.monotonic()-started>1.5: break
+                path,depth,include,folder,offset=state['queue'].pop(0)
+                try: data=self.store.listing(path,offset)
+                except (OSError,APIError): state['issues']+=1; continue
+                for item in data['items']:
+                    if item['dir']:
+                        if depth>=32 or len(state['queue'])>=10000:
+                            state['issues']+=1; continue
+                        match=named and not include and self.matches(item['name'],binding)
+                        child_folder=item['path'] if match else folder
+                        if match:
+                            if len(state['matches'])<5000:
+                                state['matches'].append({'path':item['path'],'name':item['name'],'year':self.year(item['path'])})
+                            else: state['issues']+=1
+                        state['queue'].append([item['path'],depth+1,include or match,child_folder,0])
+                    elif include:
+                        db.execute('INSERT OR REPLACE INTO photos VALUES (?,?,?,?,?,?,?)',
+                            (ident,state['generation'],item['path'],item['name'],item['revision'],self.year(item['path']),folder))
+                if data['next'] is not None: state['queue'].append([path,depth,include,folder,data['next']])
+            if not state['queue']:
+                # A complete traversal with unreadable folders must not erase a known-good snapshot.
+                if not state['issues'] or state['active'] is None:
+                    state['active']=state['generation']
+                    state['activeMatches']=state['matches']
+                state['updated']=time.time()
+                db.execute('DELETE FROM photos WHERE collection=? AND generation NOT IN (?,?)',
+                    (ident,state['active'],state['generation']))
+            db.execute('INSERT OR REPLACE INTO collections VALUES (?,?)',(ident,json.dumps(state,ensure_ascii=False)))
+            generation=state['active']
+            args=[ident,generation]
+            where='collection=? AND generation=?'
+            if year:
+                where+=' AND year=?';args.append('' if year=='other' else year)
+            total=db.execute('SELECT count(*) FROM photos WHERE '+where,args).fetchone()[0]
+            rows=db.execute('SELECT path,name,revision,year,folder FROM photos WHERE '+where+' ORDER BY year DESC,path COLLATE BINARY LIMIT 12',args).fetchall()
+            matches=sorted(state.get('activeMatches',[]),key=lambda m:(m['year'],m['path']),reverse=True)
+            return {'items':[{'path':p,'name':n,'revision':r,'dir':False,'folderYear':y,'albumFolder':f} for p,n,r,y,f in rows],
+                'matchedFolders':matches,'selectedYear':year,'rule':binding if named else None,'path':root,
+                'total':total,'limited':total>12,'issues':state['issues'],'indexing':bool(state['queue']),
+                'shared':True,'snapshot':generation,'search':{'limited':False,'canContinue':False,'folders':len(matches)}}
+    def thumbnail(self, fd, st):
+        # Revision changes on source edits, so stale thumbnails are never reused.
+        cache=self.root/'thumbnails';cache.mkdir(mode=0o700,exist_ok=True)
+        key='v1-'+revision(st)+'.jpg';target=cache/key
+        with self.cache_lock:
+            try:
+                raw=target.read_bytes();os.utime(target,None);return raw
+            except FileNotFoundError: pass
+            with os.fdopen(os.dup(fd),'rb') as source:
+                with Image.open(source) as image:
+                    image.thumbnail((1600,1600))
+                    image=ImageOps.exif_transpose(image).convert('RGB')
+                    out=io.BytesIO();image.save(out,format='JPEG',quality=80);raw=out.getvalue()
+            temp=cache/('.'+uuid.uuid4().hex)
+            try:
+                with open(temp,'xb') as f:
+                    os.chmod(temp,0o600);f.write(raw)
+                os.replace(temp,target)
+            finally:
+                temp.unlink(missing_ok=True)
+            # Bound persistent cache to 512 MiB, evict least recently requested thumbnails.
+            files=[(p.stat().st_mtime,p.stat().st_size,p) for p in cache.glob('v1-*.jpg')]
+            size=sum(n for _,n,_ in files)
+            for _,n,p in sorted(files):
+                if size<=512*1024*1024: break
+                p.unlink(missing_ok=True);size-=n
+            return raw
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -289,7 +401,7 @@ class Handler(BaseHTTPRequestHandler):
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
@@ -298,6 +410,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 if self.headers.get('Transfer-Encoding'): raise APIError(400)
                 length=int(self.headers.get('Content-Length','0'))
+                if route.path=='/api/album-index' and self.server.archive is not None:
+                    if length<=0 or length>1024 or self.headers.get_content_type()!='application/json': raise APIError(400)
+                    data=json.loads(self.rfile.read(length))
+                    if not isinstance(data,dict) or set(data)-{'key','year','refresh'}: raise APIError(400)
+                    key=data.get('key');year=data.get('year','');refresh=data.get('refresh',False)
+                    if not isinstance(key,str) or key not in ALBUM_KEYS or not isinstance(year,str) or (year and year!='other' and not re.fullmatch(r'(19|20)[0-9]{2}',year)) or type(refresh) is not bool: raise APIError(400)
+                    settings=self.server.settings.read()
+                    if key!='home' and key not in settings['albums']:
+                        self.reply(200,{'items':[],'unbound':True,'shared':True});return
+                    binding=album_binding(settings['albums'].get(key,''))
+                    self.reply(200,self.server.archive.collection(key,binding,year,refresh));return
                 if route.path=='/api/settings' and self.server.settings is not None:
                     if length<=0 or length>32768 or self.headers.get_content_type()!='application/json': raise APIError(400)
                     self.reply(200,self.server.settings.patch(json.loads(self.rfile.read(length)))); return
@@ -329,12 +452,15 @@ class Handler(BaseHTTPRequestHandler):
                 if st.st_size>MAX_DOWNLOAD: raise APIError(413)
                 if not store.image_slots.acquire(blocking=False): raise APIError(429)
                 try:
-                    with os.fdopen(os.dup(fd),'rb') as source:
+                    if self.server.archive is not None:
+                        raw=self.server.archive.thumbnail(fd,st)
+                    else:
+                      with os.fdopen(os.dup(fd),'rb') as source:
                         with Image.open(source) as image:
                             image.thumbnail((1600,1600))
                             image=ImageOps.exif_transpose(image).convert('RGB')
                             out=io.BytesIO(); image.save(out,format='JPEG',quality=80)
-                    raw=out.getvalue()
+                      raw=out.getvalue()
                 except Exception: raise APIError(415)
                 finally: store.image_slots.release()
                 self.send_response(200); self.cors(); self.send_header('Content-Type','image/jpeg'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw); return
@@ -354,6 +480,7 @@ class Server(ThreadingHTTPServer):
     def __init__(self,address,store,token,origin,settings=None):
         if not re.fullmatch(r'[!-~]{32,512}',token): raise ValueError('NAS_TOKEN must contain 32–512 printable ASCII characters')
         self.store=store; self.token=token; self.origin=origin; self.settings=settings
+        self.archive=SharedArchive(settings,store) if settings is not None else None
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
     def process_request(self,request,client_address):

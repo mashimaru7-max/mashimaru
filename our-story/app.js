@@ -1,9 +1,9 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
-import { FamilySettings } from './nas-shared.mjs?v=20261113-shared1';
-import { NasAlbums } from "./nas-albums.js?v=20261113-albumlook2";
-import { NasHome } from "./nas-home.js?v=20261113-albumlook2";
+import { FamilySettings } from './nas-shared.mjs?v=20261113-archive1';
+import { NasAlbums } from "./nas-albums.js?v=20261113-archive1";
+import { NasHome } from "./nas-home.js?v=20261113-archive1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-albumlook2";
+import { NasGallery } from "./nas-gallery.js?v=20261113-archive1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");

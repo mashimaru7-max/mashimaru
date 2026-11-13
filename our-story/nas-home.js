@@ -1,5 +1,5 @@
 import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-shared1';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-archive1';
 export class NasHome {
   constructor(gallery, notify, {vault,automatic=async()=>({items:[]})} = {}) {
     this.automatic=automatic;
@@ -33,8 +33,9 @@ export class NasHome {
     if(version!==this.version || !this.g.connected) return;
     try {
       const manual=this.choice?.origin===this.g.client.origin;
-      const choice=manual?this.choice:(await this.automatic()).items[0];
-      if(!choice || version!==this.version || !this.g.connected){if(version===this.version)hero.querySelector('.photo-note').textContent='표시할 사진이 없어요 · 홈 사진 폴더를 연결해 주세요';return;}
+      const automatic=manual?null:await this.automatic();
+      const choice=manual?this.choice:automatic.items[0];
+      if(!choice || version!==this.version || !this.g.connected){if(version===this.version)hero.querySelector('.photo-note').textContent=automatic?.indexing?'가족 공통 사진 목록을 준비하는 중이에요':'표시할 사진이 없어요 · 홈 사진 폴더를 연결해 주세요';return;}
       const blob=await (this.g.features.thumbnails ? this.g.client.thumbnail(choice.path) : this.g.client.image(choice.path));
       if(version!==this.version || !hero.isConnected || !this.g.connected) return;
       this.url=URL.createObjectURL(blob); image.src=this.url; image.hidden=false; image.alt=manual?'직접 고른 우리 가족의 대표 사진':'NAS에서 자동으로 고른 우리 사진';
