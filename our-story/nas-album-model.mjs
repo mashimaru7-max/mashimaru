@@ -1,4 +1,5 @@
 import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums2';
+const fatalListError=e=>e.name==='AbortError'||['HTTP_401','AUTH','ABORT','NETWORK','TIMEOUT','HTTP_429'].includes(e.code)||/^HTTP_5/.test(e.code||'');
 export const ALBUM_KEYS=['home','travel','growth:다온','growth:라온','growth:함께'];
 export function validateAlbumBindings(data) {
   if (!data || data.kind!=='album-folders' || !data.origins || typeof data.origins!=='object') return {};
@@ -27,7 +28,7 @@ export async function scanFolderPhotos(client,root='',{limit=12,pageBudget=16,fo
     let data;
     try { data=await client.list(task.path,task.offset); }
     catch(e) {
-      if(task.path===root || ['HTTP_401','AUTH','ABORT'].includes(e.code)) throw e;
+      if(task.path===root || fatalListError(e)) throw e;
       issues++;continue;
     }
     pages++; folders.add(task.path);
@@ -80,10 +81,11 @@ export async function findNamedFolders(client,rawRule,{pageBudget=160,maxDepth=1
     if(!current())throw new DOMException('Stale folder search','AbortError');
     const task=state.queue.shift();
     let data;
+    spent++;state.pages++;
     try{data=await client.list(task.path,task.offset);}
-    catch(e){if(task.path===rule.root || ['HTTP_401','AUTH','ABORT'].includes(e.code))throw e;state.issues++;continue;}
+    catch(e){if(task.path===rule.root || fatalListError(e)){state.queue.unshift(task);throw e;}state.issues++;continue;}
     if(!current())throw new DOMException('Stale folder search','AbortError');
-    spent++;state.pages++;state.visited.add(task.path);
+    state.visited.add(task.path);
     const dirs=data.items.filter(i=>i.dir).sort((a,b)=>b.name.localeCompare(a.name,'ko',{numeric:true}));
     for(const item of dirs) {
       if(matchesFolderName(item.name,rule)) {
@@ -111,7 +113,7 @@ export async function previewNamedFolders(client,matches,{limit=12,current=()=>t
       const part=await scanFolderPhotos(client,match.path,{limit:Math.min(share,limit-items.length),pageBudget:12,folderBudget:24,current});
       issues+=part.issues;limited=limited||part.limited;
       for(const item of part.items)if(!seen.has(item.path)){seen.add(item.path);items.push({...item,albumFolder:match.path,folderYear:match.year});}
-    } catch(e){if(['HTTP_401','AUTH','ABORT'].includes(e.code)||e.name==='AbortError')throw e;issues++;}
+    } catch(e){if(fatalListError(e))throw e;issues++;}
   }
   return {items,issues,limited};
 }

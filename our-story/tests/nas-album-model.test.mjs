@@ -85,3 +85,16 @@ test('preview samples every matching folder when its count fits the photo limit'
 });
 
 test('matching scope names do not count missing folders as discovered',async()=>{await assert.rejects(findNamedFolders({list:async()=>{throw Object.assign(new Error('missing'),{code:'HTTP_404'});}}, {...rule,root:'2020/남매사진2'}),e=>e.code==='HTTP_404');});
+test('network loss stops discovery immediately instead of retrying every remaining folder',async()=>{
+ for(const search of [c=>findNamedFolders(c,rule),c=>scanFolderPhotos(c)]) {
+  let calls=0;const c={list:async p=>{calls++;if(!p)return listing('',[dir('a'),dir('b')]);throw Object.assign(new Error('offline'),{code:'NETWORK'});}};
+  await assert.rejects(search(c),e=>e.code==='NETWORK');assert.equal(calls,2);
+ }
+});
+test('permission failures count against the search budget and failed connection tasks remain resumable',async()=>{
+ const denied={list:async p=>{if(!p)return listing('',[dir('a'),dir('b'),dir('c')]);throw Object.assign(new Error('no access'),{code:'HTTP_403'});}};
+ const r=await findNamedFolders(denied,rule,{pageBudget:2});assert.equal(r.cursor.pages,2);assert(r.canContinue);assert.equal(r.issues,1);
+ const cursor=(await findNamedFolders({list:async p=>listing(p,[dir('a')])},rule,{pageBudget:1})).cursor;
+ await assert.rejects(findNamedFolders({list:async()=>{throw Object.assign(new Error('offline'),{code:'NETWORK'});}},rule,{cursor}),e=>e.code==='NETWORK');
+ const restored=await findNamedFolders({list:async p=>listing(p,[dir(p+'/남매사진1')])},rule,{cursor});assert.equal(restored.matches[0].path,'a/남매사진1');
+});
