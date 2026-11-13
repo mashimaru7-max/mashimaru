@@ -1,4 +1,4 @@
-import {growthTabs,childJournal,journalPreview} from './growth-journal.mjs?v=20261113-journal1';
+import {growthTabs,childJournal,journalPreview} from './growth-journal.mjs?v=20261113-journalforms2';
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import { FamilySettings } from './nas-shared.mjs?v=20261113-login1';
 import { NasAlbums } from "./nas-albums.js?v=20261113-journal1";
