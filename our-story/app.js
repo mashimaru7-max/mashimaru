@@ -1,4 +1,4 @@
-import { NasAlbums } from "./nas-albums.js?v=20261113-autoalbums3";
+import { NasAlbums } from "./nas-albums.js?v=20261113-namerules1";
 import { NasHome } from "./nas-home.js?v=20261113-autoalbums2";
 import { trips, growth, wishes } from "./data.js";
 import { NasGallery } from "./nas-gallery.js?v=20261113-autoalbums2";

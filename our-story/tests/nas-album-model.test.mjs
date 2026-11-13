@@ -40,3 +40,48 @@ test('folder budget bounds large directory trees',async()=>{
  let calls=0;const c={list:async p=>{calls++;return listing(p,Array.from({length:100},(_,i)=>dir((p?p+'/':'')+i)));}};
  const d=await scanFolderPhotos(c,'',{folderBudget:3,pageBudget:20});assert(calls<=3);assert.equal(d.limited,true);
 });
+const {validateNameRule,matchesFolderName,findNamedFolders,previewNamedFolders}=await import('../nas-album-model.mjs');
+const rule={type:'name',text:'남매사진',mode:'numbered',root:''};
+test('base name matches no suffix or a numeric suffix, not other words',()=>{
+ for(const name of ['남매사진','남매사진1','남매사진2','남매사진123','남매사진 4'])assert(matchesFolderName(name,rule),name);
+ for(const name of ['남매사진여행','남매사진1보관','남매사진#','다른남매사진1','남매사진-1'])assert(!matchesFolderName(name,rule),name);
+ assert(matchesFolderName('a+b(1)2',{...rule,text:'a+b(1)'}));assert(!matchesFolderName('ab12',{...rule,text:'a+b(1)'}));
+});
+test('exact and contains modes are literal, and invalid rules are rejected',()=>{
+ assert(matchesFolderName('남매사진',{...rule,mode:'exact'}));assert(!matchesFolderName('남매사진1',{...rule,mode:'exact'}));
+ assert(matchesFolderName('가족-남매사진-생일',{...rule,mode:'contains'}));
+ assert.throws(()=>validateNameRule({...rule,text:''}));assert.throws(()=>validateNameRule({...rule,root:'../private'}));assert.throws(()=>validateNameRule({...rule,text:'a/b'}));
+});
+test('name discovery finds every year before reading photos and skips nonmatching files',async()=>{
+ const calls=[];const tree={'':[dir('2019'),dir('2020'),dir('2021')],'2019':[dir('2019/남매사진')],'2020':[dir('2020/남매사진1'),dir('2020/남매사진여행')],'2021':[dir('2021/남매사진2'),photo('2021/남매사진.jpg')],'2020/남매사진여행':[]};
+ const result=await findNamedFolders({list:async p=>{calls.push(p);return listing(p,tree[p]||[]);}},rule);
+ assert.deepEqual(result.matches.map(i=>i.path),['2021/남매사진2','2020/남매사진1','2019/남매사진']);assert(!result.limited);assert(!calls.includes('2021/남매사진2'));assert.deepEqual(result.matches.map(i=>i.year),['2021','2020','2019']);
+});
+test('name search continues from an in-memory cursor across a bounded scan and pagination',async()=>{
+ const c={list:async(p,offset)=>!p?listing('',offset?[dir('2020')]:[dir('2019')],offset?null:100):listing(p,[dir(p+'/남매사진1')])};
+ let result=await findNamedFolders(c,rule,{pageBudget:1});assert(result.canContinue);assert.equal(result.matches.length,0);
+ result=await findNamedFolders(c,rule,{cursor:result.cursor,pageBudget:20});assert(!result.canContinue);assert.equal(result.matches.length,2);assert.equal(new Set(result.matches.map(i=>i.path)).size,2);
+});
+test('named preview spreads across year folders, preserves paths and never downloads images in the model',async()=>{
+ const matches=[{path:'2021/남매사진2',year:'2021'},{path:'2020/남매사진1',year:'2020'},{path:'2019/남매사진',year:'2019'}];
+ const result=await previewNamedFolders({list:async p=>listing(p,Array.from({length:20},(_,i)=>photo(p+'/'+i+'.jpg')))},matches,{limit:6});
+ assert.equal(result.items.length,6);assert.deepEqual([...new Set(result.items.map(i=>i.folderYear))],['2021','2020','2019']);assert(result.limited);
+});
+test('old folder strings and new name rules survive binding validation together',()=>{
+ const base='https://fixture-only.trycloudflare.com';const result=validateAlbumBindings({kind:'album-folders',origins:{[base]:{travel:'여행','growth:함께':rule}}});
+ assert.equal(result[base].travel,'여행');assert.deepEqual(result[base]['growth:함께'],rule);
+});
+test('name discovery does not publish stale matches after disconnect',async()=>{
+ let ready=true;await assert.rejects(findNamedFolders({list:async p=>{ready=false;return listing(p,[dir('남매사진1')]);}},rule,{current:()=>ready}),e=>e.name==='AbortError');
+});
+test('a selected scope that itself matches is included with its descendants by the preview',async()=>{
+ let reads=0;const data=await findNamedFolders({list:async()=>{reads++;}}, {...rule,root:'2020/남매사진2'});
+ assert.equal(data.matches[0].path,'2020/남매사진2');assert.equal(reads,1);assert(!data.canContinue);
+});
+test('preview samples every matching folder when its count fits the photo limit',async()=>{
+ const matches=Array.from({length:5},(_,i)=>({path:String(2020+i)+'/남매사진'+i,year:String(2020+i)}));
+ const result=await previewNamedFolders({list:async p=>listing(p,Array.from({length:20},(_,i)=>photo(p+'/'+i+'.jpg')))},matches,{limit:12});
+ assert.equal(result.items.length,12);assert.equal(new Set(result.items.map(i=>i.albumFolder)).size,5);
+});
+
+test('matching scope names do not count missing folders as discovered',async()=>{await assert.rejects(findNamedFolders({list:async()=>{throw Object.assign(new Error('missing'),{code:'HTTP_404'});}}, {...rule,root:'2020/남매사진2'}),e=>e.code==='HTTP_404');});
