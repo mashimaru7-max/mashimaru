@@ -1,0 +1,41 @@
+# 우리라는 이야기
+
+독립적인 가족 아카이브 UI. 배포 경로: `/mashimaru/our-story/`.
+
+## 현재 범위
+
+홈, 실제 Leaflet 지도, 국내/세계 보기, 여행 상세, 여행/성장 예시 기록 추가·수정·삭제, 여행 검색/연도, 성장 대상/나이/연도/주제 필터, 성장-여행 연결, 갤러리, 버킷리스트 추가·체크·삭제. 모바일은 지도 핀 선택 시 닫을 수 있는 하단 시트를 사용한다.
+
+**공개 예시 체험이며 비공개 가족 서비스가 아니다.** 모든 예시는 허구이며 사진은 Unsplash 스톡이다. 실제 데이터 및 인증 정보 없음. 입력은 메모리에서만 유지되며 재접속/새로고침 시 초기화된다. 업로드·외부 이미지 URL·내보내기는 제공하지 않는다. 모든 사용자 입력은 HTML escape 후 렌더링한다. 비밀번호·세션·기록을 브라우저 저장소에 저장하지 않는다. noindex는 검색 힌트일 뿐 접근 제어가 아니다.
+
+## 실행
+
+빌드 및 npm 설치 불필요. 저장소 루트에서 `python3 -m http.server 8000` 후 `http://localhost:8000/our-story/` 접속. ES module이므로 file://로 열지 않는다. 구문 검사: `node --check our-story/app.js`, `node --check our-story/data.js`.
+
+## 파일 경계와 다음 단계
+
+- `index.html`: 공통 탐색, 예시 안내, 모달, 접근성 골격.
+- `style.css`: 크림/아이보리 디자인 토큰과 600/850px 반응형.
+- `data.js`: API와 분리된 예시 데이터. UI 검증용이며 저장소 역할을 대신하지 않는다.
+- `app.js`: 라우팅, 화면 렌더링, 메모리 편집. 입력값 길이/필수/숫자 범위/날짜 순서를 검증한다.
+- `assets/`: 실제 가족사진이 아닌 로컬 스톡 자산.
+- `vendor/`: Leaflet 1.9.4와 라이선스. 지도의 배경 타일만 외부 요청한다.
+
+2차 구현은 프런트 → HTTPS 앱 서버 → DB / 읽기 전용 NAS 어댑터로 분리한다. 여행/성장 저장소와 NAS 원본 조회는 별도 서비스 경계로 유지한다. 앱 서버는 가족별 멤버십/초대/관리자 역할을 매 요청 검사하며 HttpOnly, Secure, SameSite 쿠키 기반 세션, 로그인 속도 제한, CSRF 방어, 비밀번호 해싱 및 세션 만료/철회를 구현해야 한다. 브라우저에 NAS 토큰을 전달하지 않는다. 실제 사진은 서버 인증 후 읽기 전용 프록시 또는 짧은 만료 URL로 제공한다. GitHub Pages는 정적 UI만 호스팅할 수 있으므로 가족 서비스 전환 전 별도 서버 운영과 접근 제어가 필수다.
+
+기존 `nas-photo-test/`와 NAS 실행 환경은 수정하지 않았다. 코드 조사 기준 API에는 `/api/login`, `/api/setup`, `/api/logout`, `/api/status`, `/api/list`, `/api/image`가 있으나 NAS 실행 버전과 이미지/인증 동작은 검증하지 않았다. 기록 저장 API, 사용자별 가족 권한, 썸네일 생성은 없다. 문서의 토큰 설명과 현재 코드 사이에도 버전 차이가 있다. Quick Tunnel은 테스트 전용이며 이 앱에서는 호출하지 않는다. NAS 배포/볼륨/권한/터널 변경은 별도 승인 이후 진행한다.
+
+향후 데이터 모델은 여행 시작/종료일·국가/도시·좌표·동행·대표/추가 미디어·작성/수정 시각, 성장 대상·기록일·카테고리·미디어·연결 여행·측정치, 미디어 참조 ID와 작성자 ID를 갖춘다. 생년월일 입력 전 실제 나이는 계산하지 않는다. 가족별 후기, 영상, 월 필터, 영구 DB, 사진 업로드, 백업, 초대/로그인/권한은 미구현이다.
+
+## 외부 자산 및 라이선스
+
+Leaflet 1.9.4: https://leafletjs.com (BSD-2-Clause, `vendor/LEAFLET-LICENSE`). 지도 데이터 © OpenStreetMap contributors (ODbL); 표준 타일은 best-effort이며 사용량 제한 정책을 준수하고 일괄 다운로드·프리페치를 하지 않는다. API 키와 유료 API는 사용하지 않는다. 서비스 확장 시 타일 공급자 재검토 필요.
+
+예시 사진: Unsplash License https://unsplash.com/license . 다운로드 원본:
+
+- lake.jpg: 이미지 ID photo-1476514525535-07fb3b4ae5f1
+- season.jpg: 이미지 ID photo-1519689680058-324335c77eba (아기 스톡 사진)
+- beach.jpg: 이미지 ID photo-1507525428034-b723cf961d3e
+- forest.jpg: 이미지 ID photo-1472396961693-142e6e269027
+
+원본 이미지 URL 형식: `https://images.unsplash.com/<이미지 ID>` . 스톡 풍경은 해당 예시 여행지의 실촬영 인증 사진이 아니다. 한글 폰트는 Google Fonts의 Noto Sans KR / Gowun Batang / Nanum Pen Script (OFL)이며 로딩 실패 시 시스템 폰트로 대체된다.
