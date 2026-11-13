@@ -1,6 +1,6 @@
 import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
-import {safePath} from './nas-client.mjs?v=20261114-records1';
-import {ALBUM_KEYS,validateAlbumBindings} from './nas-album-model.mjs?v=20261114-records1';
+import {safePath} from './nas-client.mjs?v=20261114-files1';
+import {ALBUM_KEYS,validateAlbumBindings} from './nas-album-model.mjs?v=20261114-files1';
 
 export function validateSettings(data,origin) {
   if(!data || !Number.isSafeInteger(data.revision) || data.revision<0 || !data.albums || Array.isArray(data.albums) || typeof data.albums!=='object' || Object.keys(data.albums).some(k=>!ALBUM_KEYS.includes(k)))throw new Error('가족 설정 응답을 확인할 수 없어요.');

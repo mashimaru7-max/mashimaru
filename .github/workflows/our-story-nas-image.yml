@@ -17,6 +17,7 @@ jobs:
           python -m pip install Pillow==13.0.0
           python -m unittest discover -s our-story/tests -p test_nas_service.py -v
           python -m unittest discover -s our-story/tests -p test_journal_store.py -v
+          python -m unittest discover -s our-story/tests -p test_file_management.py -v
       - name: Build and export amd64 image for DS218+
         run: |
           docker build --platform linux/amd64 -t our-story-nas:2 our-story/nas-service

@@ -362,6 +362,23 @@ export class NasClient {
       throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
     return this.#request("/api/image", { params: { path,...(expectedRevision?{revision:expectedRevision}:{}) }, image: true });
   }
+  async fileOperation(data) {
+    this.#assertAuth();
+    if(data.action==='mkdir'){safePath(data.parent);if(!data.name||safePath(data.name).includes('/'))throw fail('PATH','폴더 이름을 확인해 주세요.');}
+    else{safePath(data.path);safePath(data.destination);if(!data.name||safePath(data.name).includes('/'))throw fail('PATH','이름을 확인해 주세요.');}
+    try{
+      const result=await this.#request('/api/files',{body:data,timeoutMs:120000});
+      if(!result||result.ok!==true||typeof result.path!=='string'||!result.path)throw fail('FORMAT','파일 작업 결과를 확인할 수 없어요.');safePath(result.path);return result;
+    }catch(error){
+      if(error.code==='HTTP_409')throw fail(error.code,'같은 이름의 항목이 있거나 원본이 변경됐어요. 덮어쓰지 않았으니 목록을 확인해 주세요.');
+      if(error.code==='HTTP_403')throw fail(error.code,'새 API의 사진 쓰기 설정과 해당 NAS 폴더의 쓰기 권한을 확인해 주세요.');
+      if(error.code==='HTTP_413')throw fail(error.code,'연결된 기록이 많아 한 번에 처리할 수 없어요. 더 작은 폴더 단위로 정리해 주세요.');
+      if(error.code==='HTTP_400')throw fail(error.code,'이름과 이동 위치를 확인해 주세요. 자기 하위 폴더나 확장자 변경은 허용하지 않아요.');
+      if(error.code==='HTTP_501')throw fail(error.code,'이 NAS 환경에서 덮어쓰기 없는 안전한 이동을 지원하지 않아 작업하지 않았어요.');
+      if(error.code==='HTTP_503')throw fail(error.code,'이전 파일 작업의 복구 확인이 필요해요. 파일 위치를 확인하기 전에는 새 정리를 진행하지 마세요.');
+      throw error;
+    }
+  }
   async journalList({target,kind='',year='',q='',trash=false,offset=0}) {
     this.#assertAuth();
     const data=await this.#request('/api/journal',{params:{target,kind,year,q,trash:trash?'1':'0',offset}});
@@ -403,7 +420,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -444,7 +461,7 @@ export class NasClient {
   trashList() { return this.#request("/api/trash"); }
   restoreTrash(id) {
     if (!/^[a-f0-9]{32}$/.test(id)) throw fail("TRASH", "휴지통 항목이 올바르지 않아요.");
-    return this.#request("/api/restore", {body:{id}});
+    return this.#request("/api/restore", {body:{id}}).catch(error=>{if(error.code==="HTTP_409")throw fail(error.code,"원래 위치에 같은 이름이 있어 복원하지 않았어요. 덮어쓰지 않고 보관 중이에요.");if(error.code==="HTTP_501")throw fail(error.code,"이 NAS에서 안전한 복원을 지원하지 않아 작업하지 않았어요.");throw error;});
   }
   cancelTransfers() {
     for (const [ctrl,route] of this.#requests)
@@ -484,6 +501,11 @@ export class NasClient {
       });
       if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
       if (!res.ok) {
+        if(res.status===409 && route==="/api/upload")throw fail("HTTP_409","같은 이름의 사진이 이미 있어요. 기존 사진은 덮어쓰지 않았어요.");
+        if(res.status===409 && route==="/api/trash")throw fail("HTTP_409","사진이 이미 변경됐어요. 목록을 새로 불러온 뒤 다시 확인해 주세요.");
+        if(res.status===403 && ["/api/upload","/api/trash","/api/restore"].includes(route))throw fail("HTTP_403","새 API의 사진 쓰기 설정과 해당 NAS 폴더의 쓰기 권한을 확인해 주세요.");
+        if(res.status===413 && route==="/api/upload")throw fail("HTTP_413","사진 업로드는 파일당 최대 64MB까지 가능해요.");
+        if(res.status===413 && route==="/api/download")throw fail("HTTP_413","원본 다운로드는 파일당 최대 128MB까지 가능해요.");
         if(res.status===409 && ["/api/image","/api/thumbnail"].includes(route))throw fail("HTTP_409","기록에 연결한 사진이 변경됐어요. 사진 연결을 다시 확인해 주세요.");
         if (res.status === 401 && auth) {
           const wasConnected = this.#ready;

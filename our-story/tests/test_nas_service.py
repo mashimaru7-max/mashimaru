@@ -286,4 +286,33 @@ class ServiceTests(unittest.TestCase):
         new=self.item()['revision']
         self.assertEqual(self.request('/api/image?path=one.jpg&revision='+new)[0],200)
 
+    def test_file_management_http_requires_login_and_explicit_write_mode(self):
+        credentials={'username':'오니둥이','password':'fixture password 12345'}
+        self.request('/api/account','POST',credentials)
+        session=json.loads(self.request('/api/login','POST',credentials)[1])['session'];headers={'Authorization':'Bearer '+session}
+        payload={'action':'mkdir','parent':'','name':'test-folder'}
+        self.store.writable=False
+        self.assertEqual(self.request('/api/files','POST',payload,headers)[0],403)
+        self.assertFalse((self.root/'test-folder').exists())
+        self.store.writable=True
+        self.assertEqual(self.request('/api/files','POST',payload,headers)[0],200)
+        self.assertEqual(self.request('/api/files','POST',payload,headers)[0],409)
+        data=json.loads(self.request('/api/list',headers=headers)[1]);item=next(i for i in data['items'] if i['name']=='test-folder')
+        move={'action':'move','path':item['path'],'revision':item['revision'],'destination':'기억','name':'moved','operationId':'a'*32}
+        self.assertEqual(self.request('/api/files','POST',move,{**headers,'Origin':'https://evil.example'})[0],403)
+        self.assertEqual(self.request('/api/files','POST',move,headers)[0],200)
+        self.assertTrue((self.root/'기억/moved').is_dir());self.assertFalse((self.root/'test-folder').exists())
+        self.assertEqual(self.request('/api/files','POST',move,headers)[0],200)
+        self.assertEqual(self.request('/api/files',headers=headers)[0],405)
+        caps=json.loads(self.request('/api/capabilities',headers=headers)[1]);self.assertTrue(caps['fileManagement'])
+
+    def test_no_photo_is_trashed_when_safe_restore_is_unsupported(self):
+        from unittest.mock import patch
+        with patch.object(api,'rename_no_replace',side_effect=api.APIError(501)):
+            capabilities=json.loads(self.request('/api/capabilities')[1])
+            self.assertFalse(capabilities['trash']);self.assertFalse(capabilities['safeMoves'])
+            self.assertEqual(self.trash()[0],501)
+        self.assertEqual((self.root/'one.jpg').read_bytes(),PHOTO)
+        self.assertEqual(list((self.root/api.TRASH).iterdir()),[])
+
 if __name__=='__main__':unittest.main()

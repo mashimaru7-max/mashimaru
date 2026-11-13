@@ -3,6 +3,8 @@ Linux only: descriptor-relative paths, no symlink traversal, read-only by defaul
 """
 import contextlib
 import datetime
+import ctypes
+import errno
 import math
 import tempfile
 import hashlib
@@ -43,7 +45,7 @@ class APIError(Exception):
 def parts(path):
     if not isinstance(path, str) or len(path) > 4096 or '\\' in path or '%' in path or any(ord(c) < 32 or ord(c) == 127 for c in path): raise APIError(400)
     values = path.split('/') if path else []
-    if any(not p or p.startswith('.') or p.lower().startswith('@eadir') for p in values): raise APIError(400)
+    if any(not p or p.startswith(('.', '@')) or p.casefold() in ('#recycle','#snapshot') for p in values): raise APIError(400)
     return values
 
 def revision(st):
@@ -162,7 +164,7 @@ class PhotoStore:
                 ident=uuid.uuid4().hex; os.mkdir(ident, mode=0o700, dir_fd=root)
                 fd=os.open(ident,DIR_FLAGS,dir_fd=root)
                 try:
-                    data=json.dumps({'id':ident,'path':path,'deletedAt':int(time.time())},ensure_ascii=False).encode()
+                    data=json.dumps({'id':ident,'path':path,'deletedAt':int(time.time()),'originalRevision':expected,'identity':[st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns]},ensure_ascii=False).encode()
                     meta=os.open('metadata.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=fd)
                     with os.fdopen(meta,'wb') as f: f.write(data); f.flush(); os.fsync(f.fileno())
                     os.rename(p[-1],'photo',src_dir_fd=parent,dst_dir_fd=fd)
@@ -557,6 +559,251 @@ class JournalStore:
         except Exception:
             Path(path).unlink(missing_ok=True);raise
 
+def rename_no_replace(src_fd,src_name,dst_fd,dst_name):
+    """Atomic no-clobber rename. Unsupported NAS kernels fail without a fallback."""
+    libc=ctypes.CDLL(None,use_errno=True)
+    call=getattr(libc,'renameat2',None)
+    if call is None: raise APIError(501)
+    call.argtypes=[ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint];call.restype=ctypes.c_int
+    if call(src_fd,os.fsencode(src_name),dst_fd,os.fsencode(dst_name),1)!=0:
+        code=ctypes.get_errno()
+        if code in (errno.EEXIST,errno.ENOTEMPTY): raise APIError(409)
+        if code in (errno.ENOSYS,errno.EOPNOTSUPP,errno.EINVAL,errno.EXDEV): raise APIError(501)
+        raise OSError(code,os.strerror(code))
+
+class FileManager:
+    """Recoverable moves, metadata rewrites and derived-index invalidation."""
+    def __init__(self,store,settings,journal,archive):
+        self.store=store;self.settings=settings;self.journal=journal;self.archive=archive
+        self.path=settings.root/'file-operations.sqlite3';self.lock=threading.RLock();self.blocked=False
+    @contextlib.contextmanager
+    def db(self):
+        with self.lock, contextlib.closing(sqlite3.connect(self.path,timeout=10)) as db,db:
+            os.chmod(self.path,0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS operations (id TEXT PRIMARY KEY,status TEXT,payload TEXT)')
+            yield db
+    def safe_moves(self):
+        if not self.store.writable:return False
+        if getattr(self,'atomic_supported',None) is not None:return self.atomic_supported
+        probe='.probe-'+uuid.uuid4().hex
+        try:
+            with self.store.lock,self.store.trash_root() as root:
+                os.mkdir(probe,mode=0o700,dir_fd=root);fd=os.open(probe,DIR_FLAGS,dir_fd=root)
+                try:
+                    os.mkdir('source',mode=0o700,dir_fd=fd);os.mkdir('existing',mode=0o700,dir_fd=fd)
+                    try:rename_no_replace(fd,'source',fd,'existing')
+                    except APIError as error:
+                        if error.status!=409:raise
+                    else:raise APIError(501)
+                    rename_no_replace(fd,'source',fd,'destination')
+                    os.fsync(fd);os.fsync(root)
+                    self.atomic_supported=True;self.atomic_error=None;return True
+                finally:
+                    for name in ('source','existing','destination'):
+                        try:os.rmdir(name,dir_fd=fd)
+                        except FileNotFoundError:pass
+                    os.close(fd);os.rmdir(probe,dir_fd=root)
+        except APIError:
+            self.atomic_supported=False;self.atomic_error=501;return False
+        except OSError as error:
+            self.atomic_error=403 if error.errno in (errno.EROFS,errno.EACCES,errno.EPERM) else 501 if error.errno in (errno.EINVAL,errno.ENOSYS,errno.EOPNOTSUPP) else 503
+            return False
+    @staticmethod
+    def mapped(path,old,new):
+        return new+path[len(old):] if path==old or path.startswith(old+'/') else path
+    @staticmethod
+    def identity(st):return [st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns]
+    @contextlib.contextmanager
+    def source(self,plan):
+        if plan['kind']=='restore':
+            with self.store.trash_root() as root:
+                fd=os.open(plan['trashId'],DIR_FLAGS,dir_fd=root)
+                try:yield fd,'photo'
+                finally:os.close(fd)
+        else:
+            p=parts(plan['old'])
+            with self.store.directory('/'.join(p[:-1])) as fd:yield fd,p[-1]
+    def write_op(self,ident,status,plan):
+        with self.db() as db:db.execute('INSERT OR REPLACE INTO operations VALUES (?,?,?)',(ident,status,json.dumps(plan,ensure_ascii=False)))
+    @staticmethod
+    def compact(plan):
+        return {k:v for k,v in plan.items() if k in ('kind','old','new','request','trashId')}|{'linkedRecords':len(plan.get('records',[]))}
+    def invalidate(self):
+        if not (self.settings.root/'archive.sqlite3').exists():return
+        with self.archive.lock, contextlib.closing(self.archive.connect()) as db,db:
+            db.execute('DELETE FROM photos');db.execute('DELETE FROM collections')
+    def snapshot(self,old,new,restore_meta=None):
+        before=self.settings.read();after=json.loads(json.dumps(before));records=[];size=0
+        if restore_meta is None:
+            for key,binding in after['albums'].items():
+                if isinstance(binding,str):after['albums'][key]=self.mapped(binding,old,new)
+                else:binding['root']=self.mapped(binding['root'],old,new)
+            if after['home']:
+                previous=after['home']['path'];after['home']['path']=self.mapped(previous,old,new)
+                if after['home']['name']==previous.split('/')[-1]:after['home']['name']=after['home']['path'].split('/')[-1]
+        for binding in after['albums'].values():album_binding(binding)
+        if after['home']:settings_path(after['home']['path'])
+        setting_plan=None
+        if after!=before:
+            after['revision']=before['revision']+1;setting_plan={'before':before,'after':after}
+        if (self.settings.root/'journal.sqlite3').exists():
+            with self.journal.db() as db:
+                for row in db.execute('SELECT * FROM records'):
+                    payload=json.loads(row[2]);refs=[];changed=False
+                    for index,ref in enumerate(payload.get('attachments',[])):
+                        if restore_meta is not None:
+                            affected=ref['path']==old and ref['revision']==restore_meta.get('originalRevision')
+                        else:affected=ref['path']==old or ref['path'].startswith(old+'/')
+                        if not affected:continue
+                        identity=None
+                        if restore_meta is not None:identity=restore_meta.get('identity')
+                        else:
+                            try:
+                                with self.store.photo(ref['path']) as (fd,st):
+                                    if revision(st)==ref['revision']:identity=self.identity(st)
+                            except (OSError,APIError):pass
+                        ref['path']=self.mapped(ref['path'],old,new)
+                        parts(ref['path'])
+                        if len(ref['path'])>1024:raise APIError(400)
+                        refs.append({'index':index,'identity':identity});changed=True
+                    if changed:
+                        size+=len(row[2].encode())
+                        if len(records)>=1000 or size>16*1024*1024:raise APIError(413)
+                        records.append({'id':row[0],'revision':row[1],'beforeHash':hashlib.sha256(row[2].encode()).hexdigest(),'deleted':row[3],'record':payload,'refs':refs})
+        return setting_plan,records
+    def finalize(self,ident,plan):
+        with self.source(plan) as (fd,name):os.fsync(fd)
+        p=parts(plan['new'])
+        with self.store.directory('/'.join(p[:-1])) as fd:os.fsync(fd)
+        # Store resolved metadata before applying it, so replay is idempotent.
+        if not plan.get('resolved'):
+            for item in plan['records']:
+                for state in item['refs']:
+                    ref=item['record']['attachments'][state['index']]
+                    if state['identity'] is None:continue
+                    try:
+                        with self.store.photo(ref['path']) as (fd,st):
+                            if self.identity(st)==state['identity']:ref['revision']=revision(st)
+                    except (OSError,APIError):pass
+                item['payload']=json.dumps(item.pop('record'),ensure_ascii=False)
+            plan['resolved']=True;self.write_op(ident,'moved',plan)
+        change=plan['settings']
+        if change:
+            current=self.settings.read()
+            if current==change['before']:
+                after=change['after'];self.settings.patch({'revision':current['revision'],'albums':after['albums'],'home':after['home']})
+            elif current!=change['after']:raise APIError(503)
+        if plan['records']:
+            with self.journal.db() as db:
+                db.execute('BEGIN IMMEDIATE')
+                for item in plan['records']:
+                    row=db.execute('SELECT revision,payload,deleted FROM records WHERE id=?',(item['id'],)).fetchone()
+                    if row and row[0]==item['revision']+1 and row[1]==item['payload'] and row[2]==item['deleted']:continue
+                    if not row or row[0]!=item['revision'] or hashlib.sha256(row[1].encode()).hexdigest()!=item['beforeHash'] or row[2]!=item['deleted']:raise APIError(503)
+                    db.execute('UPDATE records SET revision=?,payload=?,updated=? WHERE id=?',(item['revision']+1,item['payload'],plan['at'],item['id']))
+        self.invalidate();self.write_op(ident,'done',self.compact(plan))
+        if plan['kind']=='restore':
+            try:
+                with self.store.trash_root() as root:
+                    fd=os.open(plan['trashId'],DIR_FLAGS,dir_fd=root)
+                    try:os.unlink('metadata.json',dir_fd=fd)
+                    finally:os.close(fd)
+                    os.rmdir(plan['trashId'],dir_fd=root)
+            except OSError:pass # An empty private metadata entry may remain after a crash.
+    def recover(self):
+        if not self.path.exists():self.blocked=False;return
+        try:
+            with self.db() as db:pending=[r[0] for r in db.execute("SELECT id FROM operations WHERE status IN ('prepared','moved')")]
+            for ident in pending:
+                with self.db() as db:status,raw=db.execute('SELECT status,payload FROM operations WHERE id=?',(ident,)).fetchone()
+                plan=json.loads(raw)
+                if status=='prepared':
+                    try:
+                        with self.source(plan) as (fd,name):src=os.stat(name,dir_fd=fd,follow_symlinks=False)
+                    except FileNotFoundError:src=None
+                    dstparts=parts(plan['new'])
+                    try:
+                        with self.store.directory('/'.join(dstparts[:-1])) as fd:dst=os.stat(dstparts[-1],dir_fd=fd,follow_symlinks=False)
+                    except FileNotFoundError:dst=None
+                    if src is not None:
+                        if [src.st_dev,src.st_ino]==plan['inode']:
+                            self.write_op(ident,'cancelled',self.compact(plan));continue
+                        if dst is None or [dst.st_dev,dst.st_ino]!=plan['inode']:raise APIError(503)
+                    if dst is None or [dst.st_dev,dst.st_ino]!=plan['inode']:raise APIError(503)
+                self.finalize(ident,plan)
+            self.blocked=False
+        except Exception:
+            self.blocked=True;raise APIError(503)
+    def execute(self,ident,plan):
+        self.write_op(ident,'prepared',plan)
+        p=parts(plan['new'])
+        try:
+            with self.source(plan) as (src,name),self.store.directory('/'.join(p[:-1])) as dst:
+                st=os.stat(name,dir_fd=src,follow_symlinks=False)
+                if revision(st)!=plan['sourceRevision']:raise APIError(409)
+                rename_no_replace(src,name,dst,p[-1]);os.fsync(src);os.fsync(dst)
+                moved=os.stat(p[-1],dir_fd=dst,follow_symlinks=False)
+                if [moved.st_dev,moved.st_ino]!=plan['inode']:raise APIError(503)
+            self.finalize(ident,plan)
+        except Exception:
+            # Recovery either completes the recorded move or cancels an unstarted one.
+            self.recover()
+            with self.db() as db:state=db.execute('SELECT status FROM operations WHERE id=?',(ident,)).fetchone()
+            if not state or state[0]!='done':raise
+        return {'ok':True,'path':plan['new'],'linkedRecords':len(plan['records'])}
+    def perform(self,data):
+        self.store.write_check()
+        if not isinstance(data,dict):raise APIError(400)
+        if data.get('action')=='mkdir':
+            if set(data)!={'action','parent','name'}:raise APIError(400)
+            parent=data['parent'];name=data['name'];parts(parent)
+            if len(parts(name))!=1:raise APIError(400)
+            with self.store.lock,self.store.directory(parent) as fd:
+                os.mkdir(name,mode=0o750,dir_fd=fd);os.fsync(fd)
+            self.invalidate();return {'ok':True,'path':parent+'/'+name if parent else name}
+        if set(data)!={'action','path','revision','destination','name','operationId'} or data['action']!='move':raise APIError(400)
+        old=data['path'];destination=data['destination'];name=data['name'];ident=data['operationId']
+        if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):raise APIError(400)
+        p=parts(old);parts(destination)
+        if not p or len(parts(name))!=1 or not isinstance(data['revision'],str) or not re.fullmatch(r'[a-f0-9]{64}',data['revision']):raise APIError(400)
+        new=destination+'/'+name if destination else name
+        if new==old or new.startswith(old+'/'):raise APIError(400)
+        with self.db() as db:existing=db.execute('SELECT status,payload FROM operations WHERE id=?',(ident,)).fetchone()
+        if existing:
+            plan=json.loads(existing[1])
+            if plan.get('request')!=data:raise APIError(409)
+            if existing[0]=='done':return {'ok':True,'path':plan['new'],'linkedRecords':plan.get('linkedRecords',len(plan.get('records',[])))}
+            if existing[0]!='cancelled':raise APIError(409)
+        if not self.safe_moves():raise APIError(getattr(self,'atomic_error',501))
+        with self.store.lock,self.store.directory('/'.join(p[:-1])) as fd:
+            st=os.stat(p[-1],dir_fd=fd,follow_symlinks=False)
+            if not (stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode)) or revision(st)!=data['revision']:raise APIError(409)
+            if stat.S_ISREG(st.st_mode) and (not PHOTO.search(p[-1]) or name.rsplit('.',1)[-1].lower()!=p[-1].rsplit('.',1)[-1].lower()):raise APIError(400)
+            # Destination directory must exist; no implicit parent creation.
+            with self.store.directory(destination):pass
+            settings,records=self.snapshot(old,new)
+            plan={'kind':'move','old':old,'new':new,'sourceRevision':data['revision'],'inode':[st.st_dev,st.st_ino],'settings':settings,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'request':data}
+            return self.execute(ident,plan)
+    def restore(self,ident):
+        self.store.write_check()
+        if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):raise APIError(400)
+        opid=hashlib.sha256(('restore:'+ident).encode()).hexdigest()[:32]
+        with self.db() as db:existing=db.execute('SELECT status,payload FROM operations WHERE id=?',(opid,)).fetchone()
+        if existing:
+            previous=json.loads(existing[1])
+            if previous.get('kind')!='restore' or previous.get('trashId')!=ident:raise APIError(409)
+            if existing[0]=='done':return {'ok':True,'path':previous['new']}
+        if not self.safe_moves():raise APIError(getattr(self,'atomic_error',501))
+        with self.store.lock,self.store.trash_root() as root:
+            fd=os.open(ident,DIR_FLAGS,dir_fd=root)
+            try:
+                meta=self.store.read_meta(fd);st=os.stat('photo',dir_fd=fd,follow_symlinks=False)
+                if not stat.S_ISREG(st.st_mode):raise APIError(400)
+            finally:os.close(fd)
+            settings,records=self.snapshot(meta['path'],meta['path'],meta)
+            plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
+            return self.execute(opid,plan)
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -583,6 +830,28 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self): self.run_request(False)
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
+        route=urlsplit(self.path).path
+        metadata={'/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files'}
+        if route=='/api/upload':
+            # Long transfers serialize file writes without holding up record reads/writes.
+            with self.server.store.lock:
+                with self.server.metadata_lock:
+                    try:
+                        self.authorized()
+                        if self.server.files is not None:self.server.files.recover()
+                    except APIError as error:self.reply(error.status,{'error':'request_rejected'});return
+                self.dispatch_request(post)
+        elif route in metadata:
+            # File operations take the photo lock first; a slow upload must not freeze records.
+            context=self.server.store.lock if route in ('/api/trash','/api/restore','/api/files') else contextlib.nullcontext()
+            with context,self.server.metadata_lock:
+                try:
+                    self.authorized()
+                    if self.server.files is not None:self.server.files.recover()
+                except APIError as error:self.reply(error.status,{'error':'request_rejected'});return
+                self.dispatch_request(post)
+        else:self.dispatch_request(post)
+    def dispatch_request(self,post):
         try:
             route=urlsplit(self.path)
             if post and route.path=='/api/login' and self.server.auth is not None:
@@ -597,6 +866,13 @@ class Handler(BaseHTTPRequestHandler):
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
+            if route.path=='/api/files':
+                if not post:raise APIError(405)
+                if self.server.files is None or not self.server.auth.configured():raise APIError(409)
+                if self.headers.get('Transfer-Encoding'):raise APIError(400)
+                length=int(self.headers.get('Content-Length','0'))
+                if length<=0 or length>16384 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                self.reply(200,self.server.files.perform(json.loads(self.rfile.read(length))));return
             if route.path in ('/api/journal','/api/journal-backup'):
                 if self.server.journal is None or not self.server.auth.configured(): raise APIError(409)
                 if route.path=='/api/journal-backup':
@@ -614,7 +890,7 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
@@ -640,12 +916,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(200,self.server.settings.patch(json.loads(self.rfile.read(length)))); return
                 if route.path=='/api/upload':
                     if self.headers.get_content_type()!='application/octet-stream': raise APIError(415)
-                    self.reply(201,store.upload(q('path'),q('name'),self.rfile,length)); return
+                    result=store.upload(q('path'),q('name'),self.rfile,length)
+                    if self.server.files is not None:self.server.files.invalidate()
+                    self.reply(201,result); return
                 if route.path in ('/api/trash','/api/restore'):
                     if length<=0 or length>16384 or self.headers.get_content_type()!='application/json': raise APIError(400)
                     data=json.loads(self.rfile.read(length))
                     if not isinstance(data,dict): raise APIError(400)
-                    result=store.trash(data.get('path'),data.get('revision')) if route.path=='/api/trash' else store.restore(data.get('id'))
+                    store.write_check()
+                    if route.path=='/api/trash' and self.server.files is not None and not self.server.files.safe_moves():raise APIError(getattr(self.server.files,'atomic_error',501))
+                    result=store.trash(data.get('path'),data.get('revision')) if route.path=='/api/trash' else (self.server.files.restore(data.get('id')) if self.server.files is not None else store.restore(data.get('id')))
+                    if self.server.files is not None:self.server.files.invalidate()
                     self.reply(200,result); return
             raise APIError(404)
         except APIError as e: self.reply(e.status,{'error':'request_rejected'})
@@ -654,17 +935,18 @@ class Handler(BaseHTTPRequestHandler):
         except PermissionError: self.reply(403,{'error':'permission_denied'})
         except (ValueError,TypeError,KeyError): self.reply(400,{'error':'invalid_request'})
         except (BrokenPipeError,ConnectionResetError,TimeoutError): pass
-        except OSError: self.reply(400,{'error':'filesystem_request_rejected'})
+        except OSError as error: self.reply(403 if error.errno in (errno.EROFS,errno.EACCES,errno.EPERM) else 400,{'error':'filesystem_request_rejected'})
         except Exception: self.reply(500,{'error':'internal_error'})
     def send_journal_backup(self):
         path=self.server.journal.backup()
         try:
-            size=path.stat().st_size
-            if size>64*1024*1024: raise APIError(413)
-            self.send_response(200);self.cors();self.send_header('Content-Type','application/octet-stream')
-            self.send_header('Content-Disposition','attachment; filename="family-journal-backup.sqlite3"')
-            self.send_header('Content-Length',str(size));self.end_headers()
             with open(path,'rb') as f:
+                size=os.fstat(f.fileno()).st_size
+                if size>64*1024*1024:raise APIError(413)
+                path.unlink() # The open descriptor owns the temporary snapshot during transfer.
+                self.send_response(200);self.cors();self.send_header('Content-Type','application/octet-stream')
+                self.send_header('Content-Disposition','attachment; filename="family-journal-backup.sqlite3"')
+                self.send_header('Content-Length',str(size));self.end_headers()
                 while True:
                     chunk=f.read(65536)
                     if not chunk:break
@@ -727,6 +1009,11 @@ class Server(ThreadingHTTPServer):
         self.archive=SharedArchive(settings,store) if settings is not None else None
         self.auth=FamilyAuth(settings.root) if settings is not None else None
         self.journal=JournalStore(settings.root,store) if settings is not None else None
+        self.metadata_lock=threading.RLock()
+        self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None
+        if self.files is not None:
+            try:self.files.recover()
+            except APIError:pass
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
     def process_request(self,request,client_address):

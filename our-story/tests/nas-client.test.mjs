@@ -155,3 +155,19 @@ test('journal backup uses an authenticated bounded binary response',async()=>{
  await connect(f.client);const blob=await f.client.journalBackup();assert.equal(blob.type,'application/octet-stream');assert.ok((await blob.text()).startsWith('SQLite format 3'));
  assert.ok(f.calls.at(-1).init.headers.Authorization.startsWith('Bearer '));assert.equal(new URL(f.calls.at(-1).url).search,'');
 });
+test('file management sends paths and stable operation ids in authenticated POST bodies',async()=>{
+ const f=fixture(url=>url.pathname==='/api/files'?json({ok:true,path:'정리/가족.jpg',linkedRecords:1}):json(root));await connect(f.client);
+ const data={action:'move',path:'one.jpg',revision:'a'.repeat(64),destination:'정리',name:'가족.jpg',operationId:'b'.repeat(32)};
+ const result=await f.client.fileOperation(data);assert.equal(result.path,'정리/가족.jpg');assert.deepEqual(JSON.parse(f.calls.at(-1).init.body),data);assert.equal(new URL(f.calls.at(-1).url).search,'');assert.ok(f.calls.at(-1).init.headers.Authorization.startsWith('Bearer '));
+ const before=f.calls.length;await assert.rejects(()=>f.client.fileOperation({action:'mkdir',parent:'',name:'../bad'}));assert.equal(f.calls.length,before);
+});
+test('file conflicts and unsupported atomic moves never report success',async()=>{
+ for(const status of [409,501,503]){
+  const f=fixture(url=>url.pathname==='/api/files'?json({},status):json(root));await connect(f.client);
+  await assert.rejects(()=>f.client.fileOperation({action:'move',path:'one.jpg',destination:'',name:'new.jpg',revision:'a'.repeat(64),operationId:'b'.repeat(32)}),e=>e.code==='HTTP_'+status);
+ }
+});
+test('photo write permission and upload size errors describe NAS settings',async()=>{
+ const f=fixture(url=>url.pathname==='/api/upload'?json({},403):json(root));await connect(f.client);
+ const file=new Blob(['fixture'],{type:'image/jpeg'});file.name='fixture.jpg';await assert.rejects(()=>f.client.upload('',file),e=>e.code==='HTTP_403'&&e.message.includes('쓰기'));
+});
