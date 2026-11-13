@@ -115,6 +115,8 @@ export class NasClient {
   #expiry = Infinity;
   #epoch = 0;
   #requests = new Map();
+  #thumbActive = 0;
+  #thumbQueue = [];
   #onExpire;
   constructor({
     fetchImpl = globalThis.fetch.bind(globalThis),
@@ -199,6 +201,8 @@ export class NasClient {
     }
   }
   #clear() {
+    for(const task of this.#thumbQueue)task.reject(fail("ABORT","요청을 취소했어요."));
+    this.#thumbQueue=[];
     this.#epoch++;
     this.#ready = false;
     this.#secret = "";
@@ -209,6 +213,8 @@ export class NasClient {
     this.#requests.clear();
   }
   abortImages() {
+    for(const task of this.#thumbQueue)task.reject(fail("ABORT","요청을 취소했어요."));
+    this.#thumbQueue=[];
     for (const [ctrl, route] of this.#requests)
       if (["/api/image", "/api/thumbnail"].includes(route)) ctrl.abort();
   }
@@ -339,8 +345,19 @@ export class NasClient {
     }
   }
   async thumbnail(path) {
-    safePath(path);
-    return this.#request("/api/thumbnail", {params:{path}, image:true});
+    this.#assertAuth();safePath(path);
+    return new Promise((resolve,reject)=>{
+      this.#thumbQueue.push({path,resolve,reject,epoch:this.#epoch});this.#drainThumbnails();
+    });
+  }
+  #drainThumbnails() {
+    while(this.#thumbActive<2 && this.#thumbQueue.length) {
+      const task=this.#thumbQueue.shift();
+      if(task.epoch!==this.#epoch){task.reject(fail("ABORT","요청을 취소했어요."));continue;}
+      this.#thumbActive++;
+      this.#request("/api/thumbnail",{params:{path:task.path},image:true})
+        .then(task.resolve,task.reject).finally(()=>{this.#thumbActive--;this.#drainThumbnails();});
+    }
   }
   async download(path, modern = false) {
     safePath(path);

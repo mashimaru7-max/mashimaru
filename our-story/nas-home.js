@@ -1,5 +1,5 @@
-import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-autoalbums1';
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums1';
+import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-autoalbums2';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums2';
 export class NasHome {
   constructor(gallery, notify, {vault,automatic=async()=>({items:[]})} = {}) {
     this.automatic=automatic;

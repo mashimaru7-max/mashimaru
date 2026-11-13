@@ -124,3 +124,14 @@ test('upload transfer cancellation aborts the request',async()=>{
  const f=fixture((url,init)=>url.pathname==='/api/list'?json(root):new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')))));await connect(f.client);
  const pending=f.client.upload('',new File(['data'],'one.jpg'));f.client.cancelTransfers();await assert.rejects(pending,e=>e.code==='ABORT');
 });
+test('thumbnail requests share a two-slot limit across hero, covers and albums',async()=>{
+ const pending=[];const f=fixture(url=>url.pathname==='/api/list'?json(root):new Promise(resolve=>pending.push(resolve)));await connect(f.client);
+ const a=f.client.thumbnail('a.jpg'),b=f.client.thumbnail('b.jpg'),c=f.client.thumbnail('c.jpg');assert.equal(pending.length,2);
+ pending[0](new Response('a',{headers:{'content-type':'image/jpeg'}}));await a;await new Promise(resolve=>setImmediate(resolve));assert.equal(pending.length,3);
+ pending[1](new Response('b',{headers:{'content-type':'image/jpeg'}}));pending[2](new Response('c',{headers:{'content-type':'image/jpeg'}}));assert.equal((await b).size,1);assert.equal((await c).size,1);
+});
+test('disconnect cancels queued thumbnails without sending them under another connection',async()=>{
+ const f=fixture((url,init)=>url.pathname==='/api/list'?json(root):new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')))));await connect(f.client);
+ const work=[f.client.thumbnail('a.jpg'),f.client.thumbnail('b.jpg'),f.client.thumbnail('c.jpg')];const finished=Promise.allSettled(work);await f.client.disconnect();
+ const result=await finished;assert(result.every(r=>r.status==='rejected'&&r.reason.code==='ABORT'));assert.equal(f.calls.length,3);
+});

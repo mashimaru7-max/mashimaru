@@ -1,4 +1,4 @@
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums1';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums2';
 export const ALBUM_KEYS=['home','travel','growth:다온','growth:라온','growth:함께'];
 export function validateAlbumBindings(data) {
   if (!data || data.kind!=='album-folders' || !data.origins || typeof data.origins!=='object') return {};
