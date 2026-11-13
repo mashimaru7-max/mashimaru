@@ -1,6 +1,7 @@
+import {growthTabs,childJournal,journalPreview} from './growth-journal.mjs?v=20261113-journal1';
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import { FamilySettings } from './nas-shared.mjs?v=20261113-login1';
-import { NasAlbums } from "./nas-albums.js?v=20261113-login1";
+import { NasAlbums } from "./nas-albums.js?v=20261113-journal1";
 import { NasHome } from "./nas-home.js?v=20261113-login1";
 import { trips, growth, wishes } from "./data.js";
 import { NasGallery } from "./nas-gallery.js?v=20261113-login1";
@@ -251,8 +252,7 @@ function filteredGrowth() {
   return growth
     .filter(
       (r) =>
-        (r.target === state.child ||
-          (r.target === "함께" && state.child !== "함께")) &&
+        (r.target === state.child) &&
         (state.age === "전체" || r.age === state.age) &&
         (!state.year || r.date.startsWith(state.year)) &&
         (!state.category || r.category === state.category) &&
@@ -281,7 +281,7 @@ function sampleGrowthPage() {
       "다온과 라온, 서로의 곁에서 자라는 소중한 이야기.",
       "growth",
     ) +
-    `<div class="chips">${["다온", "라온", "함께"].map((c) => `<button class="${c === state.child ? "selected" : ""}" aria-pressed="${c === state.child}" data-action="child" data-value="${c}"><span class="child-avatar" aria-hidden="true">${c === "함께" ? icon("heart") : c.slice(0,1)}</span><span>${c}</span></button>`).join("")}</div><div class="growth-spread"><aside class="timeline" aria-label="나이별 타임라인">${[
+    `${growthTabs(state.child)}<div class="growth-spread"><aside class="timeline" aria-label="나이별 타임라인">${[
       ["전체", "모든 계절"],
       ["0~2세", "처음 만난 세상"],
       ["3~5세", "하루하루, 새로운 발견"],
@@ -297,6 +297,10 @@ function sampleGrowthPage() {
       )}</aside><div>${r ? `<div class="scrapbook"><a href="#" class="polaroid" data-action="detail" data-type="growth" data-id="${r.id}">${img(r.image)}<h2>${esc(r.title)}</h2><small>${esc(r.target)} · ${fmt(r.date)} · 예시</small></a><div class="scrap-side">${img(records[1]?.image || "forest")}${img(records[2]?.image || "beach")}<span class="hand muted">나란히, 천천히 ♡</span></div></div><blockquote>“${esc(r.quote || "너희의 오늘을 오래오래 기억할게.")}”</blockquote>` : empty("아직 펼쳐지지 않은 계절이에요.")}</div></div><div class="section-head"><h2>시간을 따라, 한 장씩</h2><small>생년월일 미설정 · 예시 나이 구간</small></div>${toolbar("growth")}<div id="growth-list" class="record-list">${growthList()}</div>`;
 }
 function growthPage() {
+  if(state.child!=='함께'){
+    main.innerHTML=childJournal(state.child,`${toolbar('growth')}<div id="growth-list" class="record-list">${growthList()}</div>`);
+    return;
+  }
   sampleGrowthPage();
   if(!nas.connected)return;
   const heading=main.querySelector('.page-title'),chips=main.querySelector('.chips');
@@ -307,7 +311,7 @@ function growthPage() {
   for(const child of [...main.children])if(child!==heading && child!==chips)demo.append(child);
   const host=document.createElement('section');host.id='growth-nas-album';
   main.replaceChildren(heading,chips,host,demo);
-  albums.mount(host,'growth:'+state.child);
+  albums.mount(host,'growth:함께');
 }
 function gallery() {
   const heading = `<div class="page-title"><div><span class="eyebrow">COLLECTED LITTLE MOMENTS</span><h1>추억의 조각들 <span class="leaf">${icon("sprout")}</span></h1><p>한 장의 사진 속에, 그날의 마음이 남아 있어요.</p></div></div>`;
@@ -349,7 +353,7 @@ function form(type, id) {
   const field = (label, name, value = "", props = "") =>
     `<label>${label}<input name="${name}" value="${esc(value)}" ${props}></label>`;
   modal(
-    `<span class="eyebrow">TRY A LITTLE STORY</span><h2>예시 ${type === "trip" ? "여행" : "성장"} 기록 ${id ? "수정" : "추가"}</h2><p class="fine">개인정보·실제 사진은 입력하지 마세요. 이 체험의 입력값은 새로고침하면 사라집니다.</p><form id="record-form" data-type="${type}" data-id="${id || ""}" class="form-grid">${field("제목", "title", r.title, 'required maxlength="100"')}${field("날짜", "date", r.date || "2026-11-13", 'type="date" required')}${type === "trip" ? `${field("국가", "country", r.country || "대한민국", 'required maxlength="60"')}${field("도시", "city", r.city, 'required maxlength="60"')}${field("여행 종료일", "end", r.end || r.date || "2026-11-13", 'type="date" required')}${field("위도 (-90~90)", "lat", r.lat ?? 37.4, 'type="number" min="-90" max="90" step="any" required')}${field("경도 (-180~180)", "lng", r.lng ?? 127.1, 'type="number" min="-180" max="180" step="any" required')}<label>동행 가족<input name="members" value="${esc((r.members || ["아빠", "엄마", "다온", "라온"]).join(", "))}" required maxlength="100"></label>` : `<label>기록 대상<select name="target">${["다온", "라온", "함께"].map((c) => `<option ${c === (r.target || state.child) ? "selected" : ""}>${c}</option>`).join("")}</select></label>${field("주제 (자유 입력)", "category", r.category || "일상", 'required maxlength="40"')}<label>나이 구간 (예시)<select name="age">${["0~2세", "3~5세", "6~8세", "9세 이상"].map((a) => `<option ${a === (r.age || "6~8세") ? "selected" : ""}>${a}</option>`).join("")}</select></label>${field("아이들이 남긴 말", "quote", r.quote, 'maxlength="200"')}${field("키 cm (선택)", "height", r.height, 'type="number" min="20" max="250" step="0.1"')}${field("몸무게 kg (선택)", "weight", r.weight, 'type="number" min="1" max="200" step="0.1"')}<label>연결할 여행<select name="tripId"><option value="">연결하지 않음</option>${trips.map((t) => `<option value="${t.id}" ${t.id === r.tripId ? "selected" : ""}>${esc(t.title)}</option>`).join("")}</select></label>`}<label>작성자<select name="author">${["아빠", "엄마", "다온", "라온"].map((c) => `<option ${c === r.author ? "selected" : ""}>${c}</option>`).join("")}</select></label><label>예시 대표 사진<select name="image">${[
+    `<span class="eyebrow">TRY A LITTLE STORY</span><h2>예시 ${type === "trip" ? "여행" : "성장"} 기록 ${id ? "수정" : "추가"}</h2><p class="fine">개인정보·실제 사진은 입력하지 마세요. 이 체험의 입력값은 새로고침하면 사라집니다.</p><form id="record-form" data-type="${type}" data-id="${id || ""}" class="form-grid">${field("제목", "title", r.title, 'required maxlength="100"')}${field("날짜", "date", r.date || "2026-11-13", 'type="date" required')}${type === "trip" ? `${field("국가", "country", r.country || "대한민국", 'required maxlength="60"')}${field("도시", "city", r.city, 'required maxlength="60"')}${field("여행 종료일", "end", r.end || r.date || "2026-11-13", 'type="date" required')}${field("위도 (-90~90)", "lat", r.lat ?? 37.4, 'type="number" min="-90" max="90" step="any" required')}${field("경도 (-180~180)", "lng", r.lng ?? 127.1, 'type="number" min="-180" max="180" step="any" required')}<label>동행 가족<input name="members" value="${esc((r.members || ["아빠", "엄마", "다온", "라온"]).join(", "))}" required maxlength="100"></label>` : `<label>기록 대상<select name="target">${["함께", "다온", "라온"].map((c) => `<option ${c === (r.target || state.child) ? "selected" : ""}>${c}</option>`).join("")}</select></label>${field("주제 (자유 입력)", "category", r.category || "일상", 'required maxlength="40"')}<label>나이 구간 (예시)<select name="age">${["0~2세", "3~5세", "6~8세", "9세 이상"].map((a) => `<option ${a === (r.age || "6~8세") ? "selected" : ""}>${a}</option>`).join("")}</select></label>${field("아이들이 남긴 말", "quote", r.quote, 'maxlength="200"')}${field("키 cm (선택)", "height", r.height, 'type="number" min="20" max="250" step="0.1"')}${field("몸무게 kg (선택)", "weight", r.weight, 'type="number" min="1" max="200" step="0.1"')}<label>연결할 여행<select name="tripId"><option value="">연결하지 않음</option>${trips.map((t) => `<option value="${t.id}" ${t.id === r.tripId ? "selected" : ""}>${esc(t.title)}</option>`).join("")}</select></label>`}<label>작성자<select name="author">${["아빠", "엄마", "다온", "라온"].map((c) => `<option ${c === r.author ? "selected" : ""}>${c}</option>`).join("")}</select></label><label>예시 대표 사진<select name="image">${[
       ["lake", "호수"],
       ["beach", "바다"],
       ["forest", "숲"],
@@ -421,6 +425,7 @@ function render() {
   }
 }
 function route() {
+  const previousPage=state.page;
   const page = location.hash.slice(1) || "home";
   if (page === "nas") state.galleryView = "nas";
   state.page =
@@ -429,6 +434,7 @@ function route() {
       : ["home", "travel", "growth", "gallery"].includes(page)
         ? page
         : "home";
+  if(state.page==='growth' && previousPage!=='growth'){state.child="함께";state.age="전체";}
   state.search = "";
   state.year = "";
   state.category = "";
@@ -448,6 +454,7 @@ document.addEventListener("click", (e) => {
   const { action: a, type, id, value } = b.dataset;
   if (a === "close") dialog.close();
   if (a === "nas-settings") nas.settings();
+  if (a === "journal-preview") modal(journalPreview(state.child,value));
   if (a === "gallery-source") {
     state.galleryView = value === "nas" ? "nas" : "sample";
     render();
@@ -496,6 +503,7 @@ document.addEventListener("click", (e) => {
   }
   if (a === "child") {
     state.child = value;
+    state.age="전체";state.search="";state.year="";state.category="";
     render();
   }
   if (a === "age") {

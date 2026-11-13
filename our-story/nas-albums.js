@@ -191,7 +191,7 @@ export class NasAlbums {
   async paintCovers() {
     const version=this.version,origin=this.g.client.origin;
     await this.ready;
-    const growthKey=['growth:함께','growth:다온','growth:라온'].find(k=>this.folder(k)!==undefined)||'growth:함께';
+    const growthKey='growth:함께';
     for(const [key,selector] of [['travel','[data-album-cover=travel]'],[growthKey,'[data-album-cover=growth]']]) {
       const host=document.querySelector(selector);if(!host)continue;
       try {
