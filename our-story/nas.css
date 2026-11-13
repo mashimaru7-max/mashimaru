@@ -329,3 +329,15 @@ button:disabled {
   font-size: 10px;
   color: var(--green);
 }
+.nas-action-bar,.nas-view-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0 22px}
+.nas-action-bar button,.nas-view-actions button,.nas-trash-row button{border:1px solid #dcccaf;border-radius:20px;background:#fffaf1;padding:10px 16px;color:var(--ink);cursor:pointer}
+.nas-action-bar button:hover,.nas-view-actions button:hover{background:#f4e5cc;transform:translateY(-1px)}
+.nas-danger{color:#9b4f3f!important;border-color:#dcb7a9!important}
+.nas-operation-status{white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow:auto;color:var(--green);line-height:1.7}
+.nas-management h2{margin-bottom:24px}.nas-management p{line-height:1.8}.nas-file-label{display:block;border:1px dashed #b99760;background:#fcf5e9;padding:24px;border-radius:16px;margin:22px 0}
+.nas-file-label input{display:block;max-width:100%;margin-top:14px}.nas-trash-items{max-height:50vh;overflow:auto}.nas-trash-row{display:flex;align-items:center;gap:18px;justify-content:space-between;border-bottom:1px solid #e9decd;padding:14px 0}.nas-trash-row span{overflow-wrap:anywhere;min-width:0}.nas-trash-row button{flex-shrink:0}
+.nas-home-shelf{padding:30px 36px!important;margin-top:24px!important;background:#f3eddf;border-radius:20px;position:relative}.nas-home-shelf h2{margin:8px 0}.nas-home-shelf p{color:var(--muted);margin:12px 0 20px}.nas-home-shelf .primary{display:inline-block;text-decoration:none}.nas-home-clear{position:absolute;right:24px;top:20px;z-index:2;background:#fff9ecdf;border:1px solid #e0d4bf;border-radius:20px;padding:9px 14px;font-size:12px;color:#433e33;cursor:pointer}
+@media(max-width:600px){.nas-home-shelf{padding:24px!important}.nas-action-bar .fine{width:100%}.nas-view-actions{display:grid;grid-template-columns:1fr 1fr}.nas-view-actions .nas-danger{grid-column:1/-1}.nas-status{align-items:flex-start;gap:10px}.nas-status span{max-width:65%}}
+@media(prefers-reduced-motion:reduce){.nas-action-bar button:hover,.nas-view-actions button:hover{transform:none}}
+/* Keep the mobile header's absolute nav rule out of the folder breadcrumbs. */
+.nas-crumbs{position:static;inset:auto;justify-content:flex-start;width:auto;min-height:36px}

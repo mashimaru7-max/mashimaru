@@ -1,5 +1,6 @@
-import { NasClient } from "./nas-client.mjs?v=20261113-memory1";
-import { ConnectionVault } from "./nas-vault.mjs?v=20261113-memory1";
+import { NasActions } from "./nas-actions.js?v=20261113-media2";
+import { NasClient } from "./nas-client.mjs?v=20261113-media2";
+import { ConnectionVault } from "./nas-vault.mjs?v=20261113-media2";
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -16,8 +17,15 @@ export class NasGallery {
     onState = () => {},
     onConnected = () => {},
     notify = () => {},
+    onHomePhoto = async () => {},
   } = {}) {
     this.vault = vault;
+    this.features = {};
+    this.actions = new NasActions(this, onHomePhoto);
+    this.observer = null;
+    this.moreObserver = null;
+    this.near = new Set();
+    this.sizes = new Map();
     this.remembered = false;
     this.restoring = false;
     this.persistMessage = "";
@@ -42,7 +50,7 @@ export class NasGallery {
     this.requested = new Set();
     this.queue = [];
     this.active = 0;
-    this.thumbnails = false;
+    this.thumbnails = true;
     this.viewerURL = null;
     this.viewerVersion = 0;
     this.connectVersion = 0;
@@ -53,7 +61,7 @@ export class NasGallery {
     document.body.append(this.dialog);
     this.dialog.addEventListener("close", () => {
       this.viewerVersion++;
-      this.client.abortImages();
+      this.actions.cancel();
       if (this.viewerURL) URL.revokeObjectURL(this.viewerURL);
       this.viewerURL = null;
       if (this.connecting) {
@@ -118,6 +126,7 @@ export class NasGallery {
         this.savedBase = this.client.origin;
         this.savedMode = this.client.mode;
         this.applyListing(listing);
+        void this.refreshFeatures();
         this.loaded = true;
         if (base) await this.rememberCurrent(true);
         if (navigate) {
@@ -148,7 +157,7 @@ export class NasGallery {
       ? '<div class="nas-saved-actions"><button id="nas-restore-saved" type="button">저장된 연결로 다시 연결</button><button id="nas-forget" type="button">저장 정보 지우기</button></div>'
       : "";
     const savedToken = this.remembered && this.savedMode === "token";
-    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>NAS 사진 보관함</h2>${this.connected ? `<p>${connectedNote}</p><div class="nas-saved-actions">${this.remembered ? '<button class="primary" id="nas-forget">저장 정보 지우고 연결 해제</button>' : '<button class="primary" id="nas-remember-now">이 기기에 연결 기억</button>'}<button id="nas-pause">연결만 끊기</button></div><p class="fine">사진 원본은 읽기 전용이에요. 연결 정보는 이 브라우저에 암호화해서 보관해요.</p>` : `${savedActions}<p>${this.remembered ? "터널 주소가 바뀌었으면 주소만 수정해 주세요. 토큰 칸을 비우면 저장된 정보를 사용해요." : "기존 사진 테스트에서 사용했던 주소와 연결 정보를 입력해 주세요."}</p><form id="nas-connect-form" class="form-grid" method="post" autocomplete="off"><label class="full">사진 API 터널 주소<input name="base" type="url" required maxlength="250" value="${esc(this.savedBase)}" placeholder="https://…trycloudflare.com" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label class="full">연결 방식<select name="mode" aria-label="연결 방식"><option value="token" ${this.savedMode === "token" ? "selected" : ""}>기존 사진 조회 토큰</option><option value="login" ${this.savedMode === "login" ? "selected" : ""}>사진 API 로그인 (설정한 경우)</option></select></label><label class="full" id="nas-token-row">사진 조회 토큰<input name="token" type="password" maxlength="512" autocomplete="off" spellcheck="false" autocapitalize="none" ${savedToken ? 'placeholder="비워두면 저장된 토큰 사용"' : "required"}></label><label id="nas-user-row" hidden>사진 API 아이디<input name="username" maxlength="80" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label id="nas-password-row" hidden>사진 API 비밀번호<input name="password" type="password" maxlength="128" autocomplete="off"></label><label class="full nas-remember"><input name="remember" type="checkbox" checked>이 기기에서 연결 기억</label><p class="fine full">주소와 토큰은 이 브라우저에 암호화해 보관해요. DSM 비밀번호는 입력하지 마세요. 사진과 기록은 여기에 저장하지 않아요.</p><p class="nas-message full" id="nas-connect-error" role="alert"></p><button class="primary full" type="submit">사진 보관함 연결</button></form>`}<p class="nas-message" id="nas-storage-message" role="alert">${esc(this.persistMessage)}</p>`;
+    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>NAS 사진 보관함</h2>${this.connected ? `<p>${connectedNote}</p><div class="nas-saved-actions">${this.remembered ? '<button class="primary" id="nas-forget">저장 정보 지우고 연결 해제</button>' : '<button class="primary" id="nas-remember-now">이 기기에 연결 기억</button>'}<button id="nas-pause">연결만 끊기</button></div><p class="fine">사진 관리 권한은 연결된 API 설정을 따라요. 연결 정보는 이 브라우저에 암호화해서 보관해요.</p>` : `${savedActions}<p>${this.remembered ? "터널 주소가 바뀌었으면 주소만 수정해 주세요. 토큰 칸을 비우면 저장된 정보를 사용해요." : "기존 사진 테스트에서 사용했던 주소와 연결 정보를 입력해 주세요."}</p><form id="nas-connect-form" class="form-grid" method="post" autocomplete="off"><label class="full">사진 API 터널 주소<input name="base" type="url" required maxlength="250" value="${esc(this.savedBase)}" placeholder="https://…trycloudflare.com" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label class="full">연결 방식<select name="mode" aria-label="연결 방식"><option value="token" ${this.savedMode === "token" ? "selected" : ""}>기존 사진 조회 토큰</option><option value="login" ${this.savedMode === "login" ? "selected" : ""}>사진 API 로그인 (설정한 경우)</option></select></label><label class="full" id="nas-token-row">사진 조회 토큰<input name="token" type="password" maxlength="512" autocomplete="off" spellcheck="false" autocapitalize="none" ${savedToken ? 'placeholder="비워두면 저장된 토큰 사용"' : "required"}></label><label id="nas-user-row" hidden>사진 API 아이디<input name="username" maxlength="80" autocomplete="off" spellcheck="false" autocapitalize="none"></label><label id="nas-password-row" hidden>사진 API 비밀번호<input name="password" type="password" maxlength="128" autocomplete="off"></label><label class="full nas-remember"><input name="remember" type="checkbox" checked>이 기기에서 연결 기억</label><p class="fine full">주소와 토큰은 이 브라우저에 암호화해 보관해요. DSM 비밀번호는 입력하지 마세요. 사진과 기록은 여기에 저장하지 않아요.</p><p class="nas-message full" id="nas-connect-error" role="alert"></p><button class="primary full" type="submit">사진 보관함 연결</button></form>`}<p class="nas-message" id="nas-storage-message" role="alert">${esc(this.persistMessage)}</p>`;
     this.dialog.showModal();
     const forget = this.dialog.querySelector("#nas-forget");
     if (forget)
@@ -240,6 +249,7 @@ export class NasGallery {
         await this.rememberCurrent(remember);
         if (attempt !== this.connectVersion) return;
         this.applyListing(listing);
+        void this.refreshFeatures();
         this.loaded = true;
         this.connecting = false;
         this.dialog.close();
@@ -270,6 +280,10 @@ export class NasGallery {
     };
   }
   resetImages() {
+    this.observer?.disconnect();
+    this.moreObserver?.disconnect();
+    this.near.clear();
+    this.sizes.clear();
     this.imageVersion++;
     this.client.abortImages();
     for (const url of this.urls.values()) URL.revokeObjectURL(url);
@@ -280,6 +294,7 @@ export class NasGallery {
     this.thumbErrors.clear();
   }
   resetData() {
+    this.features = {};
     this.version++;
     this.resetImages();
     this.path = "";
@@ -289,7 +304,7 @@ export class NasGallery {
     this.error = "";
     this.loaded = false;
     this.loading = false;
-    this.thumbnails = false;
+    this.thumbnails = true;
   }
   async disconnect({ forget = true, revoke = true } = {}) {
     if (forget) {
@@ -302,7 +317,10 @@ export class NasGallery {
     this.connectVersion++;
     this.connecting = false;
     this.restoring = false;
+    this.actions.cancel();
+    if (this.actions.dialog.open) this.actions.dialog.close();
     this.resetData();
+    this.features = {};
     this.viewerVersion++;
     if (this.dialog.open) this.dialog.close();
     const revocation = this.client.disconnect({ revoke });
@@ -327,6 +345,8 @@ export class NasGallery {
     return removed;
   }
   expired() {
+    this.actions.cancel();
+    if (this.actions.dialog.open) this.actions.dialog.close();
     this.remembered = false;
     this.savedBase = "";
     this.savedMode = "token";
@@ -348,6 +368,8 @@ export class NasGallery {
       const button = e.target.closest("[data-nas-action]");
       if (!button) return;
       const { nasAction: action, path, index } = button.dataset;
+      if (action === "upload") this.actions.upload();
+      if (action === "trash-list") void this.actions.trashList();
       if (action === "connect") this.settings();
       if (action === "disconnect") void this.disconnect();
       if (action === "restore") void this.restoreRemembered({ navigate: true });
@@ -362,6 +384,7 @@ export class NasGallery {
         this.render();
       }
     };
+    void this.refreshFeatures();
     this.render();
     if (this.connected && !this.loaded && !this.loading) void this.load("");
   }
@@ -369,6 +392,8 @@ export class NasGallery {
     if (this.host) this.host.onclick = null;
     this.host = null;
     this.resetImages();
+    this.actions.cancel();
+    if (this.actions.dialog.open) this.actions.dialog.close();
     this.viewerVersion++;
     if (this.dialog.open && !this.connecting) this.dialog.close();
   }
@@ -394,7 +419,7 @@ export class NasGallery {
       this.path = path;
       this.next = null;
       this.total = 0;
-      this.thumbnails = false;
+      this.thumbnails = true;
     }
     this.loading = true;
     this.error = "";
@@ -415,10 +440,22 @@ export class NasGallery {
       }
     }
   }
+  async refreshFeatures() {
+    if (!this.connected || this.checkingFeatures) return;
+    const origin = this.client.origin;
+    this.checkingFeatures = true;
+    try {
+      const features = await this.client.capabilities();
+      if (this.connected && this.client.origin === origin) this.features = features;
+    } catch { this.features = {}; }
+    finally { this.checkingFeatures = false; this.onState(); this.render(); }
+  }
   render() {
+    this.observer?.disconnect();
+    this.moreObserver?.disconnect();
     if (!this.host) return;
     if (!this.connected) {
-      this.host.innerHTML = `<section class="nas-welcome">${this.restoring ? '<p role="status">저장된 보관함에 다시 연결하는 중…</p>' : ""}<span class="nas-large-icon">▧</span><span class="eyebrow">YOUR PHOTOS STAY YOURS</span><h2>우리 사진이 머무는 곳</h2><p>NAS에 보관한 사진을 이곳에서 꺼내 보세요.<br>원본을 옮기거나 수정하지 않고 읽기만 해요.</p>${this.remembered && !this.restoring ? '<button class="primary" data-nas-action="restore">저장된 보관함에 재연결</button> ' : ""}<button class="${this.remembered ? "" : "primary"}" data-nas-action="connect">${this.remembered ? "연결 설정 / 주소 변경" : "NAS 사진 보관함 연결"}</button>${this.error ? `<p role="alert" class="nas-message">${esc(this.error)}</p>` : ""}<p class="fine">사진 조회와 여행·성장 기록 저장은 별개예요.<br>사진은 GitHub에 업로드되지 않아요.</p></section>`;
+      this.host.innerHTML = `<section class="nas-welcome">${this.restoring ? '<p role="status">저장된 보관함에 다시 연결하는 중…</p>' : ""}<span class="nas-large-icon">▧</span><span class="eyebrow">YOUR PHOTOS STAY YOURS</span><h2>우리 사진이 머무는 곳</h2><p>NAS에 보관한 사진을 이곳에서 꺼내 보세요.<br>연결한 API의 권한에 따라 사진을 조회하고 관리해요.</p>${this.remembered && !this.restoring ? '<button class="primary" data-nas-action="restore">저장된 보관함에 재연결</button> ' : ""}<button class="${this.remembered ? "" : "primary"}" data-nas-action="connect">${this.remembered ? "연결 설정 / 주소 변경" : "NAS 사진 보관함 연결"}</button>${this.error ? `<p role="alert" class="nas-message">${esc(this.error)}</p>` : ""}<p class="fine">사진 조회와 여행·성장 기록 저장은 별개예요.<br>사진은 GitHub에 업로드되지 않아요.</p></section>`;
       return;
     }
     let current = "";
@@ -432,17 +469,46 @@ export class NasGallery {
       .join("");
     const top = this.path.split("/").slice(0, -1).join("/");
     const photoCount = this.items.filter((x) => !x.dir).length;
-    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · 원본 읽기 전용 <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">←</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div>${photoCount ? '<p class="fine nas-preview-note">자동 미리보기를 켜면 처음 12장의 원본 사진을 다운로드해 작게 표시해요. 사진을 누르면 크게 볼 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<button class="nas-entry ${item.dir ? "nas-folder" : ""}" data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">▧</span>'}</span><strong>${esc(item.name)}</strong><small>${item.dir ? "폴더 열기 ↗" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기 ↗"}</small></button>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
+    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · ${this.features.upload ? "사진 관리 가능" : "읽기 전용 API"} <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">←</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div><div class="nas-action-bar"><button data-nas-action="upload">＋ 사진 업로드</button><button data-nas-action="trash-list">휴지통</button><span class="fine">${this.features.upload ? "삭제한 사진은 휴지통에서 복원할 수 있어요." : "업로드·삭제는 NAS 관리 API 설치 후 사용할 수 있어요."}</span></div>${photoCount ? '<p class="fine nas-preview-note">개수 제한 없이 스크롤에 맞춰 미리보기를 불러와요. 원본 API에서는 데이터 사용량이 클 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<button class="nas-entry ${item.dir ? "nas-folder" : ""}" data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">▧</span>'}</span><strong>${esc(item.name)}</strong><small>${item.dir ? "폴더 열기 ↗" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기 ↗"}</small></button>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
     if (this.thumbnails) this.startThumbnails();
+    const more = this.host.querySelector(".nas-more");
+    if (more && !this.loading && !this.error && "IntersectionObserver" in window) {
+      this.moreObserver = new IntersectionObserver(entries => {
+        if (entries.some(e => e.isIntersecting) && !this.loading && !this.error && this.next !== null) void this.load(this.path, this.next);
+      }, {rootMargin:"300px"});
+      this.moreObserver.observe(more);
+    }
   }
   startThumbnails() {
-    for (const item of this.items.filter((i) => !i.dir).slice(0, 12)) {
-      if (!this.urls.has(item.path) && !this.requested.has(item.path)) {
-        this.requested.add(item.path);
-        this.queue.push(item.path);
+    const enqueue = entry => {
+      const path = entry.dataset.path;
+      this.near.add(path);
+      if (!this.urls.has(path) && !this.requested.has(path) && !this.thumbErrors.has(path)) {
+        this.requested.add(path); this.queue.push(path);
       }
+      this.pumpThumbnails();
+    };
+    const entries = this.host.querySelectorAll('.nas-entry:not(.nas-folder)');
+    this.near.clear();
+    if (!("IntersectionObserver" in window)) { entries.forEach(enqueue); return; }
+    this.observer = new IntersectionObserver(changes => {
+      for (const e of changes) {
+        if (e.isIntersecting) enqueue(e.target);
+        else this.near.delete(e.target.dataset.path);
+      }
+      this.trimCache();
+    }, {rootMargin:"220px"});
+    entries.forEach(e => this.observer.observe(e));
+  }
+  trimCache() {
+    let bytes = [...this.sizes.values()].reduce((a,b) => a+b,0);
+    for (const [path,url] of this.urls) {
+      if (this.urls.size <= 48 && bytes <= 64*1024*1024) break;
+      if (this.near.has(path)) continue;
+      URL.revokeObjectURL(url); bytes -= this.sizes.get(path) || 0;
+      this.urls.delete(path); this.sizes.delete(path); this.requested.delete(path);
+      this.updateThumb(path);
     }
-    this.pumpThumbnails();
   }
   pumpThumbnails() {
     const version = this.imageVersion;
@@ -453,15 +519,17 @@ export class NasGallery {
       this.thumbnails
     ) {
       const path = this.queue.shift();
+      if (!this.near.has(path)) { this.requested.delete(path); continue; }
       this.active++;
       this.updateThumb(path, null, true);
-      this.client
-        .image(path)
+      (this.features.thumbnails ? this.client.thumbnail(path) : this.client.image(path))
         .then((blob) => {
           if (version !== this.imageVersion || !this.host || !this.connected)
             return;
           const url = URL.createObjectURL(blob);
           this.urls.set(path, url);
+          this.sizes.set(path, blob.size);
+          this.trimCache();
           this.updateThumb(path, url);
         })
         .catch((error) => {
@@ -501,12 +569,13 @@ export class NasGallery {
   }
   async openImage(item) {
     if (!item || item.dir || !this.connected) return;
-    if (this.dialog.open) this.dialog.close();
+    if (this.dialog.open) return;
     const version = ++this.viewerVersion;
-    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">A MOMENT FROM OUR PHOTO SHELF</span><h2 class="nas-file-title">${esc(item.name)}</h2><div class="nas-viewer" aria-busy="true">${skeleton}<p role="status">사진을 불러오는 중…</p></div><p class="fine">원본 읽기 전용 · 연결을 끊으면 이 기기의 미리보기를 지워요.</p>`;
+    this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">A MOMENT FROM OUR PHOTO SHELF</span><h2 class="nas-file-title">${esc(item.name)}</h2><div class="nas-viewer" aria-busy="true">${skeleton}<p role="status">사진을 불러오는 중…</p></div><div class="nas-view-actions"><button data-photo-action="download">↓ 원본 다운로드</button><button data-photo-action="home">♡ 홈 대표 사진으로</button><button class="nas-danger" data-photo-action="trash">휴지통으로 이동</button></div><p class="fine">대표 사진 선택은 이 기기에만 저장돼요. 삭제는 지원 API에서만 가능해요.</p>`;
+    this.actions.bindViewer(item);
     this.dialog.showModal();
     try {
-      const blob = await this.client.image(item.path);
+      const blob = await (this.features.thumbnails ? this.client.thumbnail(item.path) : this.client.image(item.path));
       if (
         version !== this.viewerVersion ||
         !this.dialog.open ||

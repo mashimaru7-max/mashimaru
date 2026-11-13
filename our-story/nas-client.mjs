@@ -1,4 +1,4 @@
-// Read-only compatibility client. Credentials never enter request URLs.
+// Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
 export class NasError extends Error {
   constructor(code, message) {
@@ -84,7 +84,7 @@ export function validateListing(data, path, offset) {
       )
         throw fail("FORMAT", "사진 목록에 올바르지 않은 항목이 있어요.");
       seen.add(item.path);
-      return { name: item.name, path: item.path, dir: item.dir };
+      return { name: item.name, path: item.path, dir: item.dir, ...(typeof item.revision === "string" && /^[a-f0-9]{64}$/.test(item.revision) ? {revision:item.revision} : {}) };
     })
     .filter(
       (item) =>
@@ -97,6 +97,9 @@ export function validateListing(data, path, offset) {
 }
 const messages = {
   401: "인증되지 않았어요. 토큰 또는 로그인 방식을 확인하고 다시 연결해 주세요.",
+  409: "같은 이름의 사진이 있거나 파일이 변경되었어요. 새로고침 후 확인해 주세요.",
+  413: "파일이 서버의 업로드 크기 제한을 넘었어요.",
+  415: "지원하지 않는 사진 형식이에요.",
   403: "이 페이지에서 접근할 수 없어요. 사진 API의 허용 주소 설정을 확인해야 해요.",
   404: "폴더·사진이 없거나, 이 서버가 선택한 기능을 지원하지 않아요.",
   409: "사진 API의 로그인 설정이 완료되지 않았어요. 기존 토큰 방식을 확인해 주세요.",
@@ -207,7 +210,7 @@ export class NasClient {
   }
   abortImages() {
     for (const [ctrl, route] of this.#requests)
-      if (route === "/api/image") ctrl.abort();
+      if (["/api/image", "/api/thumbnail"].includes(route)) ctrl.abort();
   }
   async disconnect({ revoke = true } = {}) {
     // Capture only for best-effort revocation; clear local state immediately.
@@ -322,9 +325,50 @@ export class NasClient {
       throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
     return this.#request("/api/image", { params: { path }, image: true });
   }
+  async capabilities() {
+    this.#assertAuth();
+    try {
+      const d = await this.#request("/api/capabilities");
+      if (d?.version !== 2) return {};
+      return { thumbnails: d.thumbnails === true, upload: d.upload === true,
+        trash: d.trash === true, download: d.download === true,
+        maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
+    } catch (e) {
+      if (["HTTP_404", "HTTP_405"].includes(e.code)) return {};
+      throw e;
+    }
+  }
+  async thumbnail(path) {
+    safePath(path);
+    return this.#request("/api/thumbnail", {params:{path}, image:true});
+  }
+  async download(path, modern = false) {
+    safePath(path);
+    return modern ? this.#request("/api/download", {params:{path}, image:true, maxBytes:128*1024*1024, timeoutMs:120000}) : this.image(path);
+  }
+  async upload(folder, file) {
+    safePath(folder); safePath(file.name);
+    if (file.name.includes("/") || !/\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(file.name) || !file.size || file.size > 64*1024*1024)
+      throw fail("UPLOAD", "사진 파일만 업로드할 수 있어요. 파일당 최대 64MB예요.");
+    return this.#request("/api/upload", {params:{path:folder,name:file.name}, raw:file, timeoutMs:120000});
+  }
+  trash(item) {
+    safePath(item.path);
+    if (!/^[a-f0-9]{64}$/.test(item.revision || "")) throw fail("REVISION", "목록을 새로 불러온 뒤 다시 시도해 주세요.");
+    return this.#request("/api/trash", {body:{path:item.path,revision:item.revision}});
+  }
+  trashList() { return this.#request("/api/trash"); }
+  restoreTrash(id) {
+    if (!/^[a-f0-9]{32}$/.test(id)) throw fail("TRASH", "휴지통 항목이 올바르지 않아요.");
+    return this.#request("/api/restore", {body:{id}});
+  }
+  cancelTransfers() {
+    for (const [ctrl,route] of this.#requests)
+      if (["/api/upload", "/api/download"].includes(route)) ctrl.abort();
+  }
   async #request(
     route,
-    { body, params = {}, image = false, auth = true } = {},
+    { body, raw, params = {}, image = false, auth = true, maxBytes, timeoutMs } = {},
   ) {
     if (auth) this.#assertAuth();
     const epoch = this.#epoch,
@@ -337,15 +381,16 @@ export class NasClient {
     const timer = setTimeout(() => {
       timedOut = true;
       ctrl.abort();
-    }, this.#timeout);
+    }, timeoutMs || this.#timeout);
     this.#requests.set(ctrl, route);
     try {
       const headers = auth ? { Authorization: "Bearer " + this.#secret } : {};
       if (body) headers["Content-Type"] = "application/json";
+      if (raw) headers["Content-Type"] = "application/octet-stream";
       const res = await this.#fetch(url.href, {
-        method: body ? "POST" : "GET",
+        method: body || raw ? "POST" : "GET",
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: raw || (body ? JSON.stringify(body) : undefined),
         signal: ctrl.signal,
         mode: "cors",
         credentials: "omit",
@@ -366,8 +411,8 @@ export class NasClient {
             "사진 API에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
         );
       }
-      const limit = image ? 15 * 1024 * 1024 : 2 * 1024 * 1024;
-      const raw = await readBounded(res, limit);
+      const limit = maxBytes || (image ? 15 * 1024 * 1024 : 2 * 1024 * 1024);
+      const payload = await readBounded(res, limit);
       if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
       if (image) {
         const type = (res.headers.get("content-type") || "")
@@ -376,10 +421,10 @@ export class NasClient {
           .toLowerCase();
         if (!/^image\/(jpeg|png|webp|gif|bmp|avif|heic|heif)$/.test(type))
           throw fail("IMAGE", "이 파일의 사진 형식을 확인할 수 없어요.");
-        return new Blob([raw], { type });
+        return new Blob([payload], { type });
       }
       try {
-        return JSON.parse(new TextDecoder().decode(raw));
+        return JSON.parse(new TextDecoder().decode(payload));
       } catch {
         throw fail(
           "FORMAT",

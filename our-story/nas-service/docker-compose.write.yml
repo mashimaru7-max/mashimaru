@@ -1,0 +1,8 @@
+# Apply only after approving photo write access. No permanent delete route exists.
+version: '3.8'
+services:
+  our-story-api:
+    environment:
+      ENABLE_WRITES: '1'
+    volumes:
+      - /volume1/photo:/photos:rw

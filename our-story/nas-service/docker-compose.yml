@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  our-story-api:
+    build: .
+    image: our-story-nas:2
+    user: '${NAS_UID:-1024}:${NAS_GID:-100}'
+    environment:
+      NAS_TOKEN: '${NAS_TOKEN:?Set NAS_TOKEN in .env}'
+      ALLOWED_ORIGIN: 'https://mashimaru7-max.github.io'
+      ENABLE_WRITES: '0'
+    volumes:
+      - /volume1/photo:/photos:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    restart: unless-stopped
+  our-story-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://our-story-api:8000
+    depends_on: [our-story-api]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped

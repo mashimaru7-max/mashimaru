@@ -1,0 +1,28 @@
+name: Build Our Story NAS service image
+on:
+  push:
+    paths:
+      - 'our-story/nas-service/**'
+      - '.github/workflows/our-story-nas-image.yml'
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the isolated NAS service
+        run: |
+          python -m pip install Pillow==13.0.0
+          python -m unittest discover -s our-story/tests -p test_nas_service.py -v
+      - name: Build and export amd64 image for DS218+
+        run: |
+          docker build --platform linux/amd64 -t our-story-nas:2 our-story/nas-service
+          docker save -o our-story-nas-amd64.tar our-story-nas:2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: our-story-nas-amd64
+          path: our-story-nas-amd64.tar
+          retention-days: 7
+          compression-level: 0

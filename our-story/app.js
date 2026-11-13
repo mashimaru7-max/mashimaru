@@ -1,5 +1,6 @@
+import { NasHome } from "./nas-home.js?v=20261113-media2";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-memory1";
+import { NasGallery } from "./nas-gallery.js?v=20261113-media2";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -39,6 +40,7 @@ function notify(t) {
 }
 const nas = new NasGallery({
   notify,
+  onHomePhoto: choice => homePhoto.select(choice),
   onState: syncNasChrome,
   onConnected() {
     state.galleryView = "nas";
@@ -46,7 +48,9 @@ const nas = new NasGallery({
     else render();
   },
 });
+const homePhoto = new NasHome(nas, notify);
 function syncNasChrome() {
+  void homePhoto.paint();
   const profile = document.querySelector(".profile");
   profile.classList.toggle("connected", nas.connected);
   profile.querySelector("span").textContent = nas.connected
@@ -55,7 +59,7 @@ function syncNasChrome() {
       ? "NAS 재연결 중"
       : "NAS 연결";
   document.querySelector(".demo-banner").innerHTML = nas.connected
-    ? "<span>NAS 사진 연결됨</span> 사진은 원본 읽기 전용으로 조회해요. 여행·성장 기록은 계속 예시 모드예요."
+    ? "<span>NAS 사진 연결됨</span> 갤러리에서 우리 사진을 보고 홈 대표 사진도 고를 수 있어요. 여행·성장 기록은 계속 예시 모드예요."
     : "<span>예시 모드</span> 여행·성장 기록은 디자인 확인용이에요. NAS 사진은 연결 후 갤러리에서 볼 수 있어요.";
 }
 function modal(html) {
@@ -77,6 +81,11 @@ function home() {
     .slice(0, 4)
     .map((r) => card(r, r.type))
     .join("")}</div></section>${stats()}`;
+  const shelf=document.createElement("section");
+  shelf.className="nas-home-shelf";
+  shelf.innerHTML='<span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>사진 한 장에서, 우리 이야기로</h2><p>NAS 사진을 둘러보고 마음에 드는 순간을 홈 대표 사진으로 골라 보세요.</p><a class="primary" href="#nas">우리 사진 보관함 열기 ↗</a>';
+  main.querySelector(".hero").after(shelf);
+  void homePhoto.paint();
 }
 function title(eye, title, sub, type) {
   return `<div class="page-title"><div><span class="eyebrow">${eye}</span><h1>${title} <span class="leaf">❧</span></h1><p>${sub}</p></div><button class="primary" data-action="add" data-type="${type}">＋ 예시 기록</button></div>`;
@@ -296,6 +305,7 @@ function form(type, id) {
   );
 }
 function render() {
+  homePhoto.release();
   const active = document.activeElement;
   const focusData = main.contains(active)
     ? { domId: active.id, data: { ...active.dataset } }

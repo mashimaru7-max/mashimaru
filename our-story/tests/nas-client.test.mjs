@@ -98,3 +98,29 @@ test('malformed stored origin is not contacted and is discarded',async()=>{
 test('full list URL pasted by the user normalizes to origin without forwarding a URL path',()=>{
  assert.equal(safeBase(base+'/api/list'),base);assert.equal(safeBase(base+'/api/list/'),base);
 });
+test('capabilities gracefully keeps old servers read-only, modern capabilities are opt-in',async()=>{
+ const f=fixture((url)=>url.pathname==='/api/capabilities'?json({},404):json(root));await connect(f.client);assert.deepEqual(await f.client.capabilities(),{});
+ const m=fixture(url=>url.pathname==='/api/capabilities'?json({version:2,upload:true,trash:'true',thumbnails:true,download:true,maxUpload:999999999}):json(root));await connect(m.client);assert.deepEqual(await m.client.capabilities(),{upload:true,trash:false,thumbnails:true,download:true,maxUpload:64*1024*1024});
+});
+test('uploads use authenticated binary POST without putting credentials in URLs',async()=>{
+ const f=fixture((url)=>url.pathname==='/api/list'?json(root):json({ok:true}));await connect(f.client);
+ const file=new File([new Uint8Array([255,216,255])],'우리 사진.jpg',{type:'image/jpeg'});await f.client.upload('여행',file);
+ const c=f.calls.at(-1);assert.equal(c.init.method,'POST');assert.equal(c.init.body,file);assert.equal(c.init.headers['Content-Type'],'application/octet-stream');assert.equal(c.init.headers.Authorization,'Bearer '+token);assert.equal(new URL(c.url).searchParams.get('name'),'우리 사진.jpg');assert(!c.url.includes(token));
+ await assert.rejects(f.client.upload('',new File(['x'],'../bad.jpg')));await assert.rejects(f.client.upload('',new File(['x'],'test.svg')));
+});
+test('soft delete requires a revision and restore rejects malformed IDs before network',async()=>{
+ const f=fixture(url=>url.pathname==='/api/list'?json(root):json({ok:true}));await connect(f.client);
+ assert.throws(()=>f.client.trash({path:'one.jpg'}));assert.throws(()=>f.client.restoreTrash('../bad'));
+ await f.client.trash({path:'one.jpg',revision:'a'.repeat(64)});assert.deepEqual(JSON.parse(f.calls.at(-1).init.body),{path:'one.jpg',revision:'a'.repeat(64)});
+ await f.client.restoreTrash('b'.repeat(32));assert.equal(new URL(f.calls.at(-1).url).pathname,'/api/restore');
+});
+test('download fallback uses legacy image API and modern original download is separate',async()=>{
+ const f=fixture(url=>url.pathname==='/api/list'?json(root):new Response('image-bytes',{headers:{'content-type':'image/jpeg'}}));await connect(f.client);
+ assert.equal((await f.client.download('one.jpg')).size,11);assert.equal(new URL(f.calls.at(-1).url).pathname,'/api/image');
+ await f.client.download('one.jpg',true);assert.equal(new URL(f.calls.at(-1).url).pathname,'/api/download');
+ await f.client.thumbnail('one.jpg');assert.equal(new URL(f.calls.at(-1).url).pathname,'/api/thumbnail');
+});
+test('upload transfer cancellation aborts the request',async()=>{
+ const f=fixture((url,init)=>url.pathname==='/api/list'?json(root):new Promise((_,reject)=>init.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')))));await connect(f.client);
+ const pending=f.client.upload('',new File(['data'],'one.jpg'));f.client.cancelTransfers();await assert.rejects(pending,e=>e.code==='ABORT');
+});
