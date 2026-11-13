@@ -171,3 +171,9 @@ test('photo write permission and upload size errors describe NAS settings',async
  const f=fixture(url=>url.pathname==='/api/upload'?json({},403):json(root));await connect(f.client);
  const file=new Blob(['fixture'],{type:'image/jpeg'});file.name='fixture.jpg';await assert.rejects(()=>f.client.upload('',file),e=>e.code==='HTTP_403'&&e.message.includes('쓰기'));
 });
+test('folder trash sends an explicit kind without changing ordinary photo requests',async()=>{
+ const f=fixture(url=>url.pathname==='/api/trash'?json({ok:true,id:'b'.repeat(32)}):json(root));await connect(f.client);
+ await f.client.trash({path:'여행',dir:true,revision:'a'.repeat(64)});
+ assert.deepEqual(JSON.parse(f.calls.at(-1).init.body),{path:'여행',revision:'a'.repeat(64),kind:'folder'});
+ await f.client.trash({path:'one.jpg',dir:false,revision:'a'.repeat(64)});assert.ok(!('kind'in JSON.parse(f.calls.at(-1).init.body)));
+});

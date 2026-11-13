@@ -420,7 +420,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -456,12 +456,12 @@ export class NasClient {
   trash(item) {
     safePath(item.path);
     if (!/^[a-f0-9]{64}$/.test(item.revision || "")) throw fail("REVISION", "목록을 새로 불러온 뒤 다시 시도해 주세요.");
-    return this.#request("/api/trash", {body:{path:item.path,revision:item.revision}});
+    return this.#request("/api/trash", {body:{path:item.path,revision:item.revision,...(item.dir?{kind:"folder"}:{})},timeoutMs:item.dir?120000:20000});
   }
   trashList() { return this.#request("/api/trash"); }
   restoreTrash(id) {
     if (!/^[a-f0-9]{32}$/.test(id)) throw fail("TRASH", "휴지통 항목이 올바르지 않아요.");
-    return this.#request("/api/restore", {body:{id}}).catch(error=>{if(error.code==="HTTP_409")throw fail(error.code,"원래 위치에 같은 이름이 있어 복원하지 않았어요. 덮어쓰지 않고 보관 중이에요.");if(error.code==="HTTP_501")throw fail(error.code,"이 NAS에서 안전한 복원을 지원하지 않아 작업하지 않았어요.");throw error;});
+    return this.#request("/api/restore", {body:{id}}).catch(error=>{if(error.code==="HTTP_409")throw fail(error.code,"원래 위치에 같은 이름이 있어 복원하지 않았어요. 덮어쓰지 않고 보관 중이에요.");if(error.code==="HTTP_501")throw fail(error.code,"이 NAS에서 안전한 복원을 지원하지 않아 작업하지 않았어요.");if(error.code==="HTTP_404")throw fail(error.code,"원래 상위 폴더나 휴지통 항목이 없어요. 상위 폴더를 먼저 복원하고 목록을 확인해 주세요.");throw error;});
   }
   cancelTransfers() {
     for (const [ctrl,route] of this.#requests)
@@ -501,8 +501,9 @@ export class NasClient {
       });
       if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
       if (!res.ok) {
+        if(res.status===413 && route==="/api/trash")throw fail("HTTP_413","연결된 성장 기록이 많아 한 번에 처리할 수 없어요. 하위 폴더 단위로 나눠 주세요.");
         if(res.status===409 && route==="/api/upload")throw fail("HTTP_409","같은 이름의 사진이 이미 있어요. 기존 사진은 덮어쓰지 않았어요.");
-        if(res.status===409 && route==="/api/trash")throw fail("HTTP_409","사진이 이미 변경됐어요. 목록을 새로 불러온 뒤 다시 확인해 주세요.");
+        if(res.status===409 && route==="/api/trash")throw fail("HTTP_409","사진 또는 폴더가 변경됐어요. 목록을 새로 불러와 다시 선택해 주세요.");
         if(res.status===403 && ["/api/upload","/api/trash","/api/restore"].includes(route))throw fail("HTTP_403","새 API의 사진 쓰기 설정과 해당 NAS 폴더의 쓰기 권한을 확인해 주세요.");
         if(res.status===413 && route==="/api/upload")throw fail("HTTP_413","사진 업로드는 파일당 최대 64MB까지 가능해요.");
         if(res.status===413 && route==="/api/download")throw fail("HTTP_413","원본 다운로드는 파일당 최대 128MB까지 가능해요.");

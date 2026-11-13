@@ -106,6 +106,22 @@ class FileTests(unittest.TestCase):
         self.assertFalse(any(i['name'].startswith(('#','@')) for i in self.store.listing('',0)['items']))
         os.symlink(self.photos/'2019',self.photos/'shortcut')
         with self.assertRaises((api.APIError,OSError)):self.manager.perform({'action':'mkdir','parent':'shortcut','name':'changed'})
+    def test_whole_folder_trash_restores_all_contents_and_saved_photo_links(self):
+        folder=self.photos/'2019/오니둥이';(folder/'nested').mkdir();(folder/'nested/video.mp4').write_bytes(b'video-fixture');(folder/'note.txt').write_text('keep all contents')
+        data=self.request();result=self.manager.trash_folder(data['path'],data['revision'])
+        self.assertFalse(folder.exists());rows=self.store.trash_list()['items']
+        self.assertEqual(rows[0]['kind'],'folder');self.assertNotIn('references',rows[0])
+        self.manager.restore(result['id']);self.assertEqual((folder/'nested/video.mp4').read_bytes(),b'video-fixture');self.assertEqual((folder/'note.txt').read_text(),'keep all contents')
+        record=self.journal.get(self.record['id']);ref=record['record']['attachments'][0]
+        with self.store.photo(ref['path']) as (fd,st):self.assertEqual(ref['revision'],api.revision(st))
+        self.assertEqual(record['record']['quote'],'남겨 둘 한마디');self.assertEqual(self.store.trash_list()['items'],[])
+    def test_folder_restore_never_merges_or_overwrites_an_existing_folder(self):
+        data=self.request();result=self.manager.trash_folder(data['path'],data['revision'])
+        folder=self.photos/data['path'];folder.mkdir();(folder/'other.txt').write_text('new contents')
+        with self.assertRaises(api.APIError) as error:self.manager.restore(result['id'])
+        self.assertEqual(error.exception.status,409);self.assertEqual((folder/'other.txt').read_text(),'new contents')
+        self.assertEqual(self.store.trash_list()['items'][0]['id'],result['id'])
+        (folder/'other.txt').unlink();folder.rmdir();self.manager.restore(result['id']);self.assertTrue((folder/'a.jpg').exists())
     def test_folder_creation_is_exclusive_and_read_only_mode_denies_writes(self):
         self.manager.perform({'action':'mkdir','parent':'정리','name':'학교생활'})
         with self.assertRaises(FileExistsError):self.manager.perform({'action':'mkdir','parent':'정리','name':'학교생활'})

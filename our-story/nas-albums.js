@@ -1,6 +1,6 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
-import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261114-files1';
+import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261114-selection1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const labels={'home':'홈','travel':'여행','growth:다온':'다온','growth:라온':'라온','growth:함께':'함께'};
 export class NasAlbums {

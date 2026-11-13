@@ -315,4 +315,16 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual((self.root/'one.jpg').read_bytes(),PHOTO)
         self.assertEqual(list((self.root/api.TRASH).iterdir()),[])
 
+    def test_folder_trash_http_is_explicit_and_restorable(self):
+        credentials={'username':'오니둥이','password':'fixture password 12345'};self.request('/api/account','POST',credentials)
+        session=json.loads(self.request('/api/login','POST',credentials)[1])['session'];headers={'Authorization':'Bearer '+session}
+        (self.root/'기억/inside.jpg').write_bytes(PHOTO)
+        item=next(i for i in json.loads(self.request('/api/list',headers=headers)[1])['items'] if i['dir'])
+        self.assertEqual(self.request('/api/trash','POST',{'path':item['path'],'revision':item['revision']},headers)[0],400)
+        status,raw,_=self.request('/api/trash','POST',{'path':item['path'],'revision':item['revision'],'kind':'folder'},headers)
+        self.assertEqual(status,200);ident=json.loads(raw)['id'];self.assertFalse((self.root/'기억').exists())
+        self.assertEqual(json.loads(self.request('/api/trash',headers=headers)[1])['items'][0]['kind'],'folder')
+        self.assertEqual(self.request('/api/restore','POST',{'id':ident},headers)[0],200)
+        self.assertEqual((self.root/'기억/inside.jpg').read_bytes(),PHOTO)
+
 if __name__=='__main__':unittest.main()

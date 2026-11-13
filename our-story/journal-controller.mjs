@@ -1,4 +1,4 @@
-import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-files1';
+import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-selection1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function recordFromFields(target,kind,fields,attachments){
  const record={target,kind,date:fields.date,author:fields.author,attachments:attachments.map(r=>({path:r.path,revision:r.revision}))};

@@ -1,7 +1,8 @@
+import {selectLoaded} from './nas-selection.mjs?v=20261114-selection1';
 import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
 import {icon} from "./icons.js?v=20261113-albumlook2";
-import { NasActions } from "./nas-actions.js?v=20261114-files1";
-import { NasClient } from "./nas-client.mjs?v=20261114-files1";
+import { NasActions } from "./nas-actions.js?v=20261114-selection1";
+import { NasClient } from "./nas-client.mjs?v=20261114-selection1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
@@ -23,6 +24,7 @@ export class NasGallery {
   } = {}) {
     this.vault = vault;
     this.features = {};
+    this.selecting=false;this.selection=new Map();
     this.actions = new NasActions(this, onHomePhoto);
     this.observer = null;
     this.moreObserver = null;
@@ -316,6 +318,7 @@ export class NasGallery {
     this.thumbErrors.clear();
   }
   resetData() {
+    this.selecting=false;this.selection.clear();
     this.features = {};
     this.version++;
     this.resetImages();
@@ -387,6 +390,8 @@ export class NasGallery {
   mount(host) {
     this.host = host;
     host.onclick = (e) => {
+      const checkbox=e.target.closest('[data-nas-select]');
+      if(checkbox){const item=this.items[Number(checkbox.dataset.nasSelect)];if(item)this.setSelected(item,checkbox.checked);return;}
       const button = e.target.closest("[data-nas-action]");
       if (!button) return;
       const { nasAction: action, path, index } = button.dataset;
@@ -397,11 +402,15 @@ export class NasGallery {
       if (action === "connect") this.settings();
       if (action === "disconnect") void this.disconnect();
       if (action === "restore") void this.restoreRemembered({ navigate: true });
-      if (action === "folder") void this.load(path);
+      if (action === "folder") {if(this.selecting && index!==undefined)this.toggleSelected(this.items[Number(index)]);else void this.load(path);}
       if (action === "more" && this.next !== null)
         void this.load(this.path, this.next);
       if (action === "retry") void this.load(this.path, this.retryOffset || 0);
-      if (action === "image") void this.openImage(this.items[Number(index)]);
+      if (action === "image") {if(this.selecting)this.toggleSelected(this.items[Number(index)]);else void this.openImage(this.items[Number(index)]);}
+      if(action==='selection'){this.selecting=!this.selecting;if(!this.selecting)this.selection.clear();this.render();this.host?.querySelector('[data-nas-action="selection"]')?.focus({preventScroll:true});}
+      if(action==='select-loaded'){selectLoaded(this.selection,this.items,{folders:!!this.features.folderTrash});this.updateSelection();}
+      if(action==='clear-selection'){this.selection.clear();this.updateSelection();}
+      if(action==='trash-selection')this.actions.trashMany([...this.selection.values()]);
       if (action === "thumbs") {
         this.thumbnails = !this.thumbnails;
         if (!this.thumbnails) this.resetImages();
@@ -415,6 +424,7 @@ export class NasGallery {
     } else if (this.connected && !this.loaded && !this.loading) void this.load("");
   }
   unmount() {
+    this.selecting=false;this.selection.clear();
     if (this.host) this.host.onclick = null;
     this.host = null;
     this.resetImages();
@@ -424,6 +434,7 @@ export class NasGallery {
     if (this.dialog.open && !this.connecting) this.dialog.close();
   }
   applyListing(data, append = false) {
+    if(data.path!==this.path)this.selection.clear();
     this.path = data.path;
     this.total = data.total;
     this.next = data.next;
@@ -436,8 +447,22 @@ export class NasGallery {
         ]
       : data.items;
   }
+  toggleSelected(item){if(item)this.setSelected(item,!this.selection.has(item.path));}
+  setSelected(item,selected){
+    if(item.dir&&!this.features.folderTrash){this.notify('폴더 선택은 NAS 코드를 업데이트한 뒤 사용할 수 있어요.');return;}
+    if(selected)this.selection.set(item.path,{...item});else this.selection.delete(item.path);
+    this.updateSelection();
+  }
+  updateSelection(){
+    if(!this.host)return;
+    this.host.querySelectorAll('[data-nas-select]').forEach(el=>{el.checked=this.selection.has(this.items[Number(el.dataset.nasSelect)]?.path);});
+    this.host.querySelectorAll('.nas-entry[data-index]').forEach(el=>{const selected=this.selection.has(this.items[Number(el.dataset.index)]?.path);el.classList.toggle('is-selected',selected);if(this.selecting)el.setAttribute('aria-pressed',String(selected));});
+    const count=this.host.querySelector('[data-selection-count]');if(count)count.textContent=this.selection.size+'개 선택';
+    const button=this.host.querySelector('[data-nas-action="trash-selection"]');if(button)button.disabled=!this.selection.size;
+  }
   async load(path, offset = 0) {
     if (!this.connected || (this.loading && offset)) return;
+    if(path!==this.path)this.selection.clear();
     const version = ++this.version;
     if (!offset) {
       this.resetImages();
@@ -495,7 +520,7 @@ export class NasGallery {
       .join("");
     const top = this.path.split("/").slice(0, -1).join("/");
     const photoCount = this.items.filter((x) => !x.dir).length;
-    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · ${this.features.upload ? "사진 관리 가능" : "읽기 전용 API"} <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}${this.features.fileOperationsBlocked?'<p class="nas-message" role="alert">이전 파일 작업의 복구 확인이 필요해요. 파일 위치를 확인하기 전에는 새 정리를 진행하지 마세요.</p>':''}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">상위 폴더</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div><div class="nas-action-bar"><button data-nas-action="upload">＋ 사진 업로드</button><button data-nas-action="trash-list">사진 휴지통</button><button data-nas-action="mkdir">새 폴더</button><button data-nas-action="manage">사진·폴더 정리</button><span class="fine">${this.features.upload ? "삭제한 사진은 휴지통에서 복원할 수 있어요." : "사진 쓰기 설정을 활성화하면 업로드·휴지통·폴더 정리를 사용할 수 있어요."}</span></div>${photoCount ? '<p class="fine nas-preview-note">개수 제한 없이 스크롤에 맞춰 미리보기를 불러와요. 원본 API에서는 데이터 사용량이 클 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<button class="nas-entry ${item.dir ? "nas-folder" : ""}" data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">' + icon("photo") + '</span>'}</span><strong>${esc(item.name)}</strong><small>${item.dir ? "폴더 열기" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기"}</small></button>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
+    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · ${this.features.upload ? "사진 관리 가능" : "읽기 전용 API"} <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}${this.features.fileOperationsBlocked?'<p class="nas-message" role="alert">이전 파일 작업의 복구 확인이 필요해요. 파일 위치를 확인하기 전에는 새 정리를 진행하지 마세요.</p>':''}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">상위 폴더</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div><div class="nas-action-bar"><button data-nas-action="upload">＋ 사진 업로드</button><button data-nas-action="trash-list">사진·폴더 휴지통</button><button data-nas-action="mkdir">새 폴더</button><button data-nas-action="manage">사진·폴더 정리</button><button data-nas-action="selection" aria-pressed="${this.selecting}">${this.selecting?'선택 끝내기':'선택하기'}</button><span class="fine">${this.features.upload ? "삭제한 사진은 휴지통에서 복원할 수 있어요." : "사진 쓰기 설정을 활성화하면 업로드·휴지통·폴더 정리를 사용할 수 있어요."}</span></div>${this.selecting?`<div class="nas-selection-bar"><strong data-selection-count>${this.selection.size}개 선택</strong><button data-nas-action="select-loaded">불러온 항목 전체 선택</button><button data-nas-action="clear-selection">선택 해제</button><button class="nas-danger" data-nas-action="trash-selection" ${this.selection.size?'':'disabled'}>선택 항목 휴지통</button><small>${this.features.folderTrash?'폴더를 선택하면 하위 내용 전체가 함께 이동돼요.':'현재는 사진만 선택할 수 있어요. 폴더 선택은 NAS 업데이트 후 활성화돼요.'}</small></div>`:''}${photoCount ? '<p class="fine nas-preview-note">개수 제한 없이 스크롤에 맞춰 미리보기를 불러와요. 원본 API에서는 데이터 사용량이 클 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<div class="nas-item-wrap">${this.selecting?`<label class="nas-selection-check"><input type="checkbox" data-nas-select="${index}" aria-label="${esc(item.name)} 선택" ${this.selection.has(item.path)?'checked':''} ${item.dir&&!this.features.folderTrash?'disabled':''}></label>`:''}<button class="nas-entry ${item.dir ? "nas-folder" : ""} ${this.selection.has(item.path)?'is-selected':''}" ${this.selecting?`aria-pressed="${this.selection.has(item.path)}"`:''} data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">' + icon("photo") + '</span>'}</span><strong>${esc(item.name)}</strong><small>${this.selecting?(item.dir?'폴더 · 하위 내용 전체':'사진 선택'):item.dir ? "폴더 열기" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기"}</small></button></div>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
     if (this.thumbnails) this.startThumbnails();
     const more = this.host.querySelector(".nas-more");
     if (more && !this.loading && !this.error && "IntersectionObserver" in window) {

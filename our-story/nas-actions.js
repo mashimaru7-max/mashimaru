@@ -1,3 +1,4 @@
+import {trashSelection} from './nas-selection.mjs?v=20261114-selection1';
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 export class NasActions {
   constructor(gallery, onHomePhoto) {
@@ -106,8 +107,24 @@ export class NasActions {
       if(this.g.connected) void this.g.load(folder);
     };
   }
+  trashMany(items){
+    if(!items.length)return;
+    if(!this.g.features.trash||items.some(item=>item.dir&&!this.g.features.folderTrash)){this.unavailable();return;}
+    const folders=items.filter(item=>item.dir).length,photos=items.length-folders;
+    const version=this.show('선택한 항목을 휴지통으로 옮길까요?',`<p><strong>사진 ${photos}개 · 폴더 ${folders}개</strong></p>${folders?'<p>선택한 폴더는 하위 사진·영상 등 모든 내용을 함께 보관해요. 연결한 앨범과 성장 기록의 사진도 복원 전까지 보이지 않아요.</p>':''}<p>영구 삭제하지 않으며, 같은 이름이 생기면 덮어쓰지 않고 복원을 멈춰요.</p><div class="nas-batch-items">${items.slice(0,100).map(item=>`<p>${item.dir?'폴더':'사진'} · ${esc(item.name)}</p>`).join('')}${items.length>100?`<p>외 ${items.length-100}개</p>`:''}</div><button class="nas-danger" data-batch-confirm>선택 항목 휴지통으로 이동</button> <button data-batch-stop disabled>남은 작업 중지</button>`);
+    const start=this.dialog.querySelector('[data-batch-confirm]'),stop=this.dialog.querySelector('[data-batch-stop]');let stopping=false;
+    stop.onclick=()=>{stopping=true;stop.disabled=true;this.message('현재 항목을 마무리한 뒤 남은 작업을 중지해요. 완료된 항목은 휴지통에 보관돼요.');};
+    start.onclick=async()=>{
+      if(this.busy)return;this.busy=true;start.disabled=true;stop.disabled=false;let result;
+      try{result=await trashSelection(this.g.client,items,{active:()=>version===this.generation&&this.g.connected,stop:()=>stopping,onProgress:p=>this.message(`${p.attempted}/${p.total} 처리 중 · ${p.item.name}`),onSuccess:item=>this.g.selection.delete(item.path)});}
+      finally{this.busy=false;}
+      if(version!==this.generation)return;
+      stop.disabled=true;this.message(`휴지통 이동 ${result.completed}개 · 확인 필요 ${result.failed.length}개 · 미처리 ${result.unprocessed}개${result.failed.length?'\n'+result.failed.slice(0,8).map(f=>f.item.name+': '+f.message).join('\n'):''}`);
+      if(this.g.connected&&this.g.host)void this.g.load(this.g.path);
+    };
+  }
   trash(item) {
-    if(!this.g.features.trash || !item.revision) { this.unavailable(); return; }
+    if(!this.g.features.trash || !item.revision || item.dir&&!this.g.features.folderTrash) { this.unavailable(); return; }
     const version=this.show("사진을 휴지통으로 옮길까요?", `<p><strong>${esc(item.name)}</strong></p><p>원래 폴더에서 숨겨지고 NAS 휴지통에 보관돼요. 휴지통에서 복원할 수 있어요.</p><button class="nas-danger" data-confirm-trash>휴지통으로 이동</button> <button data-manager-close>취소</button>`);
     this.dialog.querySelector('[data-confirm-trash]').onclick=async e=>{
       e.target.disabled=true;
@@ -122,13 +139,13 @@ export class NasActions {
   }
   async trashList() {
     if(!this.g.features.trash) { this.unavailable(); return; }
-    const version=this.show("잠시 보관한 사진", '<p>사진은 자동으로 영구 삭제되지 않아요.</p><div class="nas-trash-items">불러오는 중…</div>');
+    const version=this.show("잠시 보관한 사진과 폴더", '<p>사진은 자동으로 영구 삭제되지 않아요.</p><div class="nas-trash-items">불러오는 중…</div>');
     try {
       const data=await this.g.client.trashList();
       if(version!==this.generation || !this.dialog.open) return;
       if(!Array.isArray(data.items) || data.items.length>1000) throw new Error("휴지통 목록을 확인할 수 없어요.");
       const list=this.dialog.querySelector('.nas-trash-items');
-      list.innerHTML=data.items.length ? data.items.map(i=>`<div class="nas-trash-row"><span>${esc(i.path)}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id) ? i.id : ""}">복원</button></div>`).join("") : '<p>휴지통이 비어 있어요.</p>';
+      list.innerHTML=data.items.length ? data.items.map(i=>`<div class="nas-trash-row"><span>${i.kind==='folder'?'폴더 · ':'사진 · '}${esc(i.path)}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id) ? i.id : ""}">복원</button></div>`).join("") : '<p>휴지통이 비어 있어요.</p>';
       list.onclick=async e=>{
         const b=e.target.closest('[data-restore-id]'); if(!b || !b.dataset.restoreId) return;
         b.disabled=true;

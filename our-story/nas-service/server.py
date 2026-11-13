@@ -146,7 +146,8 @@ class PhotoStore:
 
     @contextlib.contextmanager
     def trash_root(self):
-        try: os.mkdir(TRASH, mode=0o700, dir_fd=self.root)
+        try:
+            os.mkdir(TRASH, mode=0o700, dir_fd=self.root);os.fsync(self.root)
         except FileExistsError: pass
         fd = os.open(TRASH, DIR_FLAGS, dir_fd=self.root)
         try: yield fd
@@ -167,6 +168,7 @@ class PhotoStore:
                     data=json.dumps({'id':ident,'path':path,'deletedAt':int(time.time()),'originalRevision':expected,'identity':[st.st_dev,st.st_ino,st.st_size,st.st_mtime_ns]},ensure_ascii=False).encode()
                     meta=os.open('metadata.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=fd)
                     with os.fdopen(meta,'wb') as f: f.write(data); f.flush(); os.fsync(f.fileno())
+                    os.fsync(fd);os.fsync(root)
                     os.rename(p[-1],'photo',src_dir_fd=parent,dst_dir_fd=fd)
                     os.fsync(fd); os.fsync(parent)
                 finally: os.close(fd)
@@ -175,10 +177,10 @@ class PhotoStore:
     def read_meta(self, fd):
         meta=os.open('metadata.json',FILE_FLAGS,dir_fd=fd)
         with os.fdopen(meta,'rb') as f:
-            if os.fstat(f.fileno()).st_size > 16384: raise APIError(400)
+            if os.fstat(f.fileno()).st_size > 2*1024*1024: raise APIError(400)
             data=json.load(f)
-        parts(data['path'])
-        if not PHOTO.search(data['path']): raise APIError(400)
+        if not parts(data['path']) or data.get('kind','photo') not in ('photo','folder'):raise APIError(400)
+        if data.get('kind','photo')=='photo' and not PHOTO.search(data['path']):raise APIError(400)
         return data
 
     def trash_list(self):
@@ -191,8 +193,9 @@ class PhotoStore:
                     fd=os.open(ident,DIR_FLAGS,dir_fd=root)
                     try:
                         data=self.read_meta(fd)
-                        if not stat.S_ISREG(os.stat('photo',dir_fd=fd,follow_symlinks=False).st_mode): continue
-                        rows.append({**data,'id':ident})
+                        mode=os.stat('photo',dir_fd=fd,follow_symlinks=False).st_mode
+                        if not (stat.S_ISDIR(mode) if data.get('kind')=='folder' else stat.S_ISREG(mode)):continue
+                        rows.append({'id':ident,'path':data['path'],'deletedAt':data['deletedAt'],'kind':data.get('kind','photo')})
                     finally: os.close(fd)
                 except (OSError,APIError,ValueError,KeyError): continue
             return {'items':sorted(rows,key=lambda x:x['deletedAt'],reverse=True)[:1000]}
@@ -634,6 +637,7 @@ class FileManager:
             db.execute('DELETE FROM photos');db.execute('DELETE FROM collections')
     def snapshot(self,old,new,restore_meta=None):
         before=self.settings.read();after=json.loads(json.dumps(before));records=[];size=0
+        folder_refs={(r['path'],r['revision']):r['identity'] for r in restore_meta.get('references',[])} if restore_meta and restore_meta.get('kind')=='folder' else None
         if restore_meta is None:
             for key,binding in after['albums'].items():
                 if isinstance(binding,str):after['albums'][key]=self.mapped(binding,old,new)
@@ -652,11 +656,11 @@ class FileManager:
                     payload=json.loads(row[2]);refs=[];changed=False
                     for index,ref in enumerate(payload.get('attachments',[])):
                         if restore_meta is not None:
-                            affected=ref['path']==old and ref['revision']==restore_meta.get('originalRevision')
+                            affected=(ref['path'],ref['revision']) in folder_refs if folder_refs is not None else ref['path']==old and ref['revision']==restore_meta.get('originalRevision')
                         else:affected=ref['path']==old or ref['path'].startswith(old+'/')
                         if not affected:continue
                         identity=None
-                        if restore_meta is not None:identity=restore_meta.get('identity')
+                        if restore_meta is not None:identity=folder_refs.get((ref['path'],ref['revision'])) if folder_refs is not None else restore_meta.get('identity')
                         else:
                             try:
                                 with self.store.photo(ref['path']) as (fd,st):
@@ -784,6 +788,38 @@ class FileManager:
             settings,records=self.snapshot(old,new)
             plan={'kind':'move','old':old,'new':new,'sourceRevision':data['revision'],'inode':[st.st_dev,st.st_ino],'settings':settings,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'request':data}
             return self.execute(ident,plan)
+    def trash_folder(self,path,expected):
+        self.store.write_check()
+        p=parts(path)
+        if not p or not isinstance(expected,str) or not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
+        if not self.safe_moves():raise APIError(getattr(self,'atomic_error',501))
+        with self.store.lock,self.store.directory('/'.join(p[:-1])) as parent:
+            st=os.stat(p[-1],dir_fd=parent,follow_symlinks=False)
+            if not stat.S_ISDIR(st.st_mode) or revision(st)!=expected:raise APIError(409)
+            _,records=self.snapshot(path,path);references={}
+            for item in records:
+                for state in item['refs']:
+                    if state['identity'] is not None:
+                        ref=item['record']['attachments'][state['index']]
+                        references[(ref['path'],ref['revision'])]={'path':ref['path'],'revision':ref['revision'],'identity':state['identity']}
+            ident=uuid.uuid4().hex
+            meta={'id':ident,'kind':'folder','path':path,'deletedAt':int(time.time()),'originalRevision':expected,'identity':self.identity(st),'references':list(references.values())}
+            raw=json.dumps(meta,ensure_ascii=False).encode()
+            if len(raw)>2*1024*1024:raise APIError(413)
+            with self.store.trash_root() as root:
+                os.mkdir(ident,mode=0o700,dir_fd=root);fd=os.open(ident,DIR_FLAGS,dir_fd=root)
+                try:
+                    file=os.open('metadata.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=fd)
+                    with os.fdopen(file,'wb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
+                    os.fsync(fd);os.fsync(root)
+                    current=os.stat(p[-1],dir_fd=parent,follow_symlinks=False)
+                    if revision(current)!=expected:raise APIError(409)
+                    rename_no_replace(parent,p[-1],fd,'photo')
+                    moved=os.stat('photo',dir_fd=fd,follow_symlinks=False)
+                    if [moved.st_dev,moved.st_ino]!=[st.st_dev,st.st_ino]:raise APIError(503)
+                    os.fsync(fd);os.fsync(root);os.fsync(parent)
+                finally:os.close(fd)
+            self.invalidate();return {'ok':True,'id':ident}
     def restore(self,ident):
         self.store.write_check()
         if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):raise APIError(400)
@@ -798,7 +834,7 @@ class FileManager:
             fd=os.open(ident,DIR_FLAGS,dir_fd=root)
             try:
                 meta=self.store.read_meta(fd);st=os.stat('photo',dir_fd=fd,follow_symlinks=False)
-                if not stat.S_ISREG(st.st_mode):raise APIError(400)
+                if not (stat.S_ISDIR(st.st_mode) if meta.get('kind')=='folder' else stat.S_ISREG(st.st_mode)):raise APIError(400)
             finally:os.close(fd)
             settings,records=self.snapshot(meta['path'],meta['path'],meta)
             plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
@@ -890,7 +926,7 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
@@ -925,7 +961,11 @@ class Handler(BaseHTTPRequestHandler):
                     if not isinstance(data,dict): raise APIError(400)
                     store.write_check()
                     if route.path=='/api/trash' and self.server.files is not None and not self.server.files.safe_moves():raise APIError(getattr(self.server.files,'atomic_error',501))
-                    result=store.trash(data.get('path'),data.get('revision')) if route.path=='/api/trash' else (self.server.files.restore(data.get('id')) if self.server.files is not None else store.restore(data.get('id')))
+                    if route.path=='/api/trash' and (set(data)-{'path','revision','kind'} or data.get('kind','photo') not in ('photo','folder')):raise APIError(400)
+                    if route.path=='/api/trash' and data.get('kind')=='folder':
+                        if self.server.files is None or not self.server.auth.configured() or set(data)!={'path','revision','kind'}:raise APIError(400)
+                        result=self.server.files.trash_folder(data.get('path'),data.get('revision'))
+                    else:result=store.trash(data.get('path'),data.get('revision')) if route.path=='/api/trash' else (self.server.files.restore(data.get('id')) if self.server.files is not None else store.restore(data.get('id')))
                     if self.server.files is not None:self.server.files.invalidate()
                     self.reply(200,result); return
             raise APIError(404)
