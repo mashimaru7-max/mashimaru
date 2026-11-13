@@ -1,0 +1,171 @@
+/* The approved warm illustrated album direction. Loaded after functional styles. */
+:root{--cream:#fff8ed;--paper:#fffdf7;--ink:#3d4435;--muted:#8a8171;--gold:#b98a3c;--line:#e8dbc5;--peach:#f6e3d7;--green:#758453}
+html{background:#fff7e9;scroll-padding-top:130px}
+body{overflow-x:clip;background-color:var(--cream);background-image:radial-gradient(ellipse at 8% 8%,#f8ddce95 0,transparent 34%),radial-gradient(ellipse at 92% 22%,#f6e7bd7a 0,transparent 36%),linear-gradient(110deg,#fffaf1,#fff6e8 48%,#fffaf2);background-attachment:fixed}
+body::before{content:"";position:fixed;inset:0;background:url('assets/paper-grain.svg') repeat;opacity:.62;pointer-events:none;z-index:0}
+header,main,footer,.demo-banner{position:relative}
+header{height:86px;max-width:none;padding:0 max(28px,calc((100vw - 1260px)/2));gap:24px;z-index:1100;background:#fffbf4f5;border-bottom:1px solid #e8dccb8c;box-shadow:0 4px 20px #9c814c07}
+.brand{font:700 19px/1.3 'Noto Sans KR',sans-serif;letter-spacing:-.65px;gap:11px}
+.brand-mark{display:flex;align-items:center;font-size:inherit;color:#4b563f}
+.brand-mark svg{width:38px;height:38px}
+.brand small{font:9px/2.1 'Noto Sans KR',sans-serif;letter-spacing:1.8px;color:#958a74}
+.story-icon{display:inline-block;width:23px;height:23px;vertical-align:middle;flex-shrink:0}
+.profile{display:flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:42px;padding:8px 14px;border:1px solid #dcd0b8;border-radius:25px;background:#fffdf6;font-size:11px;box-shadow:none}
+.profile .story-icon{width:21px;height:21px;color:#7c875f}
+.profile.connected{background:#f5f7eb;border-color:#d3dabb}
+header nav{position:static;height:auto;gap:7px;align-items:center}
+header nav a{height:42px;padding:0 17px;border:0;border-radius:22px;font-size:13px;font-weight:500;box-shadow:none;background:transparent}
+header nav a:hover{background:#f4e8d16b}
+header nav a.active{color:#755325;font-weight:700}
+header nav a.active:after{bottom:0;width:36px;height:4px;background:#d9ac4a;border-radius:70% 40% 60% 40%;transform:rotate(-3deg)}
+.demo-banner{z-index:2;background:#f0e6d38c;border-bottom:1px solid #e9ddca6b;padding:7px 18px;color:#8b7a5e;font-size:10px}
+.demo-banner span{color:#a77c36}
+main{isolation:isolate;z-index:1;max-width:1260px;padding:34px 40px 65px}
+main::before,main::after{content:"";position:absolute;z-index:-1;pointer-events:none;background:url('assets/leaf-spray.svg') no-repeat center/contain;width:128px;height:154px;top:3px;opacity:.72}
+main::before{left:0;transform:rotate(-19deg)}
+main::after{right:0;transform:scaleX(-1) rotate(-14deg);width:156px;height:180px;opacity:.65}
+button{border-radius:17px;border-color:#e5d8c2;background:#fffdf7;box-shadow:none;line-height:1.5}
+button:hover{background:#fcf0dc;border-color:#c7a468}
+button:active{box-shadow:inset 0 1px 3px #87642a12}
+button:focus-visible,a:focus-visible{outline:2px solid #b88736;outline-offset:4px}
+.primary{background:linear-gradient(145deg,#d2aa60,#b98a3c);border:1px solid #c39a50;color:#fffdf6;border-radius:25px;box-shadow:0 4px 10px #bb8c3924}
+.primary:hover{background:#ba8c40;color:white;border-color:#aa7d32}
+.eyebrow{letter-spacing:2.4px;color:#ae8b54;font-size:9px}
+h1,h2,h3{word-break:keep-all}
+h1{font-family:'Nanum Pen Script','Gowun Batang',serif;font-weight:400;letter-spacing:-.8px}
+h2{color:#424834}
+.leaf{display:inline-flex;vertical-align:middle;margin-left:4px;color:#8b9c65}
+.leaf .story-icon{width:25px;height:25px}
+/* Photo and title occupy their own spaces, so family faces remain visible. */
+.hero,.nas-live .hero{position:relative;display:grid;grid-template-columns:minmax(250px,.82fr) minmax(0,1.25fr);align-items:center;gap:25px;height:auto;min-height:465px;padding:36px 32px 43px;margin:12px 0 31px;border:1px solid #eee0cb;border-radius:30px;background:radial-gradient(ellipse at 16% 0,#f8dfd385,transparent 75%),linear-gradient(120deg,#fffaf1,#fff0d8 62%,#f7efdb);box-shadow:0 10px 38px #9a763d0d;overflow:visible}
+.hero>img{grid-column:2;grid-row:1;width:100%;height:374px;max-width:100%;object-fit:contain;object-position:center;background:#f4ecde;border:10px solid #fffdf8;border-radius:12px;box-shadow:0 8px 20px #8264361c;transform:rotate(1.1deg);display:block}
+.hero>img[hidden]{display:none}
+.hero::after{display:none}
+.hero-copy{grid-column:1;grid-row:1;position:relative;inset:auto;z-index:1;max-width:none;padding:14px 5px;color:var(--ink)}
+.hero-copy .eyebrow{color:#b28f5a;font-size:8px;letter-spacing:2.4px}
+.hero-copy h1{position:relative;font:400 67px/1.02 'Nanum Pen Script','Gowun Batang',serif;margin:23px 0 22px;letter-spacing:-1.5px;color:#3e4735}
+.hero-copy h1::after{content:"";position:absolute;width:125px;height:5px;bottom:-8px;left:3px;transform:rotate(-4deg);border-radius:90% 10% 80% 20%;background:#dcb9519c}
+.hero-copy .hand{display:inline-flex;margin-left:6px;color:#b38c58}
+.hero-copy .hand .story-icon{width:35px;height:35px;stroke-width:1.3}
+.hero-copy p{font-size:12px;line-height:1.9;letter-spacing:0;color:#7d7868;margin-top:28px}
+.hero-copy a{margin:7px 0 0;padding:10px 18px;border:1px solid #d3b375;border-radius:22px;color:#926a2d;font-size:12px;background:#fffcf1}
+.hero-copy a:hover{background:#f1e2bd}
+.photo-note{position:absolute;bottom:14px;right:42px;z-index:1;color:#9a8b73;font-size:9px}
+.hero .nas-home-clear{position:static;display:block;inset:auto;margin:12px 0 0;padding:7px 12px;border-radius:16px;border:1px solid #dfd4bc;background:transparent;color:#9b8968;font-size:10px;box-shadow:none}
+/* The two album covers are photo-book objects, not dashboard cards. */
+.section-head{margin:30px 0 20px;align-items:center}
+.section-head h2{font:400 31px/1.25 'Nanum Pen Script','Gowun Batang',serif;letter-spacing:-.5px}
+.section-head a{color:#a48c65;font-size:11px}
+.gateway{gap:28px;grid-template-columns:1.1fr 1fr;align-items:start}
+.album-card{padding:10px 10px 0;border:1px solid #e8d8bc;background:linear-gradient(155deg,#fffefa,#fff2dc);border-radius:24px;box-shadow:0 5px 14px #9c7a4120;position:relative;transition:transform .2s,box-shadow .2s}
+.album-card:hover{transform:translateY(-3px);box-shadow:0 9px 22px #9c7a4126}
+.album-card>img{display:block;height:237px;width:100%;border-radius:16px 16px 9px 9px;object-fit:cover}
+.album-card:nth-child(2){margin-top:25px;transform:rotate(1deg)}
+.album-card:nth-child(2)>img{height:208px}
+.album-card:nth-child(2):hover{transform:rotate(1deg) translateY(-3px)}
+.album-caption{padding:16px 14px 19px;gap:10px}
+.album-caption .eyebrow{font-size:8px;letter-spacing:1.6px}
+.album-caption h2{font:700 24px/1.5 'Gowun Batang',serif;margin:3px 0}
+.album-caption p{font-size:11px;color:#8a7c65;line-height:1.7}
+.album-seal{position:absolute;left:17px;top:-14px;z-index:2;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;border:3px solid #fff9e9;background:linear-gradient(150deg,#d6b36d,#b88631);color:#fffbe9;box-shadow:0 3px 7px #9d773735}
+.album-card:nth-child(2) .album-seal{background:linear-gradient(145deg,#b2bb81,#8a9b5e)}
+.album-seal .story-icon{width:24px;height:24px;stroke-width:1.5}
+.nas-cover{height:237px;padding:0 12px;border-radius:16px 16px 9px 9px;background:linear-gradient(140deg,#e9e8d8,#f9edd6);color:#9b927a;font-size:12px}
+.nas-cover>img{width:calc(100% + 24px);height:100%;object-fit:contain;background:#f1eadc}
+.album-card:nth-child(2) .nas-cover{height:208px}
+.nas-home-shelf{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 24px!important;margin:34px 0 12px!important;border:1px solid #e9dcc6;border-radius:20px;background:linear-gradient(120deg,#fffaf1d9,#f2e8d4a6);box-shadow:0 3px 12px #97754208}
+.nas-home-shelf h2{font:400 28px/1.3 'Nanum Pen Script','Gowun Batang',serif;margin:3px 0}
+.nas-home-shelf p{font-size:11px;line-height:1.8;margin:6px 0 0;color:#95876d}
+.nas-home-shelf .eyebrow{font-size:8px;letter-spacing:1.5px}
+.nas-home-shelf>a,.nas-home-shelf>button{flex-shrink:0;font-size:11px}
+.recent-grid{gap:22px}
+.memory{border-radius:15px;padding:0;background:transparent;box-shadow:none}
+.memory img{border:7px solid #fffdf8;border-radius:16px;box-shadow:0 4px 12px #8f724a1a;height:176px}
+.memory h3{font-size:17px;margin:12px 3px 5px}
+.memory small{font-size:10px;margin:0 3px}
+.stats{border:1px solid #e5d6bc;border-radius:20px;background:#fffaf0c9;box-shadow:0 4px 14px #9e79440d;padding:23px 10px;margin-top:34px}
+.stats strong{color:#aa7f39}.real-stats{font-size:10px;color:#a18e71}
+/* Travel map on paper, and the growth album as a taped photo spread. */
+.page-title{margin:16px 0 24px;align-items:center;gap:24px;min-height:100px;padding-right:64px}
+.page-title h1{display:flex;align-items:center;gap:12px;font:400 53px/1.2 'Nanum Pen Script','Gowun Batang',serif;margin:8px 0 12px;letter-spacing:-1px}
+.title-emblem{display:inline-flex;align-items:center;color:#b88c3c}
+.title-emblem .story-icon{width:40px;height:46px;stroke-width:1.4}
+main[data-page="growth"] .title-emblem{color:#91a24d}
+.page-title p{color:#8b806b;font-size:12px}
+.page-title>.primary{font-size:11px;padding:10px 17px;white-space:nowrap}
+.tabs{gap:7px;padding:6px;border:1px solid #e8dac0;background:#fffaf1d9;border-radius:28px;box-shadow:0 3px 9px #91703e0d;width:fit-content;max-width:100%}
+.tabs button{padding:10px 20px;border:0;box-shadow:none;background:transparent;font-size:12px}
+.tabs button.selected{background:linear-gradient(145deg,#d6af62,#bd8c35);border-color:transparent;color:#fffdf8;box-shadow:0 2px 5px #a47a3626}
+.map-wrap{padding:10px;background:#fffdf5;border:1px solid #e8dcc8;border-radius:22px;box-shadow:0 7px 21px #9b783016}
+#map{border-radius:14px;height:480px;border:0}
+.leaflet-tile-pane{filter:saturate(.65) sepia(.08)}
+.map-hint{font-size:10px;color:#9b8b70;margin:10px 6px 2px}
+.map-preview{border:8px solid #fffdf5!important;border-radius:12px;box-shadow:0 7px 20px #93764a24;transform:rotate(1deg);background:#fffaf0}
+.map-preview img{border-radius:6px}
+.toolbar input,.toolbar select{border-radius:20px;border-color:#dfd2ba;background:#fffdf7b8;font-size:12px}
+.record-row{border-color:#e9dfc8}.record-row img{border:4px solid white;border-radius:9px;box-shadow:0 2px 7px #9f7c3820}.record-row h3{font-size:17px}.record-row button{font-size:11px}
+.wish-list{padding:20px 24px;background:#fffaf0c9;border:1px solid #e9dbc0;border-radius:21px;box-shadow:0 4px 14px #96723910}
+.wish-row{border-color:#eadfc9}.wish-row input{accent-color:#cba044}
+.chips{gap:12px}.chips button{display:inline-flex;align-items:center;gap:10px;padding:7px 17px 7px 8px;border:1px solid #e5d6bc;background:#fffcf5;border-radius:28px;box-shadow:0 3px 7px #9d7b4113;font-size:13px}
+.child-avatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#e1e8cf;color:#727e4c;font-weight:600;font-size:12px}
+.chips button:nth-child(2) .child-avatar{background:#f2d8c9;color:#b08369}.chips button:nth-child(3) .child-avatar{background:#e9dfc2;color:#ae9058}
+.child-avatar .story-icon{width:19px;height:19px}
+.chips button.selected{border-color:#d8b27d;background:#f5e3cd;color:#75572f;box-shadow:0 3px 9px #b7914e1c}
+.growth-spread{background:#fffaf04d;border-radius:25px;padding:20px 15px 12px;gap:32px}
+.timeline{border-left:2px solid #d4b57c}.timeline button{border-radius:0;box-shadow:none!important}.timeline button.selected{color:#b17a34}.timeline button.selected::before{box-shadow:0 0 0 4px #f5e2c3}
+.polaroid{padding:12px 12px 22px;border-radius:8px;background:#fffef9;box-shadow:0 8px 22px #85673924;transform:rotate(-2deg)}
+.polaroid::before{background:#e3cba488;border:1px solid #d3b9893b;height:25px;width:78px;top:-12px;box-shadow:0 1px 3px #9b7c4f0b}
+.polaroid img{border-radius:3px;object-fit:contain;background:#f0e8d7}.polaroid h2{font-family:'Nanum Pen Script',serif;font-size:30px}
+.scrap-side img{border:7px solid #fffef8;border-radius:7px;box-shadow:0 5px 13px #80634425;transform:rotate(6deg)}
+.scrap-side img:nth-child(2){transform:rotate(-4deg)}
+.nas-album-heading h2{font:400 32px/1.3 'Nanum Pen Script','Gowun Batang',serif}
+.nas-album-controls button{border-radius:18px;padding:9px 14px;font-size:11px}
+.nas-album-source{color:#a39070;font-size:10px}
+.nas-album-grid{gap:21px}.nas-album-photo{padding:8px 8px 0;border:1px solid #e8ddc9;background:#fffdf7;border-radius:12px;box-shadow:0 4px 11px #97754217}
+.nas-album-photo>.nas-auto-image{border-radius:7px;background:#f0e9db}
+.nas-album-photo>span:last-child{font-size:10px;padding:10px 3px 12px;color:#897b63}
+.nas-album-spread{gap:25px;padding:10px 5px}
+.nas-album-spread .nas-album-lead{position:relative;transform:rotate(-1.5deg);overflow:visible;border-radius:9px;padding:11px 11px 0}
+.nas-album-spread .nas-album-lead::before{content:"";position:absolute;width:76px;height:24px;top:-12px;left:40%;background:#e2c99f70;border:1px solid #d7bb8b33;transform:rotate(-5deg);z-index:2}
+.nas-album-spread .nas-album-lead>.nas-auto-image{height:448px;object-fit:contain;background:#f0e9d9}
+.nas-album-spread .nas-album-lead img{object-fit:contain}
+.nas-album-spread .nas-album-photo:nth-child(2){transform:rotate(3deg)}
+.nas-album-spread .nas-album-photo:nth-child(3){transform:rotate(-3deg)}
+.nas-album-empty,.nas-welcome{background:radial-gradient(ellipse at 95% 0,#f3e4c278,transparent 80%),#fffaf0b3;border:1px solid #e9dac0;border-radius:23px;box-shadow:0 6px 18px #98723b0c}
+.nas-empty h3,.nas-welcome h2{font-family:'Nanum Pen Script',serif;font-size:32px}
+.nas-large-icon{display:grid;place-items:center;color:#b79a5d}.nas-large-icon .story-icon{width:52px;height:52px;stroke-width:1.2}
+.nas-photo-glyph .story-icon{width:30px;height:30px;color:#b9ab8a}
+.nas-thumb>.story-icon{width:30px;height:30px;color:#b9ab8a}
+.nas-crumbs{background:#fffaf0b0;border:1px solid #e8dbc5;border-radius:17px;padding:8px 10px;gap:5px;box-shadow:none}
+.nas-crumbs button{border:0;border-radius:12px;box-shadow:none;font-size:11px}
+.nas-picker-folders button{display:flex;gap:9px;align-items:center;box-shadow:none}.nas-picker-folders .story-icon{width:20px;height:20px;color:#b7985d}
+.nas-entry{border:1px solid #e9dfca;background:#fffdf6;padding:7px;border-radius:12px;box-shadow:0 3px 9px #9d7e4220}
+.nas-entry .nas-thumb{border-radius:7px}.nas-entry strong{padding:5px 3px 0}.nas-entry small{padding:0 3px}
+.nas-status{border-color:#e5d7bc}.nas-action-bar button{font-size:11px}
+.nas-rule-year select{font-size:12px;background:#fffdf5}
+dialog{border:1px solid #e6d7bd;background:#fffaf1;border-radius:24px;box-shadow:0 22px 90px #4f43293d}
+dialog::backdrop{background:#514b3d60;backdrop-filter:blur(3px)}
+.nas-dialog{border-radius:24px;background:#fffaf1}.nas-dialog h2{font-family:'Nanum Pen Script','Gowun Batang',serif;font-size:32px}
+.close{width:34px;height:34px;border-radius:50%;padding:0;background:#f5ecdc;border:0;box-shadow:none;font-size:23px;color:#948367;line-height:1}
+#toast{background:#69774e;color:#fffced;border-radius:20px;font-size:12px;padding:12px 20px;box-shadow:0 5px 17px #65714b25}
+footer{z-index:1;text-align:center;display:block;min-height:340px;padding:48px 24px 170px;margin:0;border-top:1px solid #e5d7bd6b;background:linear-gradient(#fff8ed00,#fdf3e1);isolation:isolate}
+footer::before{content:"";position:absolute;inset:0;background:url('assets/meadow-border.webp') bottom center/max(1100px,100%) auto no-repeat;z-index:-1;pointer-events:none;opacity:.95}
+footer .brand{display:block;font:400 31px/1.2 'Nanum Pen Script','Gowun Batang',serif;color:#737e52}
+footer p{font-size:11px;color:#9e9077;margin:10px 0}footer small{font-size:9px;color:#af9e80}footer button{display:inline-block;font-size:10px;background:#fff9e8b3;border-color:#e6d6b7;padding:7px 12px;margin:15px 4px 0;border-radius:17px}
+@media(min-width:1400px){.hero,.nas-live .hero{min-height:495px}.hero>img{height:405px}.hero-copy h1{font-size:73px}}
+@media(max-width:1000px){header{padding:0 28px}.brand{font-size:17px}.brand small{font-size:8px}header nav a{padding:0 12px}.hero,.nas-live .hero{gap:22px;padding:32px 26px 40px;grid-template-columns:.8fr 1.2fr;min-height:410px}.hero>img{height:330px}.hero-copy h1{font-size:60px}.hero-copy p{font-size:11px}.album-card>img,.nas-cover{height:210px}.album-card:nth-child(2)>img,.album-card:nth-child(2) .nas-cover{height:185px}}
+@media(max-width:700px){header{height:111px;padding:14px 20px 0;align-items:flex-start;gap:12px}.brand{font-size:17px;gap:9px}.brand-mark svg{width:33px;height:35px}.brand small{font-size:7px;letter-spacing:1.4px}.profile{min-width:38px;min-height:38px;width:38px;padding:8px;margin:0}.profile span{display:none}.profile .story-icon{width:20px;height:20px}header nav{position:absolute;left:13px;right:13px;bottom:5px;height:39px;justify-content:space-around;gap:3px}header nav a{height:36px;padding:0 14px;font-size:12px}.demo-banner{font-size:9px;padding:7px 13px;line-height:1.7}main{padding:23px 18px 40px}main::before{width:92px;height:124px;top:0;opacity:.58}main::after{width:110px;height:140px;opacity:.6}.hero,.nas-live .hero{grid-template-columns:1fr;gap:17px;min-height:0;padding:25px 20px 34px;border-radius:25px;margin:0 0 26px}.hero-copy{grid-column:1;grid-row:1;padding:0 3px}.hero-copy .eyebrow{font-size:7px;letter-spacing:2px}.hero-copy h1{font-size:54px;margin:17px 0 19px;line-height:1.02}.hero-copy h1::after{width:105px;bottom:-7px}.hero-copy .hand .story-icon{width:30px;height:30px}.hero-copy p{font-size:11px;line-height:1.7;margin-top:24px;margin-bottom:12px}.hero-copy a{padding:8px 14px;font-size:11px;margin-top:2px}.hero>img{grid-column:1;grid-row:2;height:clamp(220px,61vw,350px);max-height:none;border:7px solid white;border-radius:9px;transform:rotate(1deg);object-fit:contain}.photo-note{bottom:10px;right:25px;font-size:8px}.hero .nas-home-clear{display:inline-block;margin:4px 0 0 6px;font-size:9px;padding:7px 10px}.section-head{margin:25px 0 20px;gap:10px}.section-head h2{font-size:27px}.section-head .eyebrow{font-size:7px;letter-spacing:1.4px}.section-head a{font-size:10px}.gateway{gap:13px;grid-template-columns:1fr 1fr}.album-card{padding:6px 6px 0;border-radius:20px}.album-card>img,.nas-cover{height:155px;border-radius:14px 14px 7px 7px}.album-card:nth-child(2){margin-top:19px}.album-card:nth-child(2)>img,.album-card:nth-child(2) .nas-cover{height:141px}.album-seal{width:35px;height:35px;left:10px;top:-11px;border-width:2px}.album-seal .story-icon{width:19px;height:19px}.album-caption{padding:10px 5px 13px}.album-caption .eyebrow{display:none}.album-caption h2{font-size:18px;line-height:1.35;margin:3px 0 6px;letter-spacing:-.7px}.album-caption p{font-size:9px;line-height:1.6;word-break:keep-all}.nas-cover{font-size:10px;padding:0 6px}.nas-cover>img{width:calc(100% + 12px)}.nas-home-shelf{padding:16px 18px!important;margin:27px 0 6px!important;gap:12px;border-radius:18px}.nas-home-shelf h2{font-size:23px}.nas-home-shelf p{font-size:9px}.nas-home-shelf .eyebrow{font-size:7px;letter-spacing:1px}.nas-home-shelf>a,.nas-home-shelf>button{font-size:10px;padding:8px 11px;max-width:110px;word-break:keep-all}.recent-grid{gap:15px}.memory img{height:145px;border-width:5px;border-radius:12px}.memory h3{font-size:15px}.stats{padding:18px 8px;border-radius:18px}.stats strong{font-size:24px}.stats span{font-size:9px}.page-title{min-height:0;margin:9px 0 22px;padding:8px 36px 0 0;gap:15px;align-items:flex-start}.page-title h1{font-size:40px;gap:9px;margin:7px 0 9px;line-height:1.2}.title-emblem .story-icon{width:31px;height:37px}.page-title .eyebrow{font-size:7px;letter-spacing:1.5px}.page-title p{font-size:10px;line-height:1.8}.page-title>.primary{font-size:10px;padding:8px 12px}.tabs{padding:4px;gap:3px;border-radius:24px;margin:18px 0}.tabs button{font-size:10px;padding:9px 14px}.map-wrap{padding:7px;border-radius:19px}#map{height:380px;border-radius:12px}.map-preview{transform:none}.chips{gap:8px;margin:22px 0}.chips button{padding:5px 13px 5px 5px;font-size:12px;gap:7px}.child-avatar{width:28px;height:28px;font-size:10px}.child-avatar .story-icon{width:16px;height:16px}.growth-spread{padding:16px 7px 8px;gap:22px}.scrapbook{gap:12px}.polaroid{padding:8px 8px 15px;border-radius:6px}.polaroid h2{font-size:25px}.polaroid img{height:270px}.scrap-side img{border-width:5px;height:95px}.nas-album-heading h2{font-size:28px}.nas-album-controls button{font-size:10px;padding:8px 11px}.nas-album-grid{gap:15px}.nas-album-photo{padding:6px 6px 0;border-radius:10px}.nas-album-photo>span:last-child{font-size:9px;padding:9px 2px}.nas-album-spread{gap:18px 13px;padding:12px 3px}.nas-album-spread .nas-album-lead{padding:8px 8px 0}.nas-album-spread .nas-album-lead>.nas-auto-image{height:300px}.nas-album-spread .nas-album-photo:not(.nas-album-lead)>.nas-auto-image{height:150px}.nas-album-source{font-size:9px}.nas-album-empty{padding:32px 20px}.nas-crumbs{padding:6px}.nas-entry{padding:5px}.nas-entry strong{font-size:10px}.nas-entry small{font-size:9px}footer{min-height:330px;padding:40px 22px 155px;margin-top:15px}footer::before{background-size:1000px auto}footer .brand{font-size:29px}footer p{font-size:10px}footer small{font-size:8px}footer button{font-size:9px;padding:7px 10px}}
+@media(max-width:370px){.album-caption h2{font-size:16px}.hero-copy h1{font-size:50px}.nas-home-shelf{flex-direction:column;align-items:flex-start}.nas-home-shelf>a,.nas-home-shelf>button{max-width:none}.page-title h1{font-size:36px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.album-card:hover,.album-card:nth-child(2):hover{transform:none}}
+.leaflet-control-zoom{border:1px solid #ded0b7!important;border-radius:14px!important;box-shadow:0 3px 10px #9273411c!important;overflow:hidden}.leaflet-control-zoom a{background:#fffdf6!important;color:#7f724f!important}.nas-dialog .nas-file-title{font:600 18px/1.6 'Noto Sans KR',sans-serif}
+/* Decorative sprays stay inside the viewport; headings keep their full line. */
+main::before{left:18px}main::after{right:23px}.hero-copy,.growth-spread>div{min-width:0}
+@media(min-width:701px) and (max-width:1000px){.hero,.nas-live .hero{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}}
+@media(max-width:700px){.page-title{display:block;position:relative;padding-right:8px}.page-title>button{position:absolute;right:0;top:0;padding:6px 10px;font-size:9px}.page-title h1{width:100%;font-size:40px}.page-title .eyebrow{display:block;max-width:calc(100% - 85px)}.timeline{border-left:0}.growth-spread>div{width:100%}.polaroid img{height:auto;min-height:150px;max-height:350px}}
+@media(max-width:700px){.album-gateways>.section-head{display:none}.album-gateways{position:relative;z-index:2;margin-top:5px}.hero,.nas-live .hero{margin-bottom:25px}}
+.title-space{display:none}
+@media(max-width:700px){.hero,.nas-live .hero{padding-top:23px;padding-bottom:30px;gap:15px}.hero-copy .eyebrow,.hero-copy>a{display:none}.hero-copy h1{font-size:46px;line-height:1.15;margin:4px 0 17px;letter-spacing:-1px}.hero-copy .title-space{display:inline}.hero-copy .title-break{display:none}.hero-copy h1::after{width:112px;bottom:-8px}.hero-copy .hand .story-icon{width:27px;height:27px}.hero-copy p{margin-top:24px;margin-bottom:0;font-size:10px}.hero>img{height:clamp(210px,55vw,310px)}.hero .nas-home-clear{margin:10px 0 0}.nas-live .hero .photo-note{right:22px}main[data-page="travel"]::before,main[data-page="growth"]::before,main[data-page="gallery"]::before{display:none}main[data-page="travel"]::after,main[data-page="growth"]::after,main[data-page="gallery"]::after{width:102px;height:120px;right:0;top:-15px;transform:scaleX(-1);opacity:.6}}
+body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:130px;z-index:0;pointer-events:none;background:url('assets/meadow-border.webp') bottom center/max(1100px,100%) auto no-repeat;opacity:.25}
+@media(max-width:700px){body::after{height:100px;background-size:900px auto;opacity:.22}}
+/* Warm gold remains readable at phone sizes. */
+:root{--muted:#7e7463}.primary,.tabs button.selected{color:#5c401d;background:linear-gradient(145deg,#e5c47d,#d5ae60);border-color:#c6a15b;font-weight:600}.primary:hover{color:#4e371c;background:#d7b268}.photo-note,.nas-album-source,.nas-album-photo>span:last-child,.memory small,.real-stats,footer small{color:#81725c}

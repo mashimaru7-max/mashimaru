@@ -1133,9 +1133,12 @@ header {
   box-shadow: 0 1px 0 #e9e1d380;
 }
 button,
-nav a,
+nav a {
+  box-shadow: none;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
 button:active {
-  box-shadow: inset 0 1px 4px #5d48251a;
+  box-shadow: inset 0 1px 3px #5d482512;
 }
 input:focus-visible,
 select:focus-visible,

@@ -39,7 +39,7 @@ export class NasHome {
       if(version!==this.version || !hero.isConnected || !this.g.connected) return;
       this.url=URL.createObjectURL(blob); image.src=this.url; image.hidden=false; image.alt=manual?'직접 고른 우리 가족의 대표 사진':'NAS에서 자동으로 고른 우리 사진';
       hero.querySelector('.photo-note').textContent=manual?'직접 고른 NAS 대표 사진':'NAS에서 자동으로 불러온 사진';
-      if(manual){const b=document.createElement('button'); b.className='nas-home-clear'; b.textContent='자동 대표 사진 사용'; b.onclick=()=>void this.clear(); hero.append(b);}
+      if(manual){const b=document.createElement('button'); b.className='nas-home-clear'; b.textContent='자동 대표 사진 사용'; b.onclick=()=>void this.clear(); (hero.querySelector('.hero-copy')||hero).append(b);}
     } catch { if(version===this.version) this.notify('홈 사진을 불러오지 못했어요. 사진 폴더와 NAS 연결을 확인해 주세요.'); }
   }
   release() { this.version++; if(this.url) URL.revokeObjectURL(this.url); this.url=null; }
