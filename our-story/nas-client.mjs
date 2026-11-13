@@ -1,5 +1,7 @@
+import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-video1';
 // Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
+export const isVideo=path=>/\.(mp4|m4v|mov|webm)$/i.test(path);
 export class NasError extends Error {
   constructor(code, message) {
     super(message);
@@ -84,14 +86,14 @@ export function validateListing(data, path, offset) {
       )
         throw fail("FORMAT", "사진 목록에 올바르지 않은 항목이 있어요.");
       seen.add(item.path);
-      return { name: item.name, path: item.path, dir: item.dir, ...(typeof item.revision === "string" && /^[a-f0-9]{64}$/.test(item.revision) ? {revision:item.revision} : {}) };
+      return { name: item.name, path: item.path, dir: item.dir, ...(isVideo(item.path)?{video:true}:{}), ...(typeof item.revision === "string" && /^[a-f0-9]{64}$/.test(item.revision) ? {revision:item.revision} : {}) };
     })
     .filter(
       (item) =>
         !item.name.startsWith(".") &&
         !item.name.toLowerCase().startsWith("@eadir") &&
         (item.dir ||
-          /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(item.name)),
+          /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|mp4|m4v|mov|webm)$/i.test(item.name)),
     );
   return { path, total: data.total, next: data.next, items };
 }
@@ -232,6 +234,7 @@ export class NasClient {
     }
   }
   #clear() {
+    clearVideoAccess();
     for(const task of this.#thumbQueue)task.reject(fail("ABORT","요청을 취소했어요."));
     this.#thumbQueue=[];
     this.#epoch++;
@@ -420,7 +423,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.video===true?{video:true,videoUpload:d.videoUpload===true,maxVideo:Math.min(4*1024**3,Number(d.maxVideo)||0)}:{}), ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
@@ -442,6 +445,27 @@ export class NasClient {
       this.#request("/api/thumbnail",{params:{path:task.path,...(task.expectedRevision?{revision:task.expectedRevision}:{})},image:true})
         .then(task.resolve,task.reject).finally(()=>{this.#thumbActive--;this.#drainThumbnails();});
     }
+  }
+  async videoHandle(path,revision,download=false) {
+    this.#assertAuth();safePath(path);if(!isVideo(path)||!/^[a-f0-9]{64}$/.test(revision||''))throw fail('VIDEO','영상 목록을 새로 불러와 주세요.');
+    const epoch=this.#epoch,id=crypto.randomUUID();
+    await workerMessage({action:'grant',id,origin:this.#base,secret:this.#secret,path,revision,kind:download?'video-download':'video',expires:Math.min(this.#expiry,Date.now()+6*3600000)});
+    const release=()=>workerMessage({action:'release',id}).catch(()=>{});
+    if(epoch!==this.#epoch){await release();throw fail('ABORT','연결을 취소했어요.');}
+    return {url:new URL('./nas-private-media/'+id,import.meta.url).href,release};
+  }
+  async videoPoster(path,revision,signal){return firstFrame(await this.videoHandle(path,revision),signal);}
+  async downloadVideo(item){
+    const handle=await this.videoHandle(item.path,item.revision,true),a=document.createElement('a');a.href=handle.url;a.download=item.name;document.body.append(a);a.click();a.remove();
+    // Keep the stream grant alive for a long download. Logout revokes it immediately.
+    const timer=setTimeout(()=>void handle.release(),6*3600000);timer.unref?.();
+  }
+  async uploadVideo(folder,file,{progress=()=>{},active=()=>true}={}){
+    this.#assertAuth();safePath(folder);safePath(file.name);const epoch=this.#epoch;
+    if(file.name.includes('/')||!isVideo(file.name)||!file.size||file.size>4*1024**3)throw fail('UPLOAD','MP4·M4V·MOV·WebM 영상은 파일당 최대 4GB까지 올릴 수 있어요.');
+    const fingerprint=await videoFingerprint(file);if(epoch!==this.#epoch||!active())throw fail('ABORT','업로드를 취소했어요.');
+    const state=await this.#request('/api/video-upload',{body:{action:'init',path:folder,name:file.name,size:file.size,fingerprint},timeoutMs:30000});
+    return sendVideoChunks(file,state,{chunkSize:8*1024*1024,progress,active:()=>epoch===this.#epoch&&active(),send:(id,offset,hash,raw)=>this.#request('/api/video-upload-chunk',{params:{id,offset,hash},raw,timeoutMs:120000}),finish:id=>this.#request('/api/video-upload',{body:{action:'finish',id},timeoutMs:30000})});
   }
   async download(path, modern = false) {
     safePath(path);
@@ -475,7 +499,7 @@ export class NasClient {
   }
   cancelTransfers() {
     for (const [ctrl,route] of this.#requests)
-      if (["/api/upload", "/api/download"].includes(route)) ctrl.abort();
+      if (["/api/upload", "/api/download", "/api/video-upload", "/api/video-upload-chunk"].includes(route)) ctrl.abort();
   }
   async #request(
     route,

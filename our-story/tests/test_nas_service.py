@@ -107,8 +107,8 @@ class ServiceTests(unittest.TestCase):
     def test_list_pagination_and_private_folders(self):
         (self.root/'.secret').mkdir();(self.root/'@eaDir').mkdir();(self.root/'video.mp4').write_bytes(b'video')
         for i in range(120):(self.root/f'{i:03}.jpg').write_bytes(PHOTO[:64])
-        data=self.listing();self.assertEqual(data['total'],122);self.assertEqual(len(data['items']),100);self.assertEqual(data['next'],100)
-        tail=json.loads(self.request('/api/list?offset=100')[1]);self.assertEqual(len(tail['items']),22);self.assertIsNone(tail['next'])
+        data=self.listing();self.assertEqual(data['total'],123);self.assertEqual(len(data['items']),100);self.assertEqual(data['next'],100)
+        tail=json.loads(self.request('/api/list?offset=100')[1]);self.assertEqual(len(tail['items']),23);self.assertIsNone(tail['next'])
         self.assertEqual(self.request('/api/list?offset=-1')[0],400)
     def test_upload_and_no_overwrite(self):
         route='/api/upload?path=%EA%B8%B0%EC%96%B5&name=hello.jpg'

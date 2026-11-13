@@ -22,9 +22,9 @@ test('listing parser rejects unexpected paths, duplicates, malformed pagination 
  assert.equal(validateListing(root,'',0).items.length,2);
  for(const data of [{...root,path:'other'},{...root,next:0},{...root,total:-1},{...root,items:[{name:'x',path:'../x',dir:false}]},{...root,items:[root.items[0],root.items[0]]}])assert.throws(()=>validateListing(data,'',0));
 });
-test('list parser omits system directories and unsupported video, preserves metadata as text',()=>{
+test('list parser omits system directories and includes video, preserves metadata as text',()=>{
  const data={path:'',total:3,next:null,items:[{name:'@eaDir',path:'@eaDir',dir:true},{name:'video.mp4',path:'video.mp4',dir:false},{name:'<img onerror=x>.jpg',path:'<img onerror=x>.jpg',dir:false}]};
- assert.deepEqual(validateListing(data,'',0).items.map(x=>x.name),['<img onerror=x>.jpg']);
+ assert.deepEqual(validateListing(data,'',0).items.map(x=>x.name),['video.mp4','<img onerror=x>.jpg']);
 });
 test('legacy connection validates list and sends secret only in Authorization, never URL; redirects and cookies disabled',async()=>{
  const {client,calls}=fixture();const data=await connect(client);assert.equal(client.connected,true);assert.equal(data.path,'');

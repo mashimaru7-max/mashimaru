@@ -1,4 +1,4 @@
-import {trashSelection} from './nas-selection.mjs?v=20261114-purge1';
+import {trashSelection} from './nas-selection.mjs?v=20261114-video1';
 const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 export class NasActions {
   constructor(gallery, onHomePhoto) {
@@ -36,6 +36,8 @@ export class NasActions {
           if (button.dataset.photoAction === "home") {
             await this.onHomePhoto({origin:this.g.client.origin,path:item.path,name:item.name});
             this.g.notify("가족 공통 홈 대표 사진으로 저장했어요.");
+          } else if(item.video) {
+            await this.g.client.downloadVideo(item);this.g.notify('영상 다운로드를 요청했어요. 브라우저 다운로드 목록을 확인해 주세요.');
           } else {
             const blob = await this.g.client.download(item.path, !!this.g.features.download);
             if(version !== this.generation || !this.g.connected) return;
@@ -60,7 +62,7 @@ export class NasActions {
   }
   manage() {
     if(!this.g.features.fileManagement){this.unavailable();return;}
-    this.show('사진·폴더 정리',`<p>현재 위치: ${esc(this.g.path||'/photo')}</p><p class="fine">정리할 항목을 선택해 주세요. 목록에 없으면 보관함에서 더 불러온 뒤 선택해요.</p><div class="nas-file-manager-items">${this.g.items.map((item,i)=>`<button data-manage-item="${i}">${item.dir?'폴더':'사진'} · ${esc(item.name)}</button>`).join('')||'<p>정리할 항목이 없어요.</p>'}</div>`);
+    this.show('사진·폴더 정리',`<p>현재 위치: ${esc(this.g.path||'/photo')}</p><p class="fine">정리할 항목을 선택해 주세요. 목록에 없으면 보관함에서 더 불러온 뒤 선택해요.</p><div class="nas-file-manager-items">${this.g.items.map((item,i)=>`<button data-manage-item="${i}">${item.dir?'폴더':item.video?'영상':'사진'} · ${esc(item.name)}</button>`).join('')||'<p>정리할 항목이 없어요.</p>'}</div>`);
     this.dialog.querySelector('.nas-file-manager-items').onclick=e=>{const b=e.target.closest('[data-manage-item]');if(b)void this.manageItem(this.g.items[Number(b.dataset.manageItem)]);};
   }
   manageItem(item) {
@@ -90,7 +92,7 @@ export class NasActions {
   }
   upload() {
     if (!this.g.features.upload) { this.unavailable(); return; }
-    const folder=this.g.path, version=this.show("우리 사진 더하기", `<p>저장 위치: <strong>${esc(folder || "/photo")}</strong></p><label class="nas-file-label">사진 선택<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/heic,image/heif,image/avif" multiple></label><p class="fine">파일당 최대 ${Math.floor(this.g.features.maxUpload/1048576)}MB · 같은 이름은 덮어쓰지 않아요.<br>닫으면 진행 중인 전송을 취소해요. 완료된 사진은 유지돼요.</p>`);
+    const folder=this.g.path, version=this.show("우리 사진과 영상 더하기", `<p>저장 위치: <strong>${esc(folder || "/photo")}</strong></p><label class="nas-file-label">사진·영상 선택<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/heic,image/heif,image/avif${this.g.features.videoUpload?',video/mp4,video/quicktime,video/webm,.m4v':''}" multiple></label><p class="fine">사진 최대 ${Math.floor(this.g.features.maxUpload/1048576)}MB${this.g.features.videoUpload?' · 영상 최대 4GB (MP4·M4V·MOV·WebM)':''} · 같은 이름은 덮어쓰지 않아요.<br>닫으면 전송을 멈춰요. 영상은 같은 계정 세션에서 같은 폴더·파일을 다시 선택하면 이어 올려요. 완료된 파일은 유지돼요.</p>`);
     this.dialog.querySelector('input').onchange=async e=>{
       const files=[...e.target.files]; e.target.disabled=true;
       let succeeded=0; const failed=[];
@@ -98,8 +100,14 @@ export class NasActions {
         if(version!==this.generation || !this.g.connected) break;
         this.message(`${i+1}/${files.length} 전송 중 · ${files[i].name}`);
         try {
-          if(files[i].size>this.g.features.maxUpload) throw new Error("업로드 크기 초과");
-          await this.g.client.upload(folder,files[i]); succeeded++;
+          if(/\.(mp4|m4v|mov|webm)$/i.test(files[i].name)){
+            if(!this.g.features.videoUpload)throw new Error('영상 업로드는 NAS 업데이트 후 사용할 수 있어요.');
+            await this.g.client.uploadVideo(folder,files[i],{active:()=>version===this.generation&&this.g.connected,progress:(sent,total,checking)=>{if(version===this.generation)this.message(`${i+1}/${files.length} · ${files[i].name} · ${checking?'이어 올리기 확인':'전송'} ${Math.floor(sent/total*100)}%`);}});
+          }else{
+            if(files[i].size>this.g.features.maxUpload)throw new Error('사진 업로드 크기 초과');
+            await this.g.client.upload(folder,files[i]);
+          }
+          succeeded++;
         } catch(err) { if(version!==this.generation) break; failed.push(`${files[i].name}: ${err.message}`); }
       }
       if(version!==this.generation) { if(this.g.connected) void this.g.load(folder); return; }
@@ -111,7 +119,7 @@ export class NasActions {
     if(!items.length)return;
     if(!this.g.features.trash||items.some(item=>item.dir&&!this.g.features.folderTrash)){this.unavailable();return;}
     const folders=items.filter(item=>item.dir).length,photos=items.length-folders;
-    const version=this.show('선택한 항목을 휴지통으로 옮길까요?',`<p><strong>사진 ${photos}개 · 폴더 ${folders}개</strong></p>${folders?'<p>선택한 폴더는 하위 사진·영상 등 모든 내용을 함께 보관해요. 연결한 앨범과 성장 기록의 사진도 복원 전까지 보이지 않아요.</p>':''}<p>영구 삭제하지 않으며, 같은 이름이 생기면 덮어쓰지 않고 복원을 멈춰요.</p><div class="nas-batch-items">${items.slice(0,100).map(item=>`<p>${item.dir?'폴더':'사진'} · ${esc(item.name)}</p>`).join('')}${items.length>100?`<p>외 ${items.length-100}개</p>`:''}</div><button class="nas-danger" data-batch-confirm>선택 항목 휴지통으로 이동</button> <button data-batch-stop disabled>남은 작업 중지</button>`);
+    const version=this.show('선택한 항목을 휴지통으로 옮길까요?',`<p><strong>사진·영상 ${photos}개 · 폴더 ${folders}개</strong></p>${folders?'<p>선택한 폴더는 하위 사진·영상 등 모든 내용을 함께 보관해요. 연결한 앨범과 성장 기록의 사진도 복원 전까지 보이지 않아요.</p>':''}<p>영구 삭제하지 않으며, 같은 이름이 생기면 덮어쓰지 않고 복원을 멈춰요.</p><div class="nas-batch-items">${items.slice(0,100).map(item=>`<p>${item.dir?'폴더':item.video?'영상':'사진'} · ${esc(item.name)}</p>`).join('')}${items.length>100?`<p>외 ${items.length-100}개</p>`:''}</div><button class="nas-danger" data-batch-confirm>선택 항목 휴지통으로 이동</button> <button data-batch-stop disabled>남은 작업 중지</button>`);
     const start=this.dialog.querySelector('[data-batch-confirm]'),stop=this.dialog.querySelector('[data-batch-stop]');let stopping=false;
     stop.onclick=()=>{stopping=true;stop.disabled=true;this.message('현재 항목을 마무리한 뒤 남은 작업을 중지해요. 완료된 항목은 휴지통에 보관돼요.');};
     start.onclick=async()=>{
@@ -125,7 +133,7 @@ export class NasActions {
   }
   trash(item) {
     if(!this.g.features.trash || !item.revision || item.dir&&!this.g.features.folderTrash) { this.unavailable(); return; }
-    const version=this.show("사진을 휴지통으로 옮길까요?", `<p><strong>${esc(item.name)}</strong></p><p>원래 폴더에서 숨겨지고 NAS 휴지통에 보관돼요. 휴지통에서 복원할 수 있어요.</p><button class="nas-danger" data-confirm-trash>휴지통으로 이동</button> <button data-manager-close>취소</button>`);
+    const version=this.show(item.video?"영상을 휴지통으로 옮길까요?":"사진을 휴지통으로 옮길까요?", `<p><strong>${esc(item.name)}</strong></p><p>원래 폴더에서 숨겨지고 NAS 휴지통에 보관돼요. 휴지통에서 복원할 수 있어요.</p><button class="nas-danger" data-confirm-trash>휴지통으로 이동</button> <button data-manager-close>취소</button>`);
     this.dialog.querySelector('[data-confirm-trash]').onclick=async e=>{
       e.target.disabled=true;
       try {
@@ -152,7 +160,7 @@ export class NasActions {
       const sync=()=>{list.querySelectorAll('[data-trash-index]').forEach(input=>{input.checked=selected.has(data.items[Number(input.dataset.trashIndex)].id);});purge.disabled=this.busy||!selected.size;purge.textContent=`선택 ${selected.size}개 영구삭제`;toolbar.querySelector('[data-trash-count]').textContent=`${selected.size}개 선택`;clear.disabled=this.busy||!selected.size;};
       all.onclick=()=>{if(this.busy)return;selected.clear();data.items.slice(0,50).forEach(item=>selected.set(item.id,item));sync();};
       clear.onclick=()=>{if(this.busy)return;selected.clear();sync();};
-      list.innerHTML=data.items.length ? data.items.map((i,index)=>`<div class="nas-trash-row">${enabled?`<input type="checkbox" data-trash-index="${index}" aria-label="${esc(i.path)} 선택">`:''}<span>${i.kind==='folder'?'폴더 · ':'사진 · '}${esc(i.path)}${i.permanentPartial?'<small>영구삭제 중단 · 일부 파일이 삭제됐을 수 있어요.</small>':''}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id)?i.id:''}">복원</button></div>`).join('') : '<p>휴지통이 비어 있어요.</p>';
+      list.innerHTML=data.items.length ? data.items.map((i,index)=>`<div class="nas-trash-row">${enabled?`<input type="checkbox" data-trash-index="${index}" aria-label="${esc(i.path)} 선택">`:''}<span>${i.kind==='folder'?'폴더 · ':/\.(mp4|m4v|mov|webm)$/i.test(i.path)?'영상 · ':'사진 · '}${esc(i.path)}${i.permanentPartial?'<small>영구삭제 중단 · 일부 파일이 삭제됐을 수 있어요.</small>':''}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id)?i.id:''}">복원</button></div>`).join('') : '<p>휴지통이 비어 있어요.</p>';
       list.onchange=e=>{const input=e.target.closest('[data-trash-index]');if(!input)return;const item=data.items[Number(input.dataset.trashIndex)];if(input.checked&&selected.size>=50){input.checked=false;this.message('한 번에 최대 50개 항목을 선택해 주세요.');return;}if(this.busy){sync();return;}if(input.checked)selected.set(item.id,item);else selected.delete(item.id);sync();};
       sync();
       purge.onclick=()=>{if(!this.busy&&selected.size)this.permanentDelete([...selected.values()]);};

@@ -1,4 +1,4 @@
-import {safeBase,safePath} from './nas-client.mjs?v=20261114-purge1';
+import {safeBase,safePath} from './nas-client.mjs?v=20261114-video1';
 const fatalListError=e=>e.name==='AbortError'||['HTTP_401','AUTH','ABORT','NETWORK','TIMEOUT','HTTP_429'].includes(e.code)||/^HTTP_5/.test(e.code||'');
 export const ALBUM_KEYS=['home','travel','growth:다온','growth:라온','growth:함께'];
 export function validateAlbumBindings(data) {
@@ -34,11 +34,11 @@ export async function scanFolderPhotos(client,root='',{limit=12,pageBudget=16,fo
     pages++; folders.add(task.path);
     if(!current()) throw new DOMException('Stale album request','AbortError');
     for(const item of data.items) {
-      if(item.dir || seen.has(item.path)) continue;
+      if(item.dir || item.video || seen.has(item.path)) continue;
       seen.add(item.path);items.push(item);
       if(items.length===limit) break;
     }
-    if(data.items.some(item=>!item.dir && !seen.has(item.path)))limited=true;
+    if(data.items.some(item=>!item.dir && !item.video && !seen.has(item.path)))limited=true;
     for(const item of data.items) if(item.dir) {
       if(task.depth>=8 || folders.size+queue.filter(x=>!x.offset).length>=folderBudget) {limited=true;continue;}
       if(!queue.some(x=>x.path===item.path) && !folders.has(item.path)) queue.push({path:item.path,depth:task.depth+1,offset:0});

@@ -35,6 +35,10 @@ except ImportError:
 
 MAX_UPLOAD = 64 * 1024 * 1024
 MAX_DOWNLOAD = 128 * 1024 * 1024
+MAX_VIDEO = 4 * 1024 * 1024 * 1024
+VIDEO_CHUNK = 8 * 1024 * 1024
+VIDEO = re.compile(r'\.(mp4|m4v|mov|webm)$', re.I)
+MEDIA = re.compile(r'\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|mp4|m4v|mov|webm)$', re.I)
 PHOTO = re.compile(r'\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$', re.I)
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
@@ -82,9 +86,9 @@ class PhotoStore:
         finally: os.close(fd)
 
     @contextlib.contextmanager
-    def photo(self, path):
+    def photo(self, path, media=False):
         p = parts(path)
-        if not p or not PHOTO.search(p[-1]): raise APIError(400)
+        if not p or not (MEDIA if media else PHOTO).search(p[-1]): raise APIError(400)
         with self.directory('/'.join(p[:-1])) as parent:
             fd = os.open(p[-1], FILE_FLAGS, dir_fd=parent)
             try:
@@ -102,7 +106,7 @@ class PhotoStore:
                     parts(name)
                     st = os.stat(name, dir_fd=fd, follow_symlinks=False)
                     folder = stat.S_ISDIR(st.st_mode)
-                    if not folder and not (stat.S_ISREG(st.st_mode) and PHOTO.search(name)): continue
+                    if not folder and not (stat.S_ISREG(st.st_mode) and MEDIA.search(name)): continue
                     rows.append({'name':name,'path':f'{path}/{name}' if path else name,'dir':folder,'revision':revision(st)})
                 except (APIError, OSError): continue
             rows.sort(key=lambda r:(not r['dir'],r['name'].casefold(),r['name']))
@@ -158,7 +162,7 @@ class PhotoStore:
         self.write_check()
         if not re.fullmatch('[a-f0-9]{64}', expected or ''): raise APIError(400)
         p=parts(path)
-        if not p or not PHOTO.search(p[-1]): raise APIError(400)
+        if not p or not MEDIA.search(p[-1]): raise APIError(400)
         with self.lock, self.directory('/'.join(p[:-1])) as parent:
             st=os.stat(p[-1],dir_fd=parent,follow_symlinks=False)
             if not stat.S_ISREG(st.st_mode) or revision(st)!=expected: raise APIError(409)
@@ -181,7 +185,7 @@ class PhotoStore:
             if os.fstat(f.fileno()).st_size > 2*1024*1024: raise APIError(400)
             data=json.load(f)
         if not parts(data['path']) or data.get('kind','photo') not in ('photo','folder'):raise APIError(400)
-        if data.get('kind','photo')=='photo' and not PHOTO.search(data['path']):raise APIError(400)
+        if data.get('kind','photo')=='photo' and not MEDIA.search(data['path']):raise APIError(400)
         return data
 
     def trash_list(self):
@@ -328,7 +332,7 @@ class SharedArchive:
                                 state['matches'].append({'path':item['path'],'name':item['name'],'year':self.year(item['path'])})
                             else: state['issues']+=1
                         state['queue'].append([item['path'],depth+1,include or match,child_folder,0])
-                    elif include:
+                    elif include and PHOTO.search(item['name']):
                         db.execute('INSERT OR REPLACE INTO photos VALUES (?,?,?,?,?,?,?)',
                             (ident,state['generation'],item['path'],item['name'],item['revision'],self.year(item['path']),folder))
                 if data['next'] is not None: state['queue'].append([path,depth,include,folder,data['next']])
@@ -784,7 +788,7 @@ class FileManager:
         with self.store.lock,self.store.directory('/'.join(p[:-1])) as fd:
             st=os.stat(p[-1],dir_fd=fd,follow_symlinks=False)
             if not (stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode)) or revision(st)!=data['revision']:raise APIError(409)
-            if stat.S_ISREG(st.st_mode) and (not PHOTO.search(p[-1]) or name.rsplit('.',1)[-1].lower()!=p[-1].rsplit('.',1)[-1].lower()):raise APIError(400)
+            if stat.S_ISREG(st.st_mode) and (not MEDIA.search(p[-1]) or name.rsplit('.',1)[-1].lower()!=p[-1].rsplit('.',1)[-1].lower()):raise APIError(400)
             # Destination directory must exist; no implicit parent creation.
             with self.store.directory(destination):pass
             settings,records=self.snapshot(old,new)
@@ -841,6 +845,126 @@ class FileManager:
             settings,records=self.snapshot(meta['path'],meta['path'],meta)
             plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
             return self.execute(opid,plan)
+
+class VideoUploads:
+    """Session-owned, durable 8MiB chunks. Only complete videos are published, never overwritten."""
+    def __init__(self,store,settings):self.store=store;self.path=settings.root/'video-uploads.sqlite3'
+    @contextlib.contextmanager
+    def db(self):
+        with contextlib.closing(sqlite3.connect(self.path,timeout=10)) as db,db:
+            os.chmod(self.path,0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY,owner TEXT,payload TEXT)')
+            yield db
+    def save(self,db,data,owner):db.execute('INSERT OR REPLACE INTO uploads VALUES (?,?,?)',(data['id'],owner,json.dumps(data,ensure_ascii=False)))
+    def get(self,db,ident,owner):
+        if not isinstance(ident,str) or not re.fullmatch(r'[a-f0-9]{32}',ident):raise APIError(400)
+        row=db.execute('SELECT owner,payload FROM uploads WHERE id=?',(ident,)).fetchone()
+        if not row:raise APIError(404)
+        if not hmac.compare_digest(row[0],owner):raise APIError(403)
+        return json.loads(row[1])
+    @contextlib.contextmanager
+    def parent(self,data):
+        with self.store.directory(data['path']) as parent:
+            st=os.fstat(parent)
+            if [st.st_dev,st.st_ino]!=data['parent']:raise APIError(409)
+            yield parent
+    @contextlib.contextmanager
+    def temporary(self,data,parent):
+        fd=os.open('.our-story-video-'+data['id'],os.O_RDWR|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+        try:
+            st=os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode) or [st.st_dev,st.st_ino]!=data['identity']:raise APIError(409)
+            if st.st_size<data['offset']:raise APIError(409)
+            if st.st_size>data['offset']:os.ftruncate(fd,data['offset']);os.fsync(fd)
+            yield fd
+        finally:os.close(fd)
+    def result(self,data):return {key:data[key] for key in ('id','offset','size','chunks','done')}
+    def clean(self,db):
+        for ident,raw in db.execute('SELECT id,payload FROM uploads').fetchall():
+            data=json.loads(raw)
+            if time.time()-data['updated']<48*3600:continue
+            try:
+                with self.parent(data) as parent:
+                    name='.our-story-video-'+ident
+                    try:
+                        st=os.stat(name,dir_fd=parent,follow_symlinks=False)
+                        if stat.S_ISREG(st.st_mode) and [st.st_dev,st.st_ino]==data['identity']:os.unlink(name,dir_fd=parent);os.fsync(parent)
+                    except FileNotFoundError:pass
+                db.execute('DELETE FROM uploads WHERE id=?',(ident,))
+            except (OSError,APIError):pass
+    def start(self,data,owner):
+        self.store.write_check()
+        if set(data)!={'action','path','name','size','fingerprint'}:raise APIError(400)
+        path=data['path'];name=data['name'];size=data['size'];fingerprint=data['fingerprint'];parts(path)
+        if len(parts(name))!=1 or not VIDEO.search(name) or type(size) is not int or not 0<size<=MAX_VIDEO or not isinstance(fingerprint,str) or not re.fullmatch(r'[a-f0-9]{64}',fingerprint):raise APIError(400)
+        with self.store.lock,self.db() as db:
+            self.clean(db)
+            for raw, in db.execute('SELECT payload FROM uploads WHERE owner=?',(owner,)):
+                existing=json.loads(raw)
+                if all(existing[key]==data[key] for key in ('path','name','size','fingerprint')):
+                    with self.parent(existing) as parent:
+                        if existing['done']:
+                            st=os.stat(name,dir_fd=parent,follow_symlinks=False)
+                            if [st.st_dev,st.st_ino]!=existing['identity']:raise APIError(409)
+                        else:
+                            with self.temporary(existing,parent):pass
+                    return self.result(existing)
+            if db.execute("SELECT count(*) FROM uploads WHERE json_extract(payload,'$.done')=0").fetchone()[0]>=128:raise APIError(429)
+            if db.execute("SELECT count(*) FROM uploads WHERE owner=? AND json_extract(payload,'$.done')=0",(owner,)).fetchone()[0]>=32:raise APIError(429)
+            with self.store.directory(path) as parent:
+                try:os.stat(name,dir_fd=parent,follow_symlinks=False)
+                except FileNotFoundError:pass
+                else:raise APIError(409)
+                if shutil.disk_usage('/proc/self/fd/'+str(parent)).free<size+64*1024*1024:raise APIError(507)
+                ident=uuid.uuid4().hex;temp='.our-story-video-'+ident
+                fd=os.open(temp,os.O_RDWR|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=parent)
+                try:
+                    st=os.fstat(fd);parent_st=os.fstat(parent);os.fsync(fd);os.fsync(parent)
+                    value={'id':ident,'path':path,'name':name,'size':size,'fingerprint':fingerprint,'parent':[parent_st.st_dev,parent_st.st_ino],'identity':[st.st_dev,st.st_ino],'offset':0,'chunks':[],'done':False,'updated':time.time()};self.save(db,value,owner)
+                except Exception:os.unlink(temp,dir_fd=parent);raise
+                finally:os.close(fd)
+                return self.result(value)
+    def chunk(self,ident,owner,offset,digest,stream,length):
+        self.store.write_check()
+        if not isinstance(digest,str) or not re.fullmatch(r'[a-f0-9]{64}',digest) or not 0<length<=VIDEO_CHUNK or offset<0:raise APIError(400)
+        raw=bytearray()
+        while len(raw)<length:
+            piece=stream.read(min(65536,length-len(raw)))
+            if not piece:raise APIError(400)
+            raw.extend(piece)
+        if hashlib.sha256(raw).hexdigest()!=digest:raise APIError(409)
+        with self.store.lock,self.db() as db:
+            data=self.get(db,ident,owner)
+            if any(c=={'offset':offset,'size':length,'hash':digest} for c in data['chunks']):return self.result(data)
+            if data['done'] or offset!=data['offset'] or length!=min(VIDEO_CHUNK,data['size']-offset):raise APIError(409)
+            with self.parent(data) as parent,self.temporary(data,parent) as fd:
+                os.lseek(fd,offset,os.SEEK_SET);view=memoryview(raw)
+                while view:written=os.write(fd,view);view=view[written:]
+                os.fsync(fd)
+            data['offset']+=length;data['chunks'].append({'offset':offset,'size':length,'hash':digest});data['updated']=time.time();self.save(db,data,owner);return self.result(data)
+    def finish(self,ident,owner):
+        self.store.write_check()
+        with self.store.lock,self.db() as db:
+            data=self.get(db,ident,owner)
+            with self.parent(data) as parent:
+                if data['done']:
+                    st=os.stat(data['name'],dir_fd=parent,follow_symlinks=False)
+                    if [st.st_dev,st.st_ino]!=data['identity']:raise APIError(409)
+                    return self.result(data)
+                if data['offset']!=data['size']:raise APIError(409)
+                with self.temporary(data,parent) as fd:
+                    header=os.pread(fd,64,0);webm=data['name'].lower().endswith('.webm')
+                    if not (header.startswith(b'\x1aE\xdf\xa3') if webm else header[4:8]==b'ftyp'):raise APIError(415)
+                    os.fchmod(fd,0o640);os.fsync(fd)
+                    try:os.link('.our-story-video-'+ident,data['name'],src_dir_fd=parent,dst_dir_fd=parent,follow_symlinks=False)
+                    except FileExistsError:
+                        st=os.stat(data['name'],dir_fd=parent,follow_symlinks=False)
+                        if [st.st_dev,st.st_ino]!=data['identity']:raise APIError(409)
+                    os.fsync(parent)
+                # Commit receipt first. A crash can leave a harmless hidden hard link, never lose a completed file.
+                data['done']=True;data['updated']=time.time();self.save(db,data,owner);db.commit()
+                os.unlink('.our-story-video-'+ident,dir_fd=parent);os.fsync(parent)
+                return self.result(data)
 
 class PermanentTrash:
     """Password-confirmed, session-bound deletion of explicitly selected trash IDs only."""
@@ -1008,6 +1132,7 @@ class Handler(BaseHTTPRequestHandler):
     def cors(self):
         self.send_header('Access-Control-Allow-Origin',self.server.origin)
         self.send_header('Vary','Origin')
+        self.send_header('Access-Control-Expose-Headers','Content-Length, Content-Range, Accept-Ranges, Content-Disposition, ETag')
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
@@ -1022,12 +1147,12 @@ class Handler(BaseHTTPRequestHandler):
         elif not hmac.compare_digest(value.encode(),('Bearer '+self.server.token).encode()): raise APIError(401)
     def do_OPTIONS(self):
         if self.headers.get('Origin')!=self.server.origin: self.reply(403,{'error':'forbidden'}); return
-        self.send_response(204); self.cors(); self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers','Authorization, Content-Type'); self.end_headers()
+        self.send_response(204); self.cors(); self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers','Authorization, Content-Type, Range'); self.end_headers()
     def do_GET(self): self.run_request(False)
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
         route=urlsplit(self.path).path
-        metadata={'/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
+        metadata={'/api/video-upload', '/api/video-upload-chunk', '/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
         if route=='/api/upload':
             # Long transfers serialize file writes without holding up record reads/writes.
             with self.server.store.lock:
@@ -1040,7 +1165,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.dispatch_request(post)
         elif route in metadata:
             # File operations take the photo lock first; a slow upload must not freeze records.
-            context=self.server.store.lock if route in ('/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit') else contextlib.nullcontext()
+            context=self.server.store.lock if route in ('/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit','/api/video-upload','/api/video-upload-chunk') else contextlib.nullcontext()
             with context,self.server.metadata_lock:
                 try:
                     self.authorized()
@@ -1064,6 +1189,27 @@ class Handler(BaseHTTPRequestHandler):
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
+            if route.path in ('/api/video-upload','/api/video-upload-chunk'):
+                if self.server.videos is None or not self.server.auth.configured():raise APIError(409)
+                owner=hashlib.sha256(self.headers.get('Authorization','')[7:].encode()).hexdigest()
+                if self.headers.get('Transfer-Encoding'):raise APIError(400)
+                if route.path=='/api/video-upload-chunk':
+                    if not post or set(query)!={'id','offset','hash'} or self.headers.get_content_type()!='application/octet-stream':raise APIError(400)
+                    self.reply(200,self.server.videos.chunk(q('id'),owner,int(q('offset')),q('hash'),self.rfile,int(self.headers.get('Content-Length','0'))));return
+                if not post:raise APIError(405)
+                length=int(self.headers.get('Content-Length','0'))
+                if length<=0 or length>8192 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                data=json.loads(self.rfile.read(length))
+                if not isinstance(data,dict):raise APIError(400)
+                if data.get('action')=='init':result=self.server.videos.start(data,owner)
+                elif data.get('action')=='finish' and set(data)=={'action','id'}:
+                    result=self.server.videos.finish(data['id'],owner)
+                    if self.server.files is not None:self.server.files.invalidate()
+                else:raise APIError(400)
+                self.reply(200,result);return
+            if route.path in ('/api/video','/api/video-download'):
+                if post or set(query)!={'path','revision'}:raise APIError(400)
+                self.send_video(q('path'),q('revision'),route.path.endswith('download'));return
             if route.path in ('/api/trash-purge/prepare','/api/trash-purge/commit'):
                 if not post:raise APIError(405)
                 if self.server.permanent is None or not self.server.auth.configured():raise APIError(409)
@@ -1100,7 +1246,7 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'video':True,'videoUpload':store.writable and self.server.videos is not None and self.server.auth.configured(),'maxVideo':MAX_VIDEO,'videoChunk':VIDEO_CHUNK,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash':
@@ -1173,6 +1319,33 @@ class Handler(BaseHTTPRequestHandler):
         length=int(self.headers.get('Content-Length','0'))
         if length<=0 or length>2048 or self.headers.get_content_type()!='application/json': raise APIError(400)
         return json.loads(self.rfile.read(length))
+    def send_video(self,path,expected,download=False):
+        if not VIDEO.search(path) or not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
+        with self.server.store.photo(path,media=True) as (fd,st):
+            if revision(st)!=expected:raise APIError(409)
+            size=st.st_size;start=0;end=size-1;ranged=self.headers.get('Range')
+            if ranged:
+                match=re.fullmatch(r'bytes=([0-9]{0,20})-([0-9]{0,20})',ranged)
+                if not match or not any(match.groups()) or not size:
+                    self.send_response(416);self.cors();self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+                first,last=match.groups()
+                if first:start=int(first);end=min(int(last),end) if last else min(start+VIDEO_CHUNK-1,end)
+                else:start=max(0,size-int(last))
+                if start>=size or end<start:
+                    self.send_response(416);self.cors();self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
+            self.send_response(206 if ranged else 200);self.cors()
+            mime={'mp4':'video/mp4','m4v':'video/mp4','mov':'video/quicktime','webm':'video/webm'}[path.rsplit('.',1)[-1].lower()]
+            self.send_header('Content-Type','application/octet-stream' if download else mime);self.send_header('Accept-Ranges','bytes');self.send_header('ETag','"'+expected+'"')
+            if ranged:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+            self.send_header('Content-Length',str(max(0,end-start+1)))
+            if download:self.send_header('Content-Disposition',"attachment; filename=video; filename*=UTF-8''"+quote(path.split('/')[-1]))
+            self.end_headers();os.lseek(fd,start,os.SEEK_SET);remaining=end-start+1
+            while remaining>0:
+                if revision(os.fstat(fd))!=expected:self.close_connection=True;break
+                chunk=os.read(fd,min(65536,remaining))
+                if not chunk:break
+                self.wfile.write(chunk);remaining-=len(chunk)
+
     def send_photo(self,path,route,expected=''):
         if expected and not re.fullmatch(r'[a-f0-9]{64}',expected): raise APIError(400)
         store=self.server.store
@@ -1227,6 +1400,7 @@ class Server(ThreadingHTTPServer):
         self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.metadata_lock=threading.RLock()
         self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None
+        self.videos=VideoUploads(store,settings) if settings is not None else None
         self.permanent=PermanentTrash(store,settings,self.journal) if settings is not None else None
         if self.files is not None:
             try:self.files.recover();self.permanent.recover()

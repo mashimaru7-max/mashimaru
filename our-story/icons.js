@@ -1,5 +1,6 @@
 // Local, font-independent icon set. No decorative arrows on actions.
 const paths={
+ video:'<rect x="3" y="5" width="13" height="14" rx="3"/><path d="m16 10 5-3v10l-5-3Z"/>',
  photo:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.3" cy="9" r="1.4"/><path d="m4 17 5-5 3.4 3 3.8-5 4.8 7"/>',
  home:'<path d="m3 11 9-8 9 8M5 10v11h14V10"/><path d="M9 21v-7h6v7"/><path d="m12 8-1.2-1.1a1.3 1.3 0 0 0-1.8 1.9l3 2.7 3-2.7a1.3 1.3 0 0 0-1.8-1.9Z"/>',
  sprout:'<path d="M12 21v-9M12 15C4 15 3 10 3 5c6 0 10 2 9 10ZM12 12c0-6 4-9 10-9 0 6-3 10-10 9ZM5 21h14"/>',

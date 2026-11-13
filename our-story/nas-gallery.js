@@ -1,8 +1,8 @@
-import {selectLoaded} from './nas-selection.mjs?v=20261114-purge1';
+import {selectLoaded} from './nas-selection.mjs?v=20261114-video1';
 import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
-import {icon} from "./icons.js?v=20261113-albumlook2";
-import { NasActions } from "./nas-actions.js?v=20261114-trash-all1";
-import { NasClient } from "./nas-client.mjs?v=20261114-purge1";
+import {icon} from "./icons.js?v=20261114-video1";
+import { NasActions } from "./nas-actions.js?v=20261114-video1";
+import { NasClient } from "./nas-client.mjs?v=20261114-video1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
@@ -56,6 +56,7 @@ export class NasGallery {
     this.active = 0;
     this.thumbnails = true;
     this.viewerURL = null;
+    this.videoPreviews=new AbortController();this.videoHandle=null;
     this.viewerVersion = 0;
     this.connectVersion = 0;
     this.connecting = false;
@@ -65,6 +66,7 @@ export class NasGallery {
     document.body.append(this.dialog);
     this.dialog.addEventListener("close", () => {
       this.viewerVersion++;
+      const video=this.dialog.querySelector('video');if(video){video.pause();video.removeAttribute('src');video.load();}void this.videoHandle?.release();this.videoHandle=null;
       this.actions.cancel();
       if (this.viewerURL) URL.revokeObjectURL(this.viewerURL);
       this.viewerURL = null;
@@ -304,6 +306,7 @@ export class NasGallery {
     };
   }
   resetImages() {
+    this.videoPreviews.abort();this.videoPreviews=new AbortController();
     this.observer?.disconnect();
     this.moreObserver?.disconnect();
     this.near.clear();
@@ -520,7 +523,7 @@ export class NasGallery {
       .join("");
     const top = this.path.split("/").slice(0, -1).join("/");
     const photoCount = this.items.filter((x) => !x.dir).length;
-    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · ${this.features.upload ? "사진 관리 가능" : "읽기 전용 API"} <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}${this.features.fileOperationsBlocked?'<p class="nas-message" role="alert">이전 파일 작업의 복구 확인이 필요해요. 파일 위치를 확인하기 전에는 새 정리를 진행하지 마세요.</p>':''}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">상위 폴더</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div><div class="nas-action-bar"><button data-nas-action="upload">＋ 사진 업로드</button><button data-nas-action="trash-list">사진·폴더 휴지통</button><button data-nas-action="mkdir">새 폴더</button><button data-nas-action="manage">사진·폴더 정리</button><button data-nas-action="selection" aria-pressed="${this.selecting}">${this.selecting?'선택 끝내기':'선택하기'}</button><span class="fine">${this.features.upload ? "삭제한 사진은 휴지통에서 복원할 수 있어요." : "사진 쓰기 설정을 활성화하면 업로드·휴지통·폴더 정리를 사용할 수 있어요."}</span></div>${this.selecting?`<div class="nas-selection-bar"><strong data-selection-count>${this.selection.size}개 선택</strong><button data-nas-action="select-loaded">불러온 항목 전체 선택</button><button data-nas-action="clear-selection">선택 해제</button><button class="nas-danger" data-nas-action="trash-selection" ${this.selection.size?'':'disabled'}>선택 항목 휴지통</button><small>${this.features.folderTrash?'폴더를 선택하면 하위 내용 전체가 함께 이동돼요.':'현재는 사진만 선택할 수 있어요. 폴더 선택은 NAS 업데이트 후 활성화돼요.'}</small></div>`:''}${photoCount ? '<p class="fine nas-preview-note">개수 제한 없이 스크롤에 맞춰 미리보기를 불러와요. 원본 API에서는 데이터 사용량이 클 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<div class="nas-item-wrap">${this.selecting?`<label class="nas-selection-check"><input type="checkbox" data-nas-select="${index}" aria-label="${esc(item.name)} 선택" ${this.selection.has(item.path)?'checked':''} ${item.dir&&!this.features.folderTrash?'disabled':''}></label>`:''}<button class="nas-entry ${item.dir ? "nas-folder" : ""} ${this.selection.has(item.path)?'is-selected':''}" ${this.selecting?`aria-pressed="${this.selection.has(item.path)}"`:''} data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">' + icon("photo") + '</span>'}</span><strong>${esc(item.name)}</strong><small>${this.selecting?(item.dir?'폴더 · 하위 내용 전체':'사진 선택'):item.dir ? "폴더 열기" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기"}</small></button></div>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
+    this.host.innerHTML = `<div class="nas-status"><span><i></i> NAS 연결됨 · ${this.features.upload ? "사진 관리 가능" : "읽기 전용 API"} <small>${this.remembered ? "· 이 기기에 연결 기억됨" : ""}</small></span><button data-nas-action="disconnect">${this.remembered ? "저장 정보 지우기" : "연결 끊기"}</button></div>${this.persistMessage ? `<p class="nas-message" role="alert">${esc(this.persistMessage)}</p>` : ""}${this.features.fileOperationsBlocked?'<p class="nas-message" role="alert">이전 파일 작업의 복구 확인이 필요해요. 파일 위치를 확인하기 전에는 새 정리를 진행하지 마세요.</p>':''}<nav class="nas-crumbs" aria-label="사진 폴더 경로"><button data-nas-action="folder" data-path="${esc(top)}" ${this.path ? "" : "disabled"} aria-label="상위 폴더">상위 폴더</button><button data-nas-action="folder" data-path="">/photo</button>${crumbs}</nav><div class="nas-tools"><p role="status">${this.loading ? "사진 목록을 불러오는 중…" : `현재 폴더 ${this.total}개 항목 · ${this.items.length}개 표시`}</p>${photoCount ? `<button data-nas-action="thumbs" aria-pressed="${this.thumbnails}" ${this.loading ? "disabled" : ""}>${this.thumbnails ? "자동 미리보기 끄기" : "사진 미리보기 켜기"}</button>` : ""}</div><div class="nas-action-bar"><button data-nas-action="upload">＋ 사진·영상 업로드</button><button data-nas-action="trash-list">사진·영상·폴더 휴지통</button><button data-nas-action="mkdir">새 폴더</button><button data-nas-action="manage">사진·영상·폴더 정리</button><button data-nas-action="selection" aria-pressed="${this.selecting}">${this.selecting?'선택 끝내기':'선택하기'}</button><span class="fine">${this.features.upload ? "삭제한 사진은 휴지통에서 복원할 수 있어요." : "사진 쓰기 설정을 활성화하면 업로드·휴지통·폴더 정리를 사용할 수 있어요."}</span></div>${this.selecting?`<div class="nas-selection-bar"><strong data-selection-count>${this.selection.size}개 선택</strong><button data-nas-action="select-loaded">불러온 항목 전체 선택</button><button data-nas-action="clear-selection">선택 해제</button><button class="nas-danger" data-nas-action="trash-selection" ${this.selection.size?'':'disabled'}>선택 항목 휴지통</button><small>${this.features.folderTrash?'폴더를 선택하면 하위 내용 전체가 함께 이동돼요.':'현재는 사진만 선택할 수 있어요. 폴더 선택은 NAS 업데이트 후 활성화돼요.'}</small></div>`:''}${photoCount ? '<p class="fine nas-preview-note">개수 제한 없이 스크롤에 맞춰 미리보기를 불러와요. 원본 API에서는 데이터 사용량이 클 수 있어요.</p>' : ""}${this.error ? `<div class="nas-message" role="alert"><p>${esc(this.error)}</p><button data-nas-action="retry">다시 불러오기</button></div>` : ""}<div class="nas-grid" aria-busy="${this.loading}">${this.items.map((item, index) => `<div class="nas-item-wrap">${this.selecting?`<label class="nas-selection-check"><input type="checkbox" data-nas-select="${index}" aria-label="${esc(item.name)} 선택" ${this.selection.has(item.path)?'checked':''} ${item.dir&&!this.features.folderTrash?'disabled':''}></label>`:''}<button class="nas-entry ${item.dir ? "nas-folder" : ""} ${this.selection.has(item.path)?'is-selected':''}" ${this.selecting?`aria-pressed="${this.selection.has(item.path)}"`:''} data-nas-action="${item.dir ? "folder" : "image"}" data-path="${esc(item.path)}" data-index="${index}"><span class="nas-thumb">${this.urls.has(item.path) ? `<img src="${this.urls.get(item.path)}" alt="" decoding="async">` : item.dir ? '<span class="nas-folder-glyph">▰</span>' : '<span class="nas-photo-glyph">' + icon(item.video?'video':'photo') + '</span>'}</span>${item.video?'<span class="nas-video-badge">영상</span>':''}<strong>${esc(item.name)}</strong><small>${item.video?(this.selecting?'영상 선택':'영상 재생'):this.selecting?(item.dir?'폴더 · 하위 내용 전체':'사진 선택'):item.dir ? "폴더 열기" : this.thumbErrors.has(item.path) ? "눌러서 사진 확인" : "사진 크게 보기"}</small></button></div>`).join("")}${this.loading && !this.items.length ? skeleton.repeat(6) : ""}</div>${!this.loading && !this.error && !this.items.length ? '<div class="empty">이 폴더에는 표시할 사진·영상이나 하위 폴더가 없어요.</div>' : ""}${this.next !== null ? `<button class="nas-more" data-nas-action="more" ${this.loading ? "disabled" : ""}>${this.loading ? "불러오는 중…" : "사진 더 불러오기"}</button>` : ""}`;
     if (this.thumbnails) this.startThumbnails();
     const more = this.host.querySelector(".nas-more");
     if (more && !this.loading && !this.error && "IntersectionObserver" in window) {
@@ -573,7 +576,7 @@ export class NasGallery {
       if (!this.near.has(path)) { this.requested.delete(path); continue; }
       this.active++;
       this.updateThumb(path, null, true);
-      (this.features.thumbnails ? this.client.thumbnail(path) : this.client.image(path))
+      (this.items.find(item=>item.path===path)?.video ? this.client.videoPoster(path,this.items.find(item=>item.path===path).revision,this.videoPreviews.signal) : this.features.thumbnails ? this.client.thumbnail(path) : this.client.image(path))
         .then((blob) => {
           if (version !== this.imageVersion || !this.host || !this.connected)
             return;
@@ -616,10 +619,26 @@ export class NasGallery {
       const el = document.createElement("span");
       el.className = "nas-skeleton";
       thumb.append(el);
-    } else thumb.innerHTML = icon("photo");
+    } else thumb.innerHTML = icon(this.items.find(item=>item.path===path)?.video?'video':'photo');
+  }
+  async openVideo(item) {
+    if(!this.features.video){this.notify('영상 기능은 NAS 서버 업데이트 후 사용할 수 있어요.');return;}
+    if(this.dialog.open)return;
+    const version=++this.viewerVersion;
+    this.dialog.innerHTML=`<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">MOMENTS IN MOTION</span><h2 class="nas-file-title">${esc(item.name)}</h2><div class="nas-video-viewer"><video controls playsinline preload="metadata" aria-label="${esc(item.name)}"></video><p role="status">영상 연결을 준비하고 있어요…</p></div><div class="nas-view-actions"><button data-photo-action="download">원본 다운로드</button><button class="nas-danger" data-photo-action="trash">휴지통으로 이동</button></div><p class="fine">필요한 구간만 받아 재생해요. 브라우저가 지원하지 않는 영상은 원본을 다운로드해 주세요.</p>`;
+    this.actions.bindViewer(item);this.dialog.showModal();
+    try{
+      const handle=await this.client.videoHandle(item.path,item.revision);
+      if(version!==this.viewerVersion||!this.dialog.open||!this.connected){await handle.release();return;}
+      this.videoHandle=handle;const video=this.dialog.querySelector('video'),status=this.dialog.querySelector('[role="status"]');
+      video.onloadeddata=()=>{status.textContent='재생 버튼을 눌러 감상해 주세요.';};
+      video.onerror=()=>{status.textContent='이 브라우저에서 재생할 수 없는 형식이거나 연결이 끊겼어요. 원본 다운로드를 이용하거나 다시 로그인해 주세요.';};
+      video.src=handle.url;video.load();
+    }catch(error){if(version===this.viewerVersion&&this.dialog.open)this.dialog.querySelector('[role="status"]').textContent=error.message;}
   }
   async openImage(item) {
     if (!item || item.dir || !this.connected) return;
+    if(item.video){await this.openVideo(item);return;}
     if (this.dialog.open) return;
     const version = ++this.viewerVersion;
     this.dialog.innerHTML = `<button class="close" data-nas-close aria-label="닫기">×</button><span class="eyebrow">A MOMENT FROM OUR PHOTO SHELF</span><h2 class="nas-file-title">${esc(item.name)}</h2><div class="nas-viewer" aria-busy="true">${skeleton}<p role="status">사진을 불러오는 중…</p></div><div class="nas-view-actions"><button data-photo-action="download">원본 다운로드</button><button data-photo-action="home">♡ 홈 대표 사진으로</button><button class="nas-danger" data-photo-action="trash">휴지통으로 이동</button></div><p class="fine">대표 사진 선택은 가족 공통 설정에 저장돼요. 사진 삭제는 휴지통으로 처리해요.</p>`;
