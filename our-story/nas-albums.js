@@ -10,7 +10,7 @@ export class NasAlbums {
     this.ready=this.vault.load().then(d=>{this.bindings=validateAlbumBindings(d);}).catch(()=>this.notify('앨범 폴더 설정을 읽지 못했어요. 다시 연결해 주세요.'));
     this.dialog=document.createElement('dialog');this.dialog.className='nas-dialog nas-folder-picker';this.dialog.setAttribute('aria-label','앨범 사진 폴더 선택');document.body.append(this.dialog);
     this.dialog.addEventListener('close',()=>{this.settingVersion++;this.dialog.replaceChildren();});
-    this.timer=setInterval(()=>{if(this.host && this.g.connected && document.visibilityState==='visible') {this.cache.clear();this.pending.clear();void this.paint();this.onChange(false);}},60000);
+    this.timer=setInterval(()=>{if(document.visibilityState==='visible')void this.poll();},60000);
     window.addEventListener('pagehide',()=>this.release());
   }
   sync() {
@@ -37,7 +37,16 @@ export class NasAlbums {
     }).finally(()=>{if(this.pending.get(cacheKey)===promise)this.pending.delete(cacheKey);});
     this.pending.set(cacheKey,promise);return promise;
   }
-  release() {this.version++;for(const url of this.urls)URL.revokeObjectURL(url);this.urls=[];this.host=null;}
+  signature(data) {return JSON.stringify({items:data.items.map(i=>[i.path,i.revision||'']),limited:data.limited,issues:data.issues});}
+  async poll() {
+    const host=this.host,key=this.key,version=this.version;if(!host || !this.g.connected)return;
+    try {
+      const data=await this.collection(key,{refresh:true});
+      if(host!==this.host || version!==this.version || !this.g.connected)return;
+      if(this.signature(data)!==this.lastSignature){void this.paint();this.onChange(false);}
+    } catch { /* Keep the current preview on temporary errors; auth expiry clears it separately. */ }
+  }
+  release() {this.lastSignature=null;this.version++;for(const url of this.urls)URL.revokeObjectURL(url);this.urls=[];this.host=null;}
   mount(host,key='home') {this.release();this.host=host;this.key=key;void this.paint();}
   async paint() {
     const host=this.host,key=this.key;if(!host)return;
@@ -47,6 +56,7 @@ export class NasAlbums {
     try {
       const data=await this.collection(key);
       if(version!==this.version || !host.isConnected || !this.g.connected)return;
+      this.lastSignature=this.signature(data);
       const path=this.folder(key),title=key==='home'?'NAS에서 꺼낸 우리 순간들':`${labels[key]} 사진앨범`;
       host.innerHTML=`<div class="section-head nas-album-heading"><div><span class="eyebrow">AUTOMATIC PHOTO ALBUM</span><h2>${title}</h2></div><div class="nas-album-controls"><button data-album-picker>사진 폴더 ${path===undefined && key!=='home'?'연결':'변경'}</button><button data-album-refresh>새로 불러오기</button></div></div>${data.unbound?'<div class="nas-album-empty"><h3>사진마다 고르지 않아도 괜찮아요.</h3><p>사진이 있는 폴더를 한 번 연결하면 하위 폴더의 사진까지 자동으로 보여드려요.</p><button class="primary" data-album-picker>사진 폴더 연결</button></div>':`<p class="fine nas-album-source">연결 폴더: ${esc(path===undefined?'/photo 전체':path||'/photo')} · 하위 폴더 포함 · 파일 목록 순서</p>${data.items.length?`<div class="${key==='home'?'nas-album-grid':'nas-album-spread'}">${data.items.slice(0,key==='home'?8:12).map((item,i)=>`<button class="nas-album-photo ${i===0?'nas-album-lead':''}" data-album-photo="${i}"><span class="nas-auto-image">${'<span class="nas-skeleton"></span>'}</span><span>${esc(item.name)}</span></button>`).join('')}</div>`:'<div class="nas-album-empty"><p>이 범위에서 표시할 사진을 찾지 못했어요. 사진이 있는 하위 폴더를 직접 연결해 보세요.</p></div>'}<div class="nas-album-foot"><p class="fine">${data.limited?'미리보기 일부를 골라 표시했어요. 전체 사진은 보관함에서 볼 수 있어요.':'사진 파일과 여행·성장 이야기는 따로 보관돼요.'}${data.issues?' 읽지 못한 하위 폴더가 있어요.':''}</p><button data-album-all>이 폴더의 전체 사진 보기</button></div>`}`;
       host.onclick=e=>{
