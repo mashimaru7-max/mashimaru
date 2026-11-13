@@ -342,3 +342,4 @@ button:disabled {
 /* Keep the mobile header's absolute nav rule out of the folder breadcrumbs. */
 .nas-crumbs{position:static;inset:auto;justify-content:flex-start;width:auto;min-height:36px}
 .nas-home-shelf .primary{padding:12px 20px;border-radius:24px;font-size:13px;line-height:1.5;transition:background .2s}
+.nas-home-shelf h2{word-break:keep-all;text-wrap:balance}

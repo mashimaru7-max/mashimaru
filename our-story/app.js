@@ -1,6 +1,6 @@
-import { NasHome } from "./nas-home.js?v=20261113-media2";
+import { NasHome } from "./nas-home.js?v=20261113-cleanbuttons1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-media2";
+import { NasGallery } from "./nas-gallery.js?v=20261113-cleanbuttons1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -73,7 +73,7 @@ function card(r, type) {
   return `<button class="memory" data-action="detail" data-type="${type}" data-id="${r.id}">${img(r.image, 'loading="lazy"')}<h3>${esc(r.title)}</h3><small>${fmt(r.date)} · ${type === "trip" ? esc(r.city) : esc(r.target)} · 예시</small></button>`;
 }
 function home() {
-  main.innerHTML = `<section class="hero">${img("lake", 'fetchpriority="high"')}<div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<br>이야기<span class="hand"> ♡</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#travel">우리의 추억 산책하기 &nbsp; ↗</a></div><span class="photo-note">풍경 사진 · 디자인 예시</span></section><section><div class="section-head"><div><span class="eyebrow">TWO CHAPTERS, ONE FAMILY</span><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">❧</span></h2></div></div><div class="gateway"><a href="#travel" class="album-card">${img("beach")}<div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>낯선 곳에서도, 함께라서 우리 집</p></div><span class="arrow">↗</span></div></a><a href="#growth" class="album-card">${img("season")}<div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div><span class="arrow">↗</span></div></a></div></section><section><div class="section-head"><h2>요즘, 우리의 순간들</h2><a href="#gallery">추억 모두 보기 ↗</a></div><div class="recent-grid">${[
+  main.innerHTML = `<section class="hero">${img("lake", 'fetchpriority="high"')}<div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<br>이야기<span class="hand"> ♡</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#travel">우리의 추억 산책하기</a></div><span class="photo-note">풍경 사진 · 디자인 예시</span></section><section><div class="section-head"><div><span class="eyebrow">TWO CHAPTERS, ONE FAMILY</span><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">❧</span></h2></div></div><div class="gateway"><a href="#travel" class="album-card">${img("beach")}<div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>낯선 곳에서도, 함께라서 우리 집</p></div></div></a><a href="#growth" class="album-card">${img("season")}<div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div></div></a></div></section><section><div class="section-head"><h2>요즘, 우리의 순간들</h2><a href="#gallery">추억 모두 보기</a></div><div class="recent-grid">${[
     ...trips.map((r) => ({ ...r, type: "trip" })),
     ...growth.map((r) => ({ ...r, type: "growth" })),
   ]
@@ -83,7 +83,7 @@ function home() {
     .join("")}</div></section>${stats()}`;
   const shelf=document.createElement("section");
   shelf.className="nas-home-shelf";
-  shelf.innerHTML='<span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>사진 한 장에서, 우리 이야기로</h2><p>NAS 사진을 둘러보고 마음에 드는 순간을 홈 대표 사진으로 골라 보세요.</p><a class="primary" href="#nas">우리 사진 보관함 열기 ↗</a>';
+  shelf.innerHTML='<span class="eyebrow">OUR PRIVATE PHOTO SHELF</span><h2>사진 한 장에서, 우리 이야기로</h2><p>NAS 사진을 둘러보고 마음에 드는 순간을 홈 대표 사진으로 골라 보세요.</p><a class="primary" href="#nas">우리 사진 보관함 열기</a>';
   main.querySelector(".hero").after(shelf);
   void homePhoto.paint();
 }
@@ -108,7 +108,7 @@ function tripList() {
     ? rows
         .map(
           (t) =>
-            `<article class="record-row"><small>${fmt(t.date)}</small>${img(t.image, 'loading="lazy"')}<div><h3>${esc(t.title)}</h3><p>${esc(t.country)} · ${esc(t.city)} · ${esc(t.author)} 작성 · 예시</p></div><button data-action="detail" data-type="trip" data-id="${t.id}">펼쳐보기 ↗</button></article>`,
+            `<article class="record-row"><small>${fmt(t.date)}</small>${img(t.image, 'loading="lazy"')}<div><h3>${esc(t.title)}</h3><p>${esc(t.country)} · ${esc(t.city)} · ${esc(t.author)} 작성 · 예시</p></div><button data-action="detail" data-type="trip" data-id="${t.id}">펼쳐보기</button></article>`,
         )
         .join("")
     : empty("찾는 여행이 없어요.");
@@ -198,7 +198,7 @@ function preview(t) {
   const el = $("#map-preview");
   el.hidden = false;
   el.className = "map-preview";
-  el.innerHTML = `${innerWidth <= 600 ? '<button class="preview-close" data-action="preview-close" aria-label="미리보기 닫기">×</button>' : ""}${img(t.image)}<h2>${esc(t.title)}</h2><small>${esc(t.country)} · ${esc(t.city)}</small><p>${fmt(t.date)} — ${fmt(t.end)} · 예시</p><button data-action="detail" data-type="trip" data-id="${t.id}">이 여행 펼쳐보기 ↗</button>`;
+  el.innerHTML = `${innerWidth <= 600 ? '<button class="preview-close" data-action="preview-close" aria-label="미리보기 닫기">×</button>' : ""}${img(t.image)}<h2>${esc(t.title)}</h2><small>${esc(t.country)} · ${esc(t.city)}</small><p>${fmt(t.date)} — ${fmt(t.end)} · 예시</p><button data-action="detail" data-type="trip" data-id="${t.id}">이 여행 펼쳐보기</button>`;
 }
 function filteredGrowth() {
   return growth
@@ -219,7 +219,7 @@ function growthList() {
     ? records
         .map(
           (r) =>
-            `<article class="record-row"><small>${fmt(r.date)}</small>${img(r.image, 'loading="lazy"')}<div><h3>${esc(r.title)}</h3><p>${esc(r.target)} · ${esc(r.category)} · ${esc(r.author)} 작성 · 예시</p></div><button data-action="detail" data-type="growth" data-id="${r.id}">읽어보기 ↗</button></article>`,
+            `<article class="record-row"><small>${fmt(r.date)}</small>${img(r.image, 'loading="lazy"')}<div><h3>${esc(r.title)}</h3><p>${esc(r.target)} · ${esc(r.category)} · ${esc(r.author)} 작성 · 예시</p></div><button data-action="detail" data-type="growth" data-id="${r.id}">읽어보기</button></article>`,
         )
         .join("")
     : empty("이 시기의 예시 기록이 없어요.");
@@ -281,7 +281,7 @@ function detail(type, id) {
   const r = (type === "trip" ? trips : growth).find((r) => r.id === id);
   if (!r) return;
   modal(
-    `${badge}<h2>${esc(r.title)}</h2><small>${fmt(r.date)}${type === "trip" ? " — " + fmt(r.end) : " · " + esc(r.target) + " · " + esc(r.category)} · ${esc(r.author)} 작성</small>${img(r.image, 'class="detail-img"')}<p class="detail-body">${esc(r.body)}</p>${type === "trip" ? `<p class="fine">${esc(r.country)} · ${esc(r.city)}<br>함께한 가족: ${esc(r.members.join(", "))}<br>좌표 ${r.lat}, ${r.lng}</p>` : `${r.quote ? `<blockquote>“${esc(r.quote)}”</blockquote>` : ""}${r.height || r.weight ? `<p>키 ${esc(r.height || "미입력")} cm · 몸무게 ${esc(r.weight || "미입력")} kg</p>` : ""}${r.tripId ? `<button data-action="detail" data-type="trip" data-id="${esc(r.tripId)}">연결된 여행 보기 ↗</button>` : ""}`}<div class="detail-actions"><button data-action="edit" data-type="${type}" data-id="${r.id}">예시 수정</button><button data-action="delete" data-type="${type}" data-id="${r.id}">예시 삭제</button></div><p class="fine">원본 사진과 실제 가족 데이터에 영향을 주지 않는 예시 체험입니다.</p>`,
+    `${badge}<h2>${esc(r.title)}</h2><small>${fmt(r.date)}${type === "trip" ? " — " + fmt(r.end) : " · " + esc(r.target) + " · " + esc(r.category)} · ${esc(r.author)} 작성</small>${img(r.image, 'class="detail-img"')}<p class="detail-body">${esc(r.body)}</p>${type === "trip" ? `<p class="fine">${esc(r.country)} · ${esc(r.city)}<br>함께한 가족: ${esc(r.members.join(", "))}<br>좌표 ${r.lat}, ${r.lng}</p>` : `${r.quote ? `<blockquote>“${esc(r.quote)}”</blockquote>` : ""}${r.height || r.weight ? `<p>키 ${esc(r.height || "미입력")} cm · 몸무게 ${esc(r.weight || "미입력")} kg</p>` : ""}${r.tripId ? `<button data-action="detail" data-type="trip" data-id="${esc(r.tripId)}">연결된 여행 보기</button>` : ""}`}<div class="detail-actions"><button data-action="edit" data-type="${type}" data-id="${r.id}">예시 수정</button><button data-action="delete" data-type="${type}" data-id="${r.id}">예시 삭제</button></div><p class="fine">원본 사진과 실제 가족 데이터에 영향을 주지 않는 예시 체험입니다.</p>`,
   );
 }
 function form(type, id) {

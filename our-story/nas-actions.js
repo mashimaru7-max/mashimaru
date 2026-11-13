@@ -22,7 +22,7 @@ export class NasActions {
   }
   message(text) { const el=this.dialog.querySelector('[role="status"]'); if(el) el.textContent=text; }
   unavailable() {
-    this.show("NAS 관리 기능 준비 중", `<p>현재 연결된 사진 API는 읽기 전용이에요. 업로드와 휴지통 기능은 별도 관리 API를 NAS에 설치한 뒤 활성화돼요.</p><p>기존 서버와 사진은 그대로 유지돼요. 설치 전에는 웹페이지에서 파일을 변경하지 않아요.</p><a href="downloads/our-story-nas-service.zip" download>관리 API 설치 파일 받기 ↓</a>`);
+    this.show("NAS 관리 기능 준비 중", `<p>현재 연결된 사진 API는 읽기 전용이에요. 업로드와 휴지통 기능은 별도 관리 API를 NAS에 설치한 뒤 활성화돼요.</p><p>기존 서버와 사진은 그대로 유지돼요. 설치 전에는 웹페이지에서 파일을 변경하지 않아요.</p><a href="downloads/our-story-nas-service.zip" download>관리 API 설치 파일 받기</a>`);
   }
   bindViewer(item) {
     this.g.dialog.querySelectorAll('[data-photo-action]').forEach(button => {
