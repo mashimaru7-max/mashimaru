@@ -12,7 +12,7 @@ export class JournalController {
  constructor(gallery,{dialog,modal,notify}){
   this.g=gallery;this.dialog=dialog;this.modal=modal;this.notify=notify;this.host=null;this.version=0;this.items=new Map();this.urls=[];this.form=null;this.dirty=false;this.busy=false;
   this.filters={kind:'',year:'',q:'',trash:false};
-  dialog.addEventListener('close',()=>{this.form=null;this.dirty=false;this.busy=false;this.revoke();});
+  dialog.addEventListener('close',()=>{this.form=null;this.dirty=false;this.busy=false;this.browserLoadedFor=null;this.browserRequest=null;this.attachments=[];if(dialog.querySelector('#family-journal-form,[data-journal-edit],[data-journal-restore]'))dialog.querySelector('#dialog-content')?.replaceChildren();this.revoke();});
   dialog.addEventListener('cancel',e=>{if(!this.canClose())e.preventDefault();});
   dialog.addEventListener('click',e=>{
    const box=dialog.getBoundingClientRect(),outside=e.target===dialog&&(e.clientX<box.left||e.clientX>box.right||e.clientY<box.top||e.clientY>box.bottom);
@@ -24,7 +24,7 @@ export class JournalController {
  }
  canClose(){if(this.busy){this.notify('저장하는 중이에요. 잠시만 기다려 주세요.');return false;}return !this.dirty||window.confirm('저장하지 않은 내용이 있어요. 닫을까요?');}
  revoke(){for(const url of this.urls)URL.revokeObjectURL(url);this.urls=[];}
- release(){this.version++;this.detailVersion=(this.detailVersion||0)+1;this.host=null;this.items.clear();if(!this.g.connected){const owned=this.form?.isConnected||this.dialog.querySelector('[data-journal-edit],[data-journal-restore]');this.dirty=false;if(owned){this.dialog.close();this.dialog.querySelector('#dialog-content')?.replaceChildren();this.form=null;}this.revoke();}}
+ release(){this.version++;this.detailVersion=(this.detailVersion||0)+1;this.host=null;this.items.clear();if(!this.g.connected){const owned=this.form?.isConnected||this.dialog.querySelector('#family-journal-form,[data-journal-edit],[data-journal-restore]');this.dirty=false;this.browserLoadedFor=null;this.browserRequest=null;this.attachments=[];if(owned){this.dialog.close();this.dialog.querySelector('#dialog-content')?.replaceChildren();this.form=null;}this.revoke();}}
  mount(host,target){this.release();this.host=host;this.target=target;this.offset=0;this.filters={kind:'',year:'',q:'',trash:false};void this.load(true);}
  async load(reset=true,more=false){
   const host=this.host,target=this.target,version=++this.version;if(!host)return;

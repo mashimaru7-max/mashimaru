@@ -34,6 +34,6 @@ test('a failed save keeps the draft, revision context and enabled controls for r
 
 test('logout removes private record markup and cached records',()=>{
  let closed=0,cleared=0;const content={replaceChildren:()=>{cleared++;}};
- const fake={version:1,g:{connected:false},items:new Map([['private',{}]]),form:{isConnected:true},dirty:true,dialog:{querySelector:s=>s==='#dialog-content'?content:null,close:()=>{closed++;}},revoke:()=>{}};
+ const fake={version:1,g:{connected:false},items:new Map([['private',{}]]),form:null,dirty:true,dialog:{querySelector:s=>s==='#dialog-content'?content:s.includes('family-journal-form')?{}:null,close:()=>{closed++;}},revoke:()=>{}};
  JournalController.prototype.release.call(fake);assert.equal(fake.items.size,0);assert.equal(fake.form,null);assert.equal(closed,1);assert.equal(cleared,1);
 });
