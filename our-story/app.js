@@ -1,5 +1,5 @@
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js";
+import { NasGallery } from "./nas-gallery.js?v=20261113-memory1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -51,7 +51,9 @@ function syncNasChrome() {
   profile.classList.toggle("connected", nas.connected);
   profile.querySelector("span").textContent = nas.connected
     ? "NAS 연결됨"
-    : "NAS 연결";
+    : nas.restoring
+      ? "NAS 재연결 중"
+      : "NAS 연결";
   document.querySelector(".demo-banner").innerHTML = nas.connected
     ? "<span>NAS 사진 연결됨</span> 사진은 원본 읽기 전용으로 조회해요. 여행·성장 기록은 계속 예시 모드예요."
     : "<span>예시 모드</span> 여행·성장 기록은 디자인 확인용이에요. NAS 사진은 연결 후 갤러리에서 볼 수 있어요.";
@@ -529,3 +531,4 @@ dialog.addEventListener("click", (e) => {
 });
 syncNasChrome();
 route();
+void nas.restoreRemembered();

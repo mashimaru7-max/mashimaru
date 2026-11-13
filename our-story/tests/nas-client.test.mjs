@@ -70,3 +70,31 @@ test('timeouts abort requests and report a timeout rather than generic authentic
 test('connect accepts neither redirect HTML nor malformed API replies as a successful login',async()=>{
  const {client}=fixture(()=>new Response('<html>tunnel unavailable</html>'));await assert.rejects(connect(client),e=>e.code==='FORMAT');assert(!client.connected);
 });
+function memoryVault(initial=null){let saved=initial?structuredClone(initial):null;return {load:async()=>saved?structuredClone(saved):null,save:async v=>{saved=structuredClone(v);return true;},clear:async()=>{saved=null;},has:async()=>!!saved};}
+test('remembered token reconnects after a fresh client without token input or password login',async()=>{
+ const first=fixture(),vault=memoryVault();await connect(first.client);await first.client.remember(vault);await first.client.disconnect({revoke:false});const second=fixture();assert.equal((await second.client.restore(vault)).path,'');assert(second.client.connected);assert.equal(second.calls.length,1);assert.equal(second.calls[0].init.method,'GET');assert.equal(second.calls[0].init.headers.Authorization,'Bearer '+token);await second.client.disconnect();
+});
+test('only a validated connected client can be remembered',async()=>{
+ const {client}=fixture(),vault=memoryVault();await assert.rejects(client.remember(vault),e=>e.code==='AUTH');assert.equal(await vault.load(),null);
+});
+test('session remember keeps the expiring session, never the login password',async()=>{
+ const {client}=fixture(u=>u.pathname==='/api/login'?json({session:'fixture-session-only-000000000',expiresIn:3600}):json(root));const vault=memoryVault();await client.connect({base,mode:'login',username:'fixture',password:'not-to-be-persisted'});await client.remember(vault);const saved=await vault.load();assert.equal(saved.mode,'login');assert(saved.expiresAt>Date.now());assert(!JSON.stringify(saved).includes('not-to-be-persisted'));await client.disconnect();
+});
+test('expired saved sessions are deleted without sending them to the server',async()=>{
+ const {client,calls}=fixture(),vault=memoryVault({version:1,base,mode:'login',secret:'fixture-session-only-000000000',expiresAt:Date.now()-1});await assert.rejects(client.restore(vault),e=>e.code==='EXPIRED');assert.equal(calls.length,0);assert.equal(await vault.load(),null);
+});
+test('temporary network failure retains remembered credentials for retry',async()=>{
+ const vault=memoryVault({version:1,base,mode:'token',secret:token,expiresAt:null});const {client}=fixture(()=>{throw Error('offline');});await assert.rejects(client.restore(vault),e=>e.code==='NETWORK');assert(await vault.has());assert(!client.connected);assert.equal(client.origin,base);
+});
+test('authentication rejection deletes remembered credentials',async()=>{
+ const vault=memoryVault({version:1,base,mode:'token',secret:token,expiresAt:null});const {client}=fixture(()=>json({},401));await assert.rejects(client.restore(vault),e=>e.code==='HTTP_401');assert(!await vault.has());assert(!client.connected);
+});
+test('tunnel address can change while reusing encrypted credential payload, no password needed',async()=>{
+ const vault=memoryVault({version:1,base,mode:'token',secret:token,expiresAt:null}),{client,calls}=fixture();const changed='https://changed-fixture.trycloudflare.com';await client.restore(vault,{base:changed});assert.equal(new URL(calls[0].url).origin,changed);assert.equal(calls[0].init.headers.Authorization,'Bearer '+token);await client.remember(vault);assert.equal((await vault.load()).base,changed);await client.disconnect();
+});
+test('malformed stored origin is not contacted and is discarded',async()=>{
+ const vault=memoryVault({version:1,base:'https://evil.example',mode:'token',secret:token,expiresAt:null}),{client,calls}=fixture();await assert.rejects(client.restore(vault),e=>e.code==='URL');assert.equal(calls.length,0);assert(!await vault.has());
+});
+test('full list URL pasted by the user normalizes to origin without forwarding a URL path',()=>{
+ assert.equal(safeBase(base+'/api/list'),base);assert.equal(safeBase(base+'/api/list/'),base);
+});

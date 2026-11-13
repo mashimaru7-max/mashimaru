@@ -1,4 +1,5 @@
-// Read-only compatibility client. Secrets and paths stay in memory, never in URLs/storage.
+// Read-only compatibility client. Credentials never enter request URLs.
+// Remembered credentials use the separate encrypted device vault.
 export class NasError extends Error {
   constructor(code, message) {
     super(message);
@@ -20,7 +21,7 @@ export function safeBase(value) {
     u.password ||
     u.search ||
     u.hash ||
-    u.pathname !== "/" ||
+    !["/", "/api/list", "/api/list/"].includes(u.pathname) ||
     u.port ||
     !/^[a-z0-9-]+\.trycloudflare\.com$/i.test(u.hostname)
   )
@@ -126,6 +127,73 @@ export class NasClient {
   }
   get mode() {
     return this.#mode;
+  }
+  get origin() {
+    return this.#base;
+  }
+  async remember(vault) {
+    if (!this.connected)
+      throw fail("AUTH", "연결된 보관함만 저장할 수 있어요.");
+    return vault.save({
+      version: 1,
+      base: this.#base,
+      mode: this.#mode,
+      secret: this.#secret,
+      expiresAt: Number.isFinite(this.#expiry) ? this.#expiry : null,
+    });
+  }
+  async restore(vault, { base: override } = {}) {
+    const closing = this.disconnect({ revoke: false });
+    const epoch = this.#epoch;
+    await closing;
+    const saved = await vault.load();
+    if (epoch !== this.#epoch) throw fail("ABORT", "재연결을 취소했어요.");
+    if (!saved) return null;
+    let origin;
+    try {
+      if (
+        saved.version !== 1 ||
+        !["token", "login"].includes(saved.mode) ||
+        !/^[\x21-\x7e]{16,512}$/.test(saved.secret || "") ||
+        (saved.mode === "token" &&
+          (saved.secret.length < 32 || saved.expiresAt !== null)) ||
+        (saved.mode === "login" &&
+          (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now()))
+      )
+        throw fail(
+          "EXPIRED",
+          "저장된 인증 정보가 만료되었어요. 다시 연결해 주세요.",
+        );
+      origin = safeBase(override || saved.base);
+      this.#base = origin;
+      this.#secret = saved.secret;
+      this.#mode = saved.mode;
+      this.#expiry = saved.expiresAt === null ? Infinity : saved.expiresAt;
+      const listing = await this.#list("", 0);
+      if (epoch !== this.#epoch) throw fail("ABORT", "재연결을 취소했어요.");
+      this.#ready = true;
+      return listing;
+    } catch (error) {
+      if (
+        ["EXPIRED", "HTTP_401", "PATH", "MODE"].includes(error.code) ||
+        (error.code === "URL" && !override)
+      )
+        await vault.clear();
+      if (epoch === this.#epoch) this.#clear();
+      // A temporary tunnel/network failure must not erase the remembered token.
+      // Keep only a non-secret hint so the address can be corrected without retyping it.
+      if (
+        origin &&
+        error.code !== "ABORT" &&
+        !["EXPIRED", "HTTP_401"].includes(error.code)
+      ) {
+        this.#base = origin;
+        this.#mode = saved.mode;
+      }
+      throw error;
+    } finally {
+      saved.secret = "";
+    }
   }
   #clear() {
     this.#epoch++;

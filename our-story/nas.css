@@ -309,3 +309,23 @@ button:disabled {
   border-radius: 4px 5px 0 0;
   background: #c29b5d;
 }
+.nas-saved-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+.nas-dialog .form-grid label.nas-remember {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.nas-remember input {
+  accent-color: var(--gold);
+  width: 18px;
+  height: 18px;
+}
+.nas-status small {
+  font-size: 10px;
+  color: var(--green);
+}
