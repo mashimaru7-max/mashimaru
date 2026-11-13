@@ -139,16 +139,23 @@ export class NasActions {
   }
   async trashList() {
     if(!this.g.features.trash) { this.unavailable(); return; }
-    const version=this.show('잠시 보관한 사진과 폴더', '<p>자동으로 영구삭제하지 않아요. 복원하거나 삭제할 항목을 선택해 주세요.</p><div class="nas-trash-items">불러오는 중…</div><button class="nas-danger" data-purge-start disabled hidden>선택 항목 영구삭제</button>');
+    const version=this.show('잠시 보관한 사진과 폴더', '<p>자동으로 영구삭제하지 않아요. 복원하거나 삭제할 항목을 선택해 주세요.</p><div class="nas-selection-bar" data-trash-selection hidden><button data-trash-all type="button">전체 선택</button><button data-trash-clear type="button">선택 해제</button><strong data-trash-count>0개 선택</strong><small data-trash-limit></small></div><div class="nas-trash-items">불러오는 중…</div><button class="nas-danger" data-purge-start disabled hidden>선택 항목 영구삭제</button>');
     try {
       const data=await this.g.client.trashList();
       if(version!==this.generation || !this.dialog.open) return;
       if(!Array.isArray(data.items) || data.items.length>1000) throw new Error('휴지통 목록을 확인할 수 없어요.');
       const list=this.dialog.querySelector('.nas-trash-items'),purge=this.dialog.querySelector('[data-purge-start]'),selected=new Map();
       const enabled=this.g.features.permanentTrash===true;purge.hidden=!enabled;
+      const toolbar=this.dialog.querySelector('[data-trash-selection]');toolbar.hidden=!enabled||!data.items.length;
+      const all=toolbar.querySelector('[data-trash-all]'),clear=toolbar.querySelector('[data-trash-clear]');
+      if(data.items.length>50){all.textContent='앞의 50개 선택';toolbar.querySelector('[data-trash-limit]').textContent='현재 서버는 한 번에 최대 50개까지 영구삭제해요. 처리 후 남은 항목도 한 번에 선택할 수 있어요.';}
+      const sync=()=>{list.querySelectorAll('[data-trash-index]').forEach(input=>{input.checked=selected.has(data.items[Number(input.dataset.trashIndex)].id);});purge.disabled=this.busy||!selected.size;purge.textContent=`선택 ${selected.size}개 영구삭제`;toolbar.querySelector('[data-trash-count]').textContent=`${selected.size}개 선택`;clear.disabled=this.busy||!selected.size;};
+      all.onclick=()=>{if(this.busy)return;selected.clear();data.items.slice(0,50).forEach(item=>selected.set(item.id,item));sync();};
+      clear.onclick=()=>{if(this.busy)return;selected.clear();sync();};
       list.innerHTML=data.items.length ? data.items.map((i,index)=>`<div class="nas-trash-row">${enabled?`<input type="checkbox" data-trash-index="${index}" aria-label="${esc(i.path)} 선택">`:''}<span>${i.kind==='folder'?'폴더 · ':'사진 · '}${esc(i.path)}${i.permanentPartial?'<small>영구삭제 중단 · 일부 파일이 삭제됐을 수 있어요.</small>':''}</span><button data-restore-id="${/^[a-f0-9]{32}$/.test(i.id)?i.id:''}">복원</button></div>`).join('') : '<p>휴지통이 비어 있어요.</p>';
-      list.onchange=e=>{const input=e.target.closest('[data-trash-index]');if(!input)return;const item=data.items[Number(input.dataset.trashIndex)];if(input.checked&&selected.size>=50){input.checked=false;this.message('한 번에 최대 50개 항목을 선택해 주세요.');return;}if(input.checked)selected.set(item.id,item);else selected.delete(item.id);purge.disabled=!selected.size;purge.textContent=`선택 ${selected.size}개 영구삭제`;};
-      purge.onclick=()=>this.permanentDelete([...selected.values()]);
+      list.onchange=e=>{const input=e.target.closest('[data-trash-index]');if(!input)return;const item=data.items[Number(input.dataset.trashIndex)];if(input.checked&&selected.size>=50){input.checked=false;this.message('한 번에 최대 50개 항목을 선택해 주세요.');return;}if(this.busy){sync();return;}if(input.checked)selected.set(item.id,item);else selected.delete(item.id);sync();};
+      sync();
+      purge.onclick=()=>{if(!this.busy&&selected.size)this.permanentDelete([...selected.values()]);};
       list.onclick=async e=>{
         const b=e.target.closest('[data-restore-id]'); if(!b || !b.dataset.restoreId || this.busy) return;
         this.busy=true;b.disabled=true;purge.disabled=true;
