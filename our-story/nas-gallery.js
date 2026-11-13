@@ -1,6 +1,6 @@
-import { NasActions } from "./nas-actions.js?v=20261113-autoalbums2";
-import { NasClient } from "./nas-client.mjs?v=20261113-autoalbums2";
-import { ConnectionVault } from "./nas-vault.mjs?v=20261113-autoalbums2";
+import { NasActions } from "./nas-actions.js?v=20261113-shared1";
+import { NasClient } from "./nas-client.mjs?v=20261113-shared1";
+import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,

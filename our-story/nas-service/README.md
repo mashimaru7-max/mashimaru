@@ -1,6 +1,6 @@
 # 우리라는 이야기 · NAS 관리 API v2
 
-기존 `nas-photo-test`를 교체하지 않는 별도 서비스다. **현재 NAS에는 설치되지 않았다.** 기본 compose는 읽기 전용이다. 업로드·휴지통을 활성화하려면 사용자의 NAS 쓰기 권한 변경 승인이 필요하다.
+기존 `nas-photo-test`를 교체하지 않는 별도 서비스다. **현재 NAS에는 설치되지 않았다.** 기본 compose는 사진을 읽기 전용으로 연결하고, 가족 공통 설정만 별도 영구 볼륨 `/settings`에 저장한다. 업로드·휴지통을 활성화하려면 사용자의 NAS 쓰기 권한 변경 승인이 필요하다.
 
 ## 변경 이유와 영향
 
@@ -21,7 +21,7 @@
 1. 먼저 실제 `/photo` 공유 폴더 백업/스냅샷 상태와 사진 권한이 있는 DSM 계정 UID/GID를 확인한다. 예시 `1024:100`은 설치마다 다르며 관리자/root 권한으로 우회하지 않는다.
 2. File Station에 tar 파일 업로드 → Docker → 이미지 → 추가 → 파일에서 추가로 가져온다. 기존 Python/cloudflared 컨테이너는 유지한다.
 3. 새 Docker 브리지 네트워크 `our-story-net` 생성. `our-story-nas:2` 이미지로 **새 컨테이너** `our-story-api` 생성. 새 네트워크에만 연결한다. 호스트 네트워크·공개 호스트 포트는 사용하지 않는다.
-4. 볼륨에 실제 `photo` 공유 폴더를 `/photos`로 추가하고 **우선 읽기 전용**을 체크한다. 환경 변수 `NAS_TOKEN`에 기존 조회 토큰, `ALLOWED_ORIGIN=https://mashimaru7-max.github.io`, `ENABLE_WRITES=0` 설정. 비밀을 웹 코드나 GitHub Actions에 입력하지 않는다. 기본 이미지 사용자는 `1024:100`이므로 실제 계정이 다르면 적절한 사용자로 컨테이너를 구성해야 한다. GUI에서 사용자 지정이 어려우면 아래 compose 경로를 사용한다.
+4. 볼륨에 실제 `photo` 공유 폴더를 `/photos`로 추가하고 **우선 읽기 전용**을 체크한다. 사진 폴더와 별도로 영구 설정 폴더를 `/settings`에 읽기/쓰기로 마운트한다. 이 폴더는 컨테이너 사용자 UID/GID가 쓸 수 있어야 하며 사진 공유 폴더 안에 만들지 않는다. 환경 변수 `SETTINGS_ROOT=/settings`를 추가한다. 환경 변수 `NAS_TOKEN`에 기존 조회 토큰, `ALLOWED_ORIGIN=https://mashimaru7-max.github.io`, `ENABLE_WRITES=0` 설정. 비밀을 웹 코드나 GitHub Actions에 입력하지 않는다. 기본 이미지 사용자는 `1024:100`이므로 실제 계정이 다르면 적절한 사용자로 컨테이너를 구성해야 한다. GUI에서 사용자 지정이 어려우면 아래 compose 경로를 사용한다.
 5. 이미 내려받은 공식 `cloudflare/cloudflared` 이미지로 **새 컨테이너** `our-story-tunnel` 생성. `our-story-net`에 연결. 명령: `tunnel --no-autoupdate --url http://our-story-api:8000`. 네트워크에서 이름 해석이 되는지 로그 확인. 기존 터널은 수정하지 않는다.
 6. 새 터널 로그의 HTTPS 주소를 웹 연결 설정에 입력. 토큰 칸은 비워 저장된 토큰을 재사용한다. 목록/썸네일/다운로드부터 확인한다. Quick Tunnel 주소는 재시작 시 바뀔 수 있다.
 7. **쓰기 승인 후에만** 새 API 컨테이너의 사진 볼륨을 읽기/쓰기로 바꾸고 `ENABLE_WRITES=1` 설정. DSM에서 컨테이너 재생성이 필요한 경우 새 컨테이너만 재생성한다. 먼저 별도 시험 폴더에서 사진 한 장 업로드 → 휴지통 이동 → 복원을 검증한다. 권한이 안 맞으면 서버가 403을 반환하며 원본 권한을 임의로 완화하지 않는다.
@@ -51,6 +51,8 @@ docker-compose -p our-story -f docker-compose.yml -f docker-compose.write.yml up
 | 경로 | 동작 |
 | --- | --- |
 | GET `/api/capabilities` | v2 지원 기능과 쓰기 권한 표시 |
+| GET `/api/settings` | 같은 NAS의 공통 앨범 폴더·이름 규칙·대표사진과 revision |
+| POST `/api/settings` | JSON `{revision, albums?, home?}`, 인증 후 설정만 원자적 저장, 이전 revision은 409 |
 | GET `/api/list?path=&offset=0` | 100개 단위 목록, revision 포함 |
 | GET `/api/image?path=...` | 원본 미리보기, 최대 15MB |
 | GET `/api/thumbnail?path=...` | 최대 1600px JPEG, EXIF 제거, Pillow가 지원하는 형식만 |
@@ -71,3 +73,15 @@ Python 3.12 이상/Linux와 Pillow 13.0.0 대상. 현재 임시 디렉터리 HTT
 ```sh
 python -m unittest discover -s our-story/tests -p test_nas_service.py -v
 ```
+
+## 가족 공통 설정 업데이트
+
+이 버전부터 홈/여행/다온/라온/함께 폴더 연결, 이름으로 모으기 규칙, 직접 고른 홈 대표사진을 NAS에 공통 저장한다. 같은 NAS 주소·토큰으로 접속하면 가족 모두 같은 설정을 사용한다. 토큰 자체는 각 브라우저의 기존 암호화 저장에 남는다. 사진 쓰기 기능을 켜지 않아도 공통 설정을 저장할 수 있다. 설정에는 사진 경로와 이름만 있고 사진 원본/토큰/비밀번호는 없다. 토큰을 가진 가족은 공통 설정도 수정할 수 있다.
+
+1. 업데이트된 소스 ZIP 또는 새 Actions 이미지로 **our-story-api만** 교체한다. 기존 `nas-photo-test`는 변경하지 않는다.
+2. Compose는 새 `our-story-settings` 영구 볼륨을 `/settings`에 연결한다. 기본 이미지 UID/GID는 1024:100이다. `NAS_UID`/`NAS_GID`를 바꿨다면 설정 볼륨도 그 사용자에게 쓰기 권한이 있어야 한다. GUI 설치는 위의 별도 영구 설정 폴더를 사용한다. 컨테이너 내부 폴더만 사용하면 재생성 시 설정이 사라진다.
+3. Compose로 소스 빌드 시 `docker-compose -p our-story -f docker-compose.yml up -d --build our-story-api` 실행. 사진 쓰기 기능을 이미 사용 중이면 기존 write override도 동일하게 포함한다. 설정 볼륨을 삭제하는 `down -v`는 사용하지 않는다.
+4. 기존 설정이 있는 기기에서 먼저 새 서버에 연결한다. 동일한 API 주소이고 서버가 처음 설정되는 경우 기존 암호화 앨범/대표사진을 자동 이관한다. **터널 주소가 바뀌었다면 이전 주소로 저장된 설정은 자동 이관하지 않는다.** 새 주소에서 폴더/이름 규칙을 한 번 다시 저장하면 이후 가족에게 공유된다.
+5. 다른 브라우저에서 같은 NAS 주소·토큰으로 접속해 공통 앨범과 대표사진을 확인한다. 변경사항은 새 접속, 창 포커스 복귀 또는 최대 15초 간격 확인으로 반영된다. 탭/연도 필터 등 현재 탐색 상태는 기기마다 다를 수 있다.
+
+이미 가족 설정이 있는 NAS에는 새 기기의 예전/빈 설정을 자동 덮어쓰지 않는다. 동시에 다른 항목을 수정하면 revision 충돌 후 최신 설정을 읽어 해당 항목만 다시 저장한다. 같은 항목의 편집은 마지막 성공 저장을 따른다. 서버가 구버전이면 사진 조회는 유지하고 업데이트 안내를 표시하며, 공통 저장 성공으로 표시하지 않는다. 실제 NAS 배포/권한 및 가족 기기 연결은 별도 검증이 필요하다. 여행·성장 **예시 이야기 기록**은 여전히 메모리 체험이며 이 설정 동기화 범위에 포함되지 않는다.

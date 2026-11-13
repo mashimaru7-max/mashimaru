@@ -1,7 +1,8 @@
-import { NasAlbums } from "./nas-albums.js?v=20261113-namerules2";
-import { NasHome } from "./nas-home.js?v=20261113-autoalbums2";
+import { FamilySettings } from './nas-shared.mjs?v=20261113-shared1';
+import { NasAlbums } from "./nas-albums.js?v=20261113-shared1";
+import { NasHome } from "./nas-home.js?v=20261113-shared1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-autoalbums2";
+import { NasGallery } from "./nas-gallery.js?v=20261113-shared1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -48,7 +49,16 @@ const nas = new NasGallery({
     render();
   },
 });
+const familySettings = new FamilySettings(nas, {notify,onChange:()=>{
+  void Promise.all([familySettings.albumLoad(),familySettings.homeLoad()]).then(([a,h])=>{
+    if(!nas.connected)return;
+    albums.bindings=a?.origins||{};homePhoto.choice=h;albums.cache.clear();albums.searches.clear();render();syncNasChrome();
+  }).catch(e=>notify(e.message));
+}});
+setInterval(()=>{if(nas.connected && document.visibilityState==='visible')void familySettings.refresh().catch(()=>{});},15000);
+window.addEventListener('focus',()=>{if(nas.connected)void familySettings.refresh().catch(()=>{});});
 const albums = new NasAlbums(nas, {
+  vault: familySettings.albumVault,
   notify,
   onChange(rebuild) { if(rebuild) render(); else if(state.page==='home') void homePhoto.paint(); },
   onBrowse(path) {
@@ -56,9 +66,10 @@ const albums = new NasAlbums(nas, {
     if(state.page==='gallery')render(); else location.hash='nas';
   },
 });
-const homePhoto = new NasHome(nas, notify, {automatic:()=>albums.collection('home')});
+const homePhoto = new NasHome(nas, notify, {vault:familySettings.homeVault,automatic:()=>albums.collection('home')});
 let liveConnection=false;
 function syncNasChrome() {
+  familySettings.sync();
   albums.sync();
   if(liveConnection!==nas.connected) {
     liveConnection=nas.connected;
@@ -75,7 +86,11 @@ function syncNasChrome() {
       ? "NAS 재연결 중"
       : "NAS 연결";
   document.querySelector(".demo-banner").innerHTML = nas.connected
-    ? "<span>우리 사진 자동 연결</span> 홈은 자동으로, 여행·성장앨범은 연결한 폴더의 사진으로 채워져요."
+    ? (familySettings.unsupported
+      ? "<span>NAS 업데이트 필요</span> 사진은 볼 수 있지만, 현재 서버는 가족 공통 설정 저장을 지원하지 않아요."
+      : familySettings.data
+        ? "<span>가족 공통 설정</span> 같은 NAS에 연결한 가족은 같은 폴더·이름 규칙·대표사진을 함께 사용해요."
+        : "<span>가족 설정 확인 중</span> NAS에서 공통 설정을 불러오고 있어요.")
     : "<span>예시 모드</span> 여행·성장 기록은 디자인 확인용이에요. NAS 사진은 연결 후 갤러리에서 볼 수 있어요.";
 }
 function modal(html) {

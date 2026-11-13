@@ -1,5 +1,5 @@
-import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-autoalbums2';
-import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261113-namerules2';
+import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
+import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261113-shared1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const labels={'home':'홈','travel':'여행','growth:다온':'다온','growth:라온':'라온','growth:함께':'함께'};
 export class NasAlbums {
@@ -34,6 +34,7 @@ export class NasAlbums {
   async collection(key,{refresh=false,onProgress=()=>{}}={}) {
     await this.ready;
     if(!this.g.connected)return {items:[],unconnected:true};
+    this.bindings=validateAlbumBindings(await this.vault.load());
     const origin=this.g.client.origin,binding=this.folder(key),year=this.years.get(key)||'';
     if(key!=='home' && binding===undefined)return {items:[],unbound:true};
     const path=typeof binding==='string'?binding:'',cacheKey=origin+'\n'+JSON.stringify(binding??'')+'\n'+year;
@@ -111,17 +112,19 @@ export class NasAlbums {
     }
   }
   async apply(key,path) {
+    await this.ready;
+    this.bindings=validateAlbumBindings(await this.vault.load());
     if(path?.type==='name')path=validateNameRule(path);
     if(!ALBUM_KEYS.includes(key) || !this.g.connected)throw new Error('연결된 앨범을 확인해 주세요.');
     const origin=this.g.client.origin;
     const updated={...this.bindings,[origin]:{...this.bindings[origin],[key]:path}};
     const checked=validateAlbumBindings({kind:'album-folders',origins:updated});
     if(JSON.stringify(checked[origin]?.[key])!==JSON.stringify(path))throw new Error('폴더 경로를 확인해 주세요.');
-    if(!await this.vault.save({kind:'album-folders',origins:checked}))throw new Error('사진 폴더 설정을 저장하지 못했어요.');
+    if(!await (this.vault.saveKey?this.vault.saveKey(key,path):this.vault.save({kind:'album-folders',origins:checked})))throw new Error('사진 폴더 설정을 저장하지 못했어요.');
     if(!this.g.connected || this.g.client.origin!==origin)return;
     this.bindings=checked;this.years.delete(key);this.cache.clear();this.pending.clear();
     if(this.dialog.open)this.dialog.close();
-    this.notify(path?.type==='name'?`${labels[key]} 이름 규칙을 저장했어요. 일치하는 폴더를 찾을게요.`:`${labels[key]} 사진 폴더를 연결했어요. 사진은 자동으로 표시돼요.`);this.onChange(true);
+    this.notify(path?.type==='name'?`${labels[key]} 이름 규칙을 가족 공통으로 저장했어요. 일치하는 폴더를 찾을게요.`:`${labels[key]} 사진 폴더를 가족 공통으로 연결했어요.`);this.onChange(true);
   }
   async pick(key,path='',offset=0,existing=[]) {
     await this.ready;if(!this.g.connected){this.g.settings();return;}
@@ -133,7 +136,7 @@ export class NasAlbums {
       const listing=await this.g.client.list(path,offset);
       if(version!==this.settingVersion || !this.dialog.open || !this.g.connected || this.g.client.origin!==origin)return;
       const folders=[...existing,...listing.items.filter(i=>i.dir)];
-      this.dialog.innerHTML=`<button class="close" data-picker-close aria-label="닫기">×</button><span class="eyebrow">CONNECT ONCE, KEEP THE MOMENTS</span><h2>${labels[key]} 사진 폴더 연결</h2><p>이 기기에서 한 번만 선택하면, 이 폴더와 하위 폴더의 사진이 자동으로 표시돼요. 사진은 이동하지 않아요.</p><div class="nas-picker-modes"><button disabled>폴더 선택</button><button data-picker-name>이름으로 모으기</button></div><p class="nas-picker-path">${esc(path||'/photo')}</p><div class="nas-picker-nav"><button data-picker-up ${path?'':'disabled'}>상위 폴더</button><button data-picker-root>전체 폴더</button></div><div class="nas-picker-folders">${folders.map((f,i)=>`<button data-picker-folder="${i}"><span>▰</span> ${esc(f.name)}</button>`).join('')||'<p class="fine">현재 목록에 하위 폴더가 없어요.</p>'}</div>${listing.next!==null?'<button data-picker-more>폴더 목록 더 보기</button>':''}<p class="fine">국가·도시·아이·나이를 사진에서 추정해 분류하지 않아요.</p><button class="primary" data-picker-use>이 폴더 연결</button><p role="alert" class="nas-picker-error"></p>`;
+      this.dialog.innerHTML=`<button class="close" data-picker-close aria-label="닫기">×</button><span class="eyebrow">CONNECT ONCE, KEEP THE MOMENTS</span><h2>${labels[key]} 사진 폴더 연결</h2><p>한 번 연결하면 같은 NAS에 접속한 가족에게도 같은 앨범이 표시돼요. 사진은 이동하지 않아요.</p><div class="nas-picker-modes"><button disabled>폴더 선택</button><button data-picker-name>이름으로 모으기</button></div><p class="nas-picker-path">${esc(path||'/photo')}</p><div class="nas-picker-nav"><button data-picker-up ${path?'':'disabled'}>상위 폴더</button><button data-picker-root>전체 폴더</button></div><div class="nas-picker-folders">${folders.map((f,i)=>`<button data-picker-folder="${i}"><span>▰</span> ${esc(f.name)}</button>`).join('')||'<p class="fine">현재 목록에 하위 폴더가 없어요.</p>'}</div>${listing.next!==null?'<button data-picker-more>폴더 목록 더 보기</button>':''}<p class="fine">국가·도시·아이·나이를 사진에서 추정해 분류하지 않아요.</p><button class="primary" data-picker-use>이 폴더 연결</button><p role="alert" class="nas-picker-error"></p>`;
       this.dialog.onclick=e=>{
         if(e.target.closest('[data-picker-close]'))this.dialog.close();
         if(e.target.closest('[data-picker-name]'))void this.pickName(key,path);

@@ -1,4 +1,4 @@
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums2';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-shared1';
 const fatalListError=e=>e.name==='AbortError'||['HTTP_401','AUTH','ABORT','NETWORK','TIMEOUT','HTTP_429'].includes(e.code)||/^HTTP_5/.test(e.code||'');
 export const ALBUM_KEYS=['home','travel','growth:다온','growth:라온','growth:함께'];
 export function validateAlbumBindings(data) {

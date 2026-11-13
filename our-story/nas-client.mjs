@@ -331,6 +331,11 @@ export class NasClient {
       throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
     return this.#request("/api/image", { params: { path }, image: true });
   }
+  async sharedSettings(patch) {
+    this.#assertAuth();
+    try { return await this.#request("/api/settings", patch === undefined ? {} : {body: patch}); }
+    catch(e) {if(e.code==="HTTP_409")throw fail(e.code,"가족 설정이 다른 기기에서 변경됐어요. 다시 시도해 주세요.");throw e;}
+  }
   async capabilities() {
     this.#assertAuth();
     try {

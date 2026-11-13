@@ -1,5 +1,5 @@
-import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-autoalbums2';
-import {safeBase,safePath} from './nas-client.mjs?v=20261113-autoalbums2';
+import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
+import {safeBase,safePath} from './nas-client.mjs?v=20261113-shared1';
 export class NasHome {
   constructor(gallery, notify, {vault,automatic=async()=>({items:[]})} = {}) {
     this.automatic=automatic;
@@ -29,6 +29,7 @@ export class NasHome {
     hero.querySelector('.photo-note').textContent=this.g.connected?'우리 사진을 자동으로 불러오는 중':'풍경 사진 · 디자인 예시';
     hero.querySelector('.nas-home-clear')?.remove();
     await this.ready;
+    try { this.choice=await this.vault.load(); } catch(e) { if(version===this.version)this.notify(e.message);return; }
     if(version!==this.version || !this.g.connected) return;
     try {
       const manual=this.choice?.origin===this.g.client.origin;

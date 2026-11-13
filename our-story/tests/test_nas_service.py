@@ -24,10 +24,12 @@ class ServiceTests(unittest.TestCase):
         (self.root/'기억').mkdir()
         (self.root/'one.jpg').write_bytes(PHOTO)
         self.store=api.PhotoStore(self.root,True)
-        self.server=api.Server(('127.0.0.1',0),self.store,TOKEN,ORIGIN)
+        self.settings_temp=tempfile.TemporaryDirectory();self.settings_dir=Path(self.settings_temp.name)
+        self.settings=api.SharedSettings(self.settings_dir)
+        self.server=api.Server(('127.0.0.1',0),self.store,TOKEN,ORIGIN,self.settings)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
     def tearDown(self):
-        self.server.shutdown();self.server.server_close();os.close(self.store.root);self.temp.cleanup()
+        self.server.shutdown();self.server.server_close();os.close(self.store.root);self.temp.cleanup();self.settings_temp.cleanup()
     def request(self,path,method='GET',body=None,headers=None):
         h={'Origin':ORIGIN,'Authorization':'Bearer '+TOKEN}
         if headers: h.update(headers)
@@ -44,6 +46,40 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(self.request(path,headers={'Origin':'https://evil.example'})[0],403)
         self.assertEqual(self.request('/api/upload?name=a.jpg','POST',PHOTO,{'Authorization':'','Content-Type':'application/octet-stream'})[0],401)
         self.assertFalse((self.root/'a.jpg').exists())
+    def test_shared_family_settings_persist_and_preserve_originals(self):
+        self.store.writable=False
+        status,raw,_=self.request('/api/settings')
+        self.assertEqual(status,200);self.assertEqual(json.loads(raw)['revision'],0)
+        rule={'type':'name','text':'오니둥이','mode':'numbered','root':''}
+        patch={'revision':0,'albums':{'growth:함께':rule},'home':{'path':'one.jpg','name':'one.jpg'}}
+        self.assertEqual(self.request('/api/settings','POST',patch)[0],200)
+        # A new HTTP connection and a fresh store see the same persisted configuration.
+        shared=json.loads(self.request('/api/settings')[1])
+        self.assertEqual(shared['albums']['growth:함께'],rule)
+        self.assertEqual(api.SharedSettings(self.settings_dir).read(),shared)
+        self.assertEqual((self.root/'one.jpg').read_bytes(),PHOTO)
+        self.assertEqual(sorted(x.name for x in self.root.iterdir()),['one.jpg','기억'])
+        self.assertEqual(self.request('/api/settings','POST',patch)[0],409)
+        self.assertEqual(self.request('/api/settings','POST',{'revision':1,'albums':{'travel':'기억'}})[0],200)
+        shared=json.loads(self.request('/api/settings')[1]);self.assertEqual(shared['home']['path'],'one.jpg')
+        self.assertEqual(shared['albums']['growth:함께'],rule)
+        self.assertEqual(self.request('/api/settings','POST',{'revision':2,'home':None})[0],200)
+        self.assertIsNone(api.SharedSettings(self.settings_dir).read()['home'])
+    def test_settings_auth_schema_and_secrets(self):
+        for method,body in [('GET',None),('POST',{'revision':0,'albums':{}})]:
+            self.assertEqual(self.request('/api/settings',method,body,{'Authorization':'Bearer wrong'})[0],401)
+            self.assertEqual(self.request('/api/settings',method,body,{'Origin':'https://evil.example'})[0],403)
+        for patch in [
+            {'revision':0,'token':'secret'}, {'revision':True},
+            {'revision':0,'albums':{'unknown':''}}, {'revision':0,'albums':{'travel':'../private'}},
+            {'revision':0,'albums':{'travel':{'type':'name','text':'a','mode':'regex','root':''}}},
+            {'revision':0,'home':{'path':'../../one.jpg','name':'bad'}},
+        ]:
+            self.assertEqual(self.request('/api/settings','POST',patch)[0],400)
+        self.assertEqual(self.settings.read()['revision'],0)
+        self.assertFalse(any(self.settings_dir.iterdir()))
+        self.assertEqual(self.request('/api/settings','POST',{'revision':0,'home':None})[0],200)
+        self.assertNotIn(TOKEN,(self.settings_dir/'settings.json').read_text())
     def test_preflight(self):
         status,_,h=self.request('/api/upload','OPTIONS',headers={'Authorization':''})
         self.assertEqual(status,204);self.assertEqual(h['Access-Control-Allow-Origin'],ORIGIN)

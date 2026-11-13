@@ -14,6 +14,7 @@ import threading
 import time
 import uuid
 import warnings
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit, quote
 try:
@@ -204,6 +205,59 @@ class PhotoStore:
             os.rmdir(ident,dir_fd=root)
         return {'ok':True}
 
+ALBUM_KEYS = {'home', 'travel', 'growth:다온', 'growth:라온', 'growth:함께'}
+
+def settings_path(value):
+    parts(value)
+    return value
+
+def album_binding(value):
+    if isinstance(value, str): return settings_path(value)
+    if not isinstance(value, dict) or set(value) != {'type','text','mode','root'}: raise APIError(400)
+    if value['type'] != 'name' or value['mode'] not in ('numbered','exact','contains'): raise APIError(400)
+    text=value['text']
+    if not isinstance(text,str) or not text.strip() or len(text)>80 or any(ord(c)<32 for c in text) or '/' in text or '\\' in text: raise APIError(400)
+    return {**value, 'root':settings_path(value['root'])}
+
+class SharedSettings:
+    """Small authenticated family configuration, stored separately from original photos."""
+    def __init__(self, root):
+        self.root=Path(root)
+        self.lock=threading.RLock()
+    def read(self):
+        with self.lock:
+            try:
+                with open(self.root/'settings.json', encoding='utf-8') as f: data=json.load(f)
+            except FileNotFoundError: return {'revision':0,'albums':{},'home':None}
+            return data
+    def patch(self, data):
+        if not isinstance(data,dict) or set(data)-{'revision','albums','home'}: raise APIError(400)
+        if type(data.get('revision')) is not int: raise APIError(400)
+        albums=data.get('albums',{})
+        if not isinstance(albums,dict) or set(albums)-ALBUM_KEYS: raise APIError(400)
+        albums={k:album_binding(v) for k,v in albums.items()}
+        home=data.get('home')
+        if home is not None:
+            if not isinstance(home,dict) or set(home)!={'path','name'}: raise APIError(400)
+            settings_path(home['path'])
+            if not PHOTO.search(home['path']) or not isinstance(home['name'],str) or len(home['name'])>1024: raise APIError(400)
+        with self.lock:
+            current=self.read()
+            if current['revision']!=data['revision']: raise APIError(409)
+            updated={'revision':current['revision']+1,'albums':{**current['albums'],**albums},'home':home if 'home' in data else current['home']}
+            temp=self.root/('.settings-'+uuid.uuid4().hex)
+            try:
+                with open(temp,'x',encoding='utf-8') as f:
+                    os.chmod(temp,0o600)
+                    json.dump(updated,f,ensure_ascii=False);f.flush();os.fsync(f.fileno())
+                os.replace(temp,self.root/'settings.json')
+                fd=os.open(self.root,DIR_FLAGS)
+                try: os.fsync(fd)
+                finally: os.close(fd)
+            finally:
+                if temp.exists(): temp.unlink()
+            return updated
+
 class Handler(BaseHTTPRequestHandler):
     server_version='OurStoryNAS/2'
     def setup(self):
@@ -235,7 +289,8 @@ class Handler(BaseHTTPRequestHandler):
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None}); return
+                if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
                 if route.path in ('/api/image','/api/download','/api/thumbnail'):
@@ -243,6 +298,9 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 if self.headers.get('Transfer-Encoding'): raise APIError(400)
                 length=int(self.headers.get('Content-Length','0'))
+                if route.path=='/api/settings' and self.server.settings is not None:
+                    if length<=0 or length>32768 or self.headers.get_content_type()!='application/json': raise APIError(400)
+                    self.reply(200,self.server.settings.patch(json.loads(self.rfile.read(length)))); return
                 if route.path=='/api/upload':
                     if self.headers.get_content_type()!='application/octet-stream': raise APIError(415)
                     self.reply(201,store.upload(q('path'),q('name'),self.rfile,length)); return
@@ -293,9 +351,9 @@ class Handler(BaseHTTPRequestHandler):
 class Server(ThreadingHTTPServer):
     daemon_threads=True
     request_queue_size=8
-    def __init__(self,address,store,token,origin):
+    def __init__(self,address,store,token,origin,settings=None):
         if not re.fullmatch(r'[!-~]{32,512}',token): raise ValueError('NAS_TOKEN must contain 32–512 printable ASCII characters')
-        self.store=store; self.token=token; self.origin=origin
+        self.store=store; self.token=token; self.origin=origin; self.settings=settings
         self.slots=threading.BoundedSemaphore(8)
         super().__init__(address,Handler)
     def process_request(self,request,client_address):
@@ -308,6 +366,6 @@ class Server(ThreadingHTTPServer):
 
 if __name__=='__main__':
     store=PhotoStore(os.environ.get('PHOTO_ROOT','/photos'),os.environ.get('ENABLE_WRITES')=='1')
-    server=Server(('0.0.0.0',8000),store,os.environ.get('NAS_TOKEN',''),os.environ.get('ALLOWED_ORIGIN','https://mashimaru7-max.github.io'))
+    server=Server(('0.0.0.0',8000),store,os.environ.get('NAS_TOKEN',''),os.environ.get('ALLOWED_ORIGIN','https://mashimaru7-max.github.io'),SharedSettings(os.environ.get('SETTINGS_ROOT','/settings')))
     print('Our Story NAS v2: '+('write enabled' if store.writable else 'read-only'),flush=True)
     server.serve_forever()

@@ -7,9 +7,11 @@ services:
     environment:
       NAS_TOKEN: '${NAS_TOKEN:?Set NAS_TOKEN in .env}'
       ALLOWED_ORIGIN: 'https://mashimaru7-max.github.io'
+      SETTINGS_ROOT: '/settings'
       ENABLE_WRITES: '0'
     volumes:
       - /volume1/photo:/photos:ro
+      - our-story-settings:/settings
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -23,3 +25,6 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
+
+volumes:
+  our-story-settings:
