@@ -296,7 +296,7 @@ class SharedArchive:
             row=db.execute('SELECT state FROM collections WHERE id=?',(ident,)).fetchone()
             state=json.loads(row[0]) if row else {'active':None,'generation':0,'queue':[],'updated':0}
             if not state['queue'] and (not state['generation'] or refresh or time.time()-state['updated']>300):
-                state.update(generation=state['generation']+1,issues=0,matches=[],updated=time.time())
+                state.update(generation=state['generation']+1,issues=0,matches=[],scanned=0,updated=time.time())
                 include=not named or bool(root and self.matches(root.split('/')[-1],binding))
                 state['queue']=[[root,0,include,root if include and named else '',0]]
                 if include and named: state['matches']=[{'path':root,'name':root.split('/')[-1],'year':self.year(root)}]
@@ -304,6 +304,7 @@ class SharedArchive:
             for _ in range(budget):
                 if not state['queue'] or time.monotonic()-started>1.5: break
                 path,depth,include,folder,offset=state['queue'].pop(0)
+                state['scanned']=state.get('scanned',0)+1
                 try: data=self.store.listing(path,offset)
                 except (OSError,APIError): state['issues']+=1; continue
                 for item in data['items']:
@@ -330,18 +331,18 @@ class SharedArchive:
                 db.execute('DELETE FROM photos WHERE collection=? AND generation NOT IN (?,?)',
                     (ident,state['active'],state['generation']))
             db.execute('INSERT OR REPLACE INTO collections VALUES (?,?)',(ident,json.dumps(state,ensure_ascii=False)))
-            generation=state['active']
+            generation=state['active'] if state['active'] is not None else state['generation']
             args=[ident,generation]
             where='collection=? AND generation=?'
             if year:
                 where+=' AND year=?';args.append('' if year=='other' else year)
             total=db.execute('SELECT count(*) FROM photos WHERE '+where,args).fetchone()[0]
             rows=db.execute('SELECT path,name,revision,year,folder FROM photos WHERE '+where+' ORDER BY year DESC,path COLLATE BINARY LIMIT 12',args).fetchall()
-            matches=sorted(state.get('activeMatches',[]),key=lambda m:(m['year'],m['path']),reverse=True)
+            matches=sorted(state.get('activeMatches',[]) if state['active'] is not None else state.get('matches',[]),key=lambda m:(m['year'],m['path']),reverse=True)
             return {'items':[{'path':p,'name':n,'revision':r,'dir':False,'folderYear':y,'albumFolder':f} for p,n,r,y,f in rows],
                 'matchedFolders':matches,'selectedYear':year,'rule':binding if named else None,'path':root,
                 'total':total,'limited':total>12,'issues':state['issues'],'indexing':bool(state['queue']),
-                'shared':True,'snapshot':generation,'search':{'limited':False,'canContinue':False,'folders':len(matches)}}
+                'shared':True,'snapshot':generation,'progress':{'scanned':state.get('scanned',0),'pending':len(state['queue']),'found':db.execute('SELECT count(*) FROM photos WHERE collection=? AND generation=?',(ident,state['generation'])).fetchone()[0]},'search':{'limited':False,'canContinue':False,'folders':len(matches)}}
     def thumbnail(self, fd, st):
         # Revision changes on source edits, so stale thumbnails are never reused.
         cache=self.root/'thumbnails';cache.mkdir(mode=0o700,exist_ok=True)

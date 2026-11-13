@@ -164,7 +164,9 @@ class ServiceTests(unittest.TestCase):
         for n in range(4):
             d=self.root/str(n);d.mkdir();(d/'a.jpg').write_bytes(PHOTO)
         data=archive.collection('home','',budget=1)
-        self.assertTrue(data['indexing']);self.assertEqual(data['items'],[])
+        self.assertTrue(data['indexing']);self.assertEqual(data['total'],1)
+        self.assertEqual(data['items'][0]['name'],'one.jpg')
+        self.assertEqual(data['progress'],{'scanned':1,'pending':5,'found':1})
         archive=api.SharedArchive(self.settings,self.store)
         data=archive.collection('home','',budget=20)
         self.assertFalse(data['indexing']);self.assertEqual(data['total'],5)
