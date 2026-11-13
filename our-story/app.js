@@ -1,4 +1,5 @@
 import { trips, growth, wishes } from "./data.js";
+import { NasGallery } from "./nas-gallery.js";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -11,6 +12,7 @@ const state = {
   year: "",
   category: "",
   selected: null,
+  galleryView: "sample",
 };
 let map = null,
   toastTimer,
@@ -34,6 +36,25 @@ function notify(t) {
   $("#toast").style.display = "block";
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => ($("#toast").style.display = "none"), 3000);
+}
+const nas = new NasGallery({
+  notify,
+  onState: syncNasChrome,
+  onConnected() {
+    state.galleryView = "nas";
+    if (state.page !== "gallery") location.hash = "nas";
+    else render();
+  },
+});
+function syncNasChrome() {
+  const profile = document.querySelector(".profile");
+  profile.classList.toggle("connected", nas.connected);
+  profile.querySelector("span").textContent = nas.connected
+    ? "NAS 연결됨"
+    : "NAS 연결";
+  document.querySelector(".demo-banner").innerHTML = nas.connected
+    ? "<span>NAS 사진 연결됨</span> 사진은 원본 읽기 전용으로 조회해요. 여행·성장 기록은 계속 예시 모드예요."
+    : "<span>예시 모드</span> 여행·성장 기록은 디자인 확인용이에요. NAS 사진은 연결 후 갤러리에서 볼 수 있어요.";
 }
 function modal(html) {
   $("#dialog-content").innerHTML = html;
@@ -218,22 +239,32 @@ function growthPage() {
       )}</aside><div>${r ? `<div class="scrapbook"><a href="#" class="polaroid" data-action="detail" data-type="growth" data-id="${r.id}">${img(r.image)}<h2>${esc(r.title)}</h2><small>${esc(r.target)} · ${fmt(r.date)} · 예시</small></a><div class="scrap-side">${img(records[1]?.image || "forest")}${img(records[2]?.image || "beach")}<span class="hand muted">나란히, 천천히 ♡</span></div></div><blockquote>“${esc(r.quote || "너희의 오늘을 오래오래 기억할게.")}”</blockquote>` : empty("아직 펼쳐지지 않은 계절이에요.")}</div></div><div class="section-head"><h2>시간을 따라, 한 장씩</h2><small>생년월일 미설정 · 예시 나이 구간</small></div>${toolbar("growth")}<div id="growth-list" class="record-list">${growthList()}</div>`;
 }
 function gallery() {
+  const heading = `<div class="page-title"><div><span class="eyebrow">COLLECTED LITTLE MOMENTS</span><h1>추억의 조각들 <span class="leaf">❧</span></h1><p>한 장의 사진 속에, 그날의 마음이 남아 있어요.</p></div></div>`;
+  const sources = `<div class="tabs nas-connection-tabs" aria-label="사진 보관함 선택"><button data-action="gallery-source" data-value="sample" class="${state.galleryView === "sample" ? "selected" : ""}" aria-pressed="${state.galleryView === "sample"}">예시 앨범</button><button data-action="gallery-source" data-value="nas" class="${state.galleryView === "nas" ? "selected" : ""}" aria-pressed="${state.galleryView === "nas"}">NAS 사진</button></div>`;
+  if (state.galleryView === "nas") {
+    main.innerHTML = heading + sources + '<div id="nas-gallery"></div>';
+    nas.mount(document.querySelector("#nas-gallery"));
+    return;
+  }
   const all = [
     ...trips.map((r) => ({ ...r, type: "trip" })),
     ...growth.map((r) => ({ ...r, type: "growth" })),
   ].filter((r) => !state.category || r.type === state.category);
-  main.innerHTML = `<div class="page-title"><div><span class="eyebrow">COLLECTED LITTLE MOMENTS</span><h1>추억의 조각들 <span class="leaf">❧</span></h1><p>한 장의 사진 속에, 그날의 마음이 남아 있어요.</p></div></div><div class="chips">${[
-    ["", "전체"],
-    ["trip", "여행"],
-    ["growth", "성장"],
-  ]
-    .map(
-      ([v, t]) =>
-        `<button class="${state.category === v ? "selected" : ""}" data-action="gallery-filter" data-value="${v}">${t}</button>`,
-    )
-    .join(
-      "",
-    )}</div><div class="gallery-grid">${all.map((r) => `<button data-action="detail" data-type="${r.type}" data-id="${r.id}">${img(r.image, 'loading="lazy"')}<small>${esc(r.title)} · 예시</small></button>`).join("")}</div>`;
+  main.innerHTML =
+    heading +
+    sources +
+    `<div class="chips">${[
+      ["", "전체"],
+      ["trip", "여행"],
+      ["growth", "성장"],
+    ]
+      .map(
+        ([v, t]) =>
+          `<button class="${state.category === v ? "selected" : ""}" data-action="gallery-filter" data-value="${v}">${t}</button>`,
+      )
+      .join(
+        "",
+      )}</div><div class="gallery-grid">${all.map((r) => `<button data-action="detail" data-type="${r.type}" data-id="${r.id}">${img(r.image, 'loading="lazy"')}<small>${esc(r.title)} · 예시</small></button>`).join("")}</div>`;
 }
 function detail(type, id) {
   const r = (type === "trip" ? trips : growth).find((r) => r.id === id);
@@ -268,6 +299,7 @@ function render() {
     ? { domId: active.id, data: { ...active.dataset } }
     : null;
   revealObserver?.disconnect();
+  nas.unmount();
   map?.remove();
   map = null;
   document.querySelectorAll("nav a").forEach((a) => {
@@ -314,9 +346,13 @@ function render() {
 }
 function route() {
   const page = location.hash.slice(1) || "home";
-  state.page = ["home", "travel", "growth", "gallery"].includes(page)
-    ? page
-    : "home";
+  if (page === "nas") state.galleryView = "nas";
+  state.page =
+    page === "nas"
+      ? "gallery"
+      : ["home", "travel", "growth", "gallery"].includes(page)
+        ? page
+        : "home";
   state.search = "";
   state.year = "";
   state.category = "";
@@ -335,9 +371,14 @@ document.addEventListener("click", (e) => {
   e.preventDefault();
   const { action: a, type, id, value } = b.dataset;
   if (a === "close") dialog.close();
+  if (a === "nas-settings") nas.settings();
+  if (a === "gallery-source") {
+    state.galleryView = value === "nas" ? "nas" : "sample";
+    render();
+  }
   if (a === "about")
     modal(
-      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>지금은 로그인하지 않은 공개 예시 화면입니다. 가족 계정·초대·공동 작성·NAS 사진 조회는 다음 단계에서 서버 인증과 함께 연결합니다.</p><p class="fine">실제 기록은 0개이며, 비공개 가족 데이터는 포함되어 있지 않습니다.</p>',
+      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>여행·성장 기록은 예시입니다. 갤러리에서는 기존 사진 API에 연결하여 NAS 원본을 읽기 전용으로 볼 수 있어요. 가족 계정·초대·공동 작성·영구 저장은 아직 준비 중입니다.</p>',
     );
   if (a === "credits")
     modal(
@@ -486,4 +527,5 @@ dialog.addEventListener("click", (e) => {
       dialog.close();
   }
 });
+syncNasChrome();
 route();

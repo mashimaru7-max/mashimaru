@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data: https://tile.openstreetmap.org; connect-src 'self' https://*.trycloudflare.com; form-action 'none'; object-src 'none'; base-uri 'self'"
+    />
+    <meta
       name="description"
       content="우리라는 이야기 — 가족 여행과 성장 아카이브의 예시 체험"
     />
     <title>우리라는 이야기 · 가족 아카이브</title>
     <link rel="stylesheet" href="vendor/leaflet.css" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="nas.css" />
     <script src="vendor/leaflet.js" defer></script>
     <script src="app.js" type="module"></script>
   </head>
@@ -25,8 +30,12 @@
         <a href="#home">홈</a><a href="#travel">여행지도</a
         ><a href="#growth">성장앨범</a><a href="#gallery">갤러리</a>
       </nav>
-      <button class="profile" data-action="about">
-        ♡ <span>가족 체험</span>
+      <button
+        class="profile"
+        data-action="nas-settings"
+        aria-label="NAS 사진 보관함 연결 설정"
+      >
+        ▧ <span>NAS 연결</span>
       </button>
     </header>
     <div class="demo-banner">
@@ -38,10 +47,11 @@
       <a class="brand" href="#home">우리라는 이야기 ♡</a>
       <p>평범한 오늘이, 우리에게는 오래 남을 이야기.</p>
       <small
-        >공개 UI 체험 · 실제 기록 0개 · 로그인 / NAS 연결 준비 중<br />입력은
-        메모리에서만 유지되며 새로고침하면 사라집니다. 개인정보를 입력하지
-        마세요.</small
+        >여행·성장 예시는 임시 기록 · NAS 원본은 읽기 전용<br />연결 정보와
+        조회한 사진은 저장하지 않아요. 가족 계정과 기록 영구 저장은 준비
+        중이에요.</small
       ><button data-action="credits">사진 및 지도 출처</button>
+      <button data-action="about">우리 가족 아카이브 소개</button>
     </footer>
     <dialog id="dialog">
       <button class="close" aria-label="닫기" data-action="close">×</button>

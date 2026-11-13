@@ -1,0 +1,369 @@
+// Read-only compatibility client. Secrets and paths stay in memory, never in URLs/storage.
+export class NasError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "NasError";
+    this.code = code;
+  }
+}
+const fail = (code, message) => new NasError(code, message);
+export function safeBase(value) {
+  let u;
+  try {
+    u = new URL(value.trim());
+  } catch {
+    throw fail("URL", "올바른 HTTPS 터널 주소를 입력해 주세요.");
+  }
+  if (
+    u.protocol !== "https:" ||
+    u.username ||
+    u.password ||
+    u.search ||
+    u.hash ||
+    u.pathname !== "/" ||
+    u.port ||
+    !/^[a-z0-9-]+\.trycloudflare\.com$/i.test(u.hostname)
+  )
+    throw fail(
+      "URL",
+      "기존 사진 API의 https://…trycloudflare.com 주소만 사용할 수 있어요.",
+    );
+  return u.origin;
+}
+export function safePath(value) {
+  if (
+    typeof value !== "string" ||
+    value.length > 4096 ||
+    /[\\\x00-\x1f\x7f]/.test(value) ||
+    value.startsWith("/") ||
+    value.endsWith("/") ||
+    (value && value.split("/").some((x) => !x || x === "." || x === ".."))
+  )
+    throw fail("PATH", "안전하지 않은 사진 경로는 열 수 없어요.");
+  // The existing server decodes once after query parsing. Reject escaped traversal too.
+  try {
+    if (decodeURIComponent(value) !== value) throw new Error();
+  } catch {
+    throw fail(
+      "PATH",
+      "이름에 URL 이스케이프 문자가 포함된 항목은 지원하지 않아요.",
+    );
+  }
+  return value;
+}
+export function validateListing(data, path, offset) {
+  if (
+    !data ||
+    data.path !== path ||
+    !Array.isArray(data.items) ||
+    data.items.length > 100 ||
+    !Number.isSafeInteger(data.total) ||
+    data.total < 0 ||
+    !(
+      data.next === null ||
+      (Number.isSafeInteger(data.next) &&
+        data.next > offset &&
+        data.next <= 1000000)
+    )
+  )
+    throw fail("FORMAT", "사진 목록 응답 형식을 확인할 수 없어요.");
+  const prefix = path ? path + "/" : "";
+  const seen = new Set();
+  const items = data.items
+    .map((item) => {
+      if (
+        !item ||
+        typeof item.name !== "string" ||
+        !item.name ||
+        item.name.length > 1024 ||
+        /[\/\\\x00-\x1f]/.test(item.name) ||
+        typeof item.dir !== "boolean" ||
+        safePath(item.path) !== prefix + item.name ||
+        seen.has(item.path)
+      )
+        throw fail("FORMAT", "사진 목록에 올바르지 않은 항목이 있어요.");
+      seen.add(item.path);
+      return { name: item.name, path: item.path, dir: item.dir };
+    })
+    .filter(
+      (item) =>
+        !item.name.startsWith(".") &&
+        !item.name.toLowerCase().startsWith("@eadir") &&
+        (item.dir ||
+          /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(item.name)),
+    );
+  return { path, total: data.total, next: data.next, items };
+}
+const messages = {
+  401: "인증되지 않았어요. 토큰 또는 로그인 방식을 확인하고 다시 연결해 주세요.",
+  403: "이 페이지에서 접근할 수 없어요. 사진 API의 허용 주소 설정을 확인해야 해요.",
+  404: "폴더·사진이 없거나, 이 서버가 선택한 기능을 지원하지 않아요.",
+  409: "사진 API의 로그인 설정이 완료되지 않았어요. 기존 토큰 방식을 확인해 주세요.",
+  413: "15MB를 넘는 사진은 현재 미리보기에서 지원하지 않아요.",
+};
+export class NasClient {
+  #fetch;
+  #timeout;
+  #base = "";
+  #secret = "";
+  #mode = "";
+  #ready = false;
+  #expiry = Infinity;
+  #epoch = 0;
+  #requests = new Map();
+  #onExpire;
+  constructor({
+    fetchImpl = globalThis.fetch.bind(globalThis),
+    timeoutMs = 20000,
+    onExpire = () => {},
+  } = {}) {
+    this.#fetch = fetchImpl;
+    this.#timeout = timeoutMs;
+    this.#onExpire = onExpire;
+  }
+  get connected() {
+    return this.#ready && !!this.#secret && Date.now() < this.#expiry;
+  }
+  get mode() {
+    return this.#mode;
+  }
+  #clear() {
+    this.#epoch++;
+    this.#ready = false;
+    this.#secret = "";
+    this.#base = "";
+    this.#mode = "";
+    this.#expiry = Infinity;
+    for (const ctrl of this.#requests.keys()) ctrl.abort();
+    this.#requests.clear();
+  }
+  abortImages() {
+    for (const [ctrl, route] of this.#requests)
+      if (route === "/api/image") ctrl.abort();
+  }
+  async disconnect({ revoke = true } = {}) {
+    // Capture only for best-effort revocation; clear local state immediately.
+    const base = this.#base,
+      secret = this.#secret,
+      mode = this.#mode;
+    this.#clear();
+    if (revoke && base && secret && mode === "login") {
+      const ctrl = new AbortController(),
+        timer = setTimeout(() => ctrl.abort(), 3000);
+      try {
+        await this.#fetch(base + "/api/logout", {
+          method: "POST",
+          body: "{}",
+          headers: {
+            Authorization: "Bearer " + secret,
+            "Content-Type": "application/json",
+          },
+          mode: "cors",
+          credentials: "omit",
+          cache: "no-store",
+          redirect: "error",
+          referrerPolicy: "no-referrer",
+          signal: ctrl.signal,
+        });
+      } catch {
+        /* Local disconnect still succeeds. */
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+  async connect({
+    base,
+    mode = "token",
+    token = "",
+    username = "",
+    password = "",
+  }) {
+    const closing = this.disconnect();
+    const epoch = this.#epoch;
+    await closing;
+    if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
+    this.#base = safeBase(base);
+    try {
+      if (mode === "token") {
+        if (!/^[\x21-\x7e]{32,512}$/.test(token.trim()))
+          throw fail(
+            "TOKEN",
+            "기존 사진 조회 토큰을 입력해 주세요 (32자 이상).",
+          );
+        this.#mode = mode;
+        this.#secret = token.trim();
+      } else if (mode === "login") {
+        if (
+          !username.trim() ||
+          username.length > 80 ||
+          !password ||
+          password.length > 128
+        )
+          throw fail("LOGIN", "사진 API의 아이디와 비밀번호를 입력해 주세요.");
+        this.#mode = mode;
+        const data = await this.#request("/api/login", {
+          body: { username: username.trim(), password },
+          auth: false,
+        });
+        if (
+          !/^[\x21-\x7e]{16,512}$/.test(data?.session || "") ||
+          !Number.isFinite(data.expiresIn) ||
+          data.expiresIn <= 0 ||
+          data.expiresIn > 31 * 86400
+        )
+          throw fail("FORMAT", "로그인 응답 형식이 올바르지 않아요.");
+        this.#secret = data.session;
+        this.#expiry = Date.now() + data.expiresIn * 1000;
+      } else throw fail("MODE", "지원하지 않는 연결 방식이에요.");
+      const listing = await this.#list("", 0);
+      if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
+      this.#ready = true;
+      return listing;
+    } catch (error) {
+      if (epoch === this.#epoch) await this.disconnect();
+      throw error;
+    }
+  }
+  #assertAuth() {
+    if (Date.now() >= this.#expiry) {
+      this.#clear();
+      this.#onExpire();
+    }
+    if (!this.#secret)
+      throw fail("AUTH", "먼저 NAS 사진 보관함에 연결해 주세요.");
+  }
+  async #list(path, offset) {
+    safePath(path);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1000000)
+      throw fail("OFFSET", "목록 위치가 올바르지 않아요.");
+    return validateListing(
+      await this.#request("/api/list", { params: { path, offset } }),
+      path,
+      offset,
+    );
+  }
+  async list(path = "", offset = 0) {
+    this.#assertAuth();
+    return this.#list(path, offset);
+  }
+  async image(path) {
+    this.#assertAuth();
+    safePath(path);
+    if (!/\.(jpe?g|png|webp|gif|bmp|heic|heif|avif)$/i.test(path))
+      throw fail("IMAGE", "지원하는 사진 파일만 열 수 있어요.");
+    return this.#request("/api/image", { params: { path }, image: true });
+  }
+  async #request(
+    route,
+    { body, params = {}, image = false, auth = true } = {},
+  ) {
+    if (auth) this.#assertAuth();
+    const epoch = this.#epoch,
+      url = new URL(this.#base + route);
+    Object.entries(params).forEach(([k, v]) =>
+      url.searchParams.set(k, String(v)),
+    );
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, this.#timeout);
+    this.#requests.set(ctrl, route);
+    try {
+      const headers = auth ? { Authorization: "Bearer " + this.#secret } : {};
+      if (body) headers["Content-Type"] = "application/json";
+      const res = await this.#fetch(url.href, {
+        method: body ? "POST" : "GET",
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal,
+        mode: "cors",
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+      });
+      if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
+      if (!res.ok) {
+        if (res.status === 401 && auth) {
+          const wasConnected = this.#ready;
+          this.#clear();
+          if (wasConnected) this.#onExpire();
+        }
+        throw fail(
+          "HTTP_" + res.status,
+          messages[res.status] ||
+            "사진 API에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.",
+        );
+      }
+      const limit = image ? 15 * 1024 * 1024 : 2 * 1024 * 1024;
+      const raw = await readBounded(res, limit);
+      if (epoch !== this.#epoch) throw fail("ABORT", "연결을 취소했어요.");
+      if (image) {
+        const type = (res.headers.get("content-type") || "")
+          .split(";")[0]
+          .trim()
+          .toLowerCase();
+        if (!/^image\/(jpeg|png|webp|gif|bmp|avif|heic|heif)$/.test(type))
+          throw fail("IMAGE", "이 파일의 사진 형식을 확인할 수 없어요.");
+        return new Blob([raw], { type });
+      }
+      try {
+        return JSON.parse(new TextDecoder().decode(raw));
+      } catch {
+        throw fail(
+          "FORMAT",
+          "사진 API 응답이 아니에요. 터널 주소가 유효한지 확인해 주세요.",
+        );
+      }
+    } catch (error) {
+      if (timedOut)
+        throw fail(
+          "TIMEOUT",
+          "응답 시간이 길어지고 있어요. NAS와 터널 연결을 확인해 주세요.",
+        );
+      if (error instanceof NasError) throw error;
+      if (ctrl.signal.aborted) throw fail("ABORT", "요청을 취소했어요.");
+      throw fail(
+        "NETWORK",
+        "NAS에 닿지 못했어요. 터널 주소·NAS 실행 상태·접근 허용 설정을 확인해 주세요.",
+      );
+    } finally {
+      clearTimeout(timer);
+      this.#requests.delete(ctrl);
+    }
+  }
+}
+async function readBounded(response, maxBytes) {
+  if (Number(response.headers.get("content-length")) > maxBytes) {
+    await response.body?.cancel();
+    throw fail("SIZE", "파일이 미리보기 크기 제한을 넘었어요.");
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw fail("FORMAT", "비어 있는 응답을 받았어요.");
+  const parts = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        throw fail("SIZE", "파일이 미리보기 크기 제한을 넘었어요.");
+      }
+      parts.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.byteLength;
+  }
+  return result;
+}
