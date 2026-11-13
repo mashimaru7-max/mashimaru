@@ -1,6 +1,6 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import { NasActions } from "./nas-actions.js?v=20261113-shared1";
-import { NasClient } from "./nas-client.mjs?v=20261113-archive1";
+import { NasClient } from "./nas-client.mjs?v=20261113-random1";
 import { ConnectionVault } from "./nas-vault.mjs?v=20261113-shared1";
 const esc = (s) =>
   String(s ?? "").replace(

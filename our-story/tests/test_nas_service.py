@@ -199,4 +199,19 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(len(list((self.settings_dir/'thumbnails').glob('v1-*.jpg'))),2)
         self.assertEqual((self.root/'one.jpg').read_bytes(),original)
 
+    def test_random_visits_sample_full_index_and_keep_same_visit_stable(self):
+        for i in range(40): (self.root/('photo-%02d.jpg'%i)).write_bytes(PHOTO)
+        seed='a'*32;archive=self.server.archive
+        first=archive.collection('home','',seed=seed)
+        again=archive.collection('home','',seed=seed)
+        other=archive.collection('home','',seed='b'*32)
+        self.assertTrue(first['randomized']);self.assertEqual(len(first['items']),12)
+        self.assertEqual(first['items'],again['items']);self.assertNotEqual(first['items'],other['items'])
+        self.assertEqual(first['total'],41)
+        default=archive.collection('home','')
+        self.assertFalse(default['randomized']);self.assertNotEqual(first['items'],default['items'])
+        self.assertEqual(self.request('/api/album-index','POST',{'key':'home','seed':'bad'})[0],400)
+        status,raw,_=self.request('/api/album-index','POST',{'key':'home','seed':seed})
+        self.assertEqual(status,200);self.assertEqual(json.loads(raw)['items'],first['items'])
+
 if __name__=='__main__':unittest.main()

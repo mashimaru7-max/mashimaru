@@ -1,9 +1,9 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
-import { FamilySettings } from './nas-shared.mjs?v=20261113-archive1';
-import { NasAlbums } from "./nas-albums.js?v=20261113-indexfix1";
-import { NasHome } from "./nas-home.js?v=20261113-archive1";
+import { FamilySettings } from './nas-shared.mjs?v=20261113-random1';
+import { NasAlbums } from "./nas-albums.js?v=20261113-random1";
+import { NasHome } from "./nas-home.js?v=20261113-random1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261113-archive1";
+import { NasGallery } from "./nas-gallery.js?v=20261113-random1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -365,6 +365,7 @@ function form(type, id) {
   );
 }
 function render() {
+  albums.beginVisit(state.page+(state.page==='growth'?':'+state.child:''));
   albums.release();
   main.classList.toggle("nas-live",nas.connected);
   main.dataset.page=state.page;

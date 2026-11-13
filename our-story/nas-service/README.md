@@ -110,3 +110,12 @@ python -m unittest discover -s our-story/tests -p test_nas_service.py -v
 ### 기존 v2 이미지에 코드만 적용하기
 
 `downloads/our-story-index-fix.zip`에는 수정된 `server.py` 한 파일만 있다. NAS의 별도 `docker/our-story/hotfix` 폴더에 압축을 풀고, 새 API 컨테이너를 중지한 뒤 **파일 추가**로 그 파일을 `/app/server.py`에 읽기 전용 마운트한다. 기존 `/photos`, `/settings`, 환경 변수, 네트워크는 유지한다. API만 재시작하며 터널은 재시작하지 않는다. 원복은 해당 파일 마운트만 제거하면 된다. 기존 API나 사진 파일에는 적용하지 않는다.
+
+
+## 방문마다 사진 랜덤 표시
+
+공통 설정과 전체 사진 인덱스는 가족이 공유하되, 각 방문의 표시 사진은 달라진다. 웹은 페이지 진입/아이 선택 변경/명시적 ‘새로 불러오기’에 128-bit 무작위 seed를 만든다. 같은 페이지의 일반 재렌더와 백그라운드 폴링에서는 seed를 유지한다. SQL에서 전체 대상 목록을 seed+경로의 SHA-256 순으로 정렬해 최대 12장을 뽑으므로, 기존 미리보기 12장만 섞는 방식이 아니다. 같은 목록·seed에서는 같은 결과다. 표본이 적으면 재방문해도 같은 사진이 나올 수 있으며 반복 금지는 아니다. 새 사진 발견/인덱스 갱신으로 대상 목록 자체가 바뀌는 경우 표시는 달라질 수 있다.
+
+직접 지정한 홈 대표사진은 고정한다. 자동 홈 대표사진·앨범·홈의 앨범 표지는 방문 seed를 따른다. 연도 필터는 그 연도의 대상 사진 안에서만 적용된다. 사진 목록을 읽는 기본 API는 seed가 없으면 기존 고정 정렬을 유지한다. `randomAlbums:true` 기능 응답이 없는 구버전 NAS에는 seed를 전송하지 않고 업데이트 안내를 표시한다. 기존 `/settings` 데이터 변경이나 사진 권한 변경은 필요 없다.
+
+기존 hotfix 파일 마운트가 있다면 API를 중지하고 `downloads/our-story-random-albums.zip`의 `server.py`로 NAS의 `hotfix/server.py`만 교체한 뒤 API를 재시작한다. 터널은 유지한다.

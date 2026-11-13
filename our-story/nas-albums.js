@@ -1,13 +1,13 @@
 import {icon} from "./icons.js?v=20261113-albumlook2";
 import {ConnectionVault,indexedConnectionStore} from './nas-vault.mjs?v=20261113-shared1';
-import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261113-archive1';
+import {scanFolderPhotos,validateAlbumBindings,ALBUM_KEYS,validateNameRule,findNamedFolders,previewNamedFolders} from './nas-album-model.mjs?v=20261113-random1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const labels={'home':'홈','travel':'여행','growth:다온':'다온','growth:라온':'라온','growth:함께':'함께'};
 export class NasAlbums {
   constructor(gallery,{notify=()=>{},onChange=()=>{},onBrowse=()=>{},vault}={}) {
     this.g=gallery;this.notify=notify;this.onChange=onChange;this.onBrowse=onBrowse;
     this.vault=vault||new ConnectionVault({store:indexedConnectionStore(indexedDB,'our-story-album-folders-v1')});
-    this.searches=new Map();this.searchPending=new Map();this.years=new Map();this.bindings={};this.cache=new Map();this.pending=new Map();this.version=0;this.host=null;this.urls=[];this.origin='';this.key='home';this.settingVersion=0;this.refreshKeys=new Set();this.pollTime=0;
+    this.searches=new Map();this.searchPending=new Map();this.years=new Map();this.bindings={};this.cache=new Map();this.pending=new Map();this.version=0;this.host=null;this.urls=[];this.origin='';this.key='home';this.settingVersion=0;this.refreshKeys=new Set();this.pollTime=0;this.visitSeed=crypto.randomUUID().replaceAll('-','');this.visitPage=null;
     this.ready=this.vault.load().then(d=>{this.bindings=validateAlbumBindings(d);}).catch(()=>this.notify('앨범 폴더 설정을 읽지 못했어요. 다시 연결해 주세요.'));
     this.dialog=document.createElement('dialog');this.dialog.className='nas-dialog nas-folder-picker';this.dialog.setAttribute('aria-label','앨범 사진 폴더 선택');document.body.append(this.dialog);
     this.dialog.addEventListener('close',()=>{this.settingVersion++;this.dialog.replaceChildren();});
@@ -38,15 +38,15 @@ export class NasAlbums {
     this.bindings=validateAlbumBindings(await this.vault.load());
     const origin=this.g.client.origin,binding=this.folder(key),year=this.years.get(key)||'';
     if(key!=='home' && binding===undefined)return {items:[],unbound:true};
-    const path=typeof binding==='string'?binding:'',cacheKey=origin+'\n'+key+'\n'+JSON.stringify(binding??'')+'\n'+year;
+    const path=typeof binding==='string'?binding:'',cacheKey=origin+'\n'+key+'\n'+JSON.stringify(binding??'')+'\n'+year+'\n'+(this.visitSeed||'');
     const cached=this.cache.get(cacheKey);
-    if(!refresh && cached && !cached.data.indexing && !(this.g.features.sharedArchive && !cached.data.shared) && Date.now()-cached.time<60000 && !this.refreshKeys.has(key))return cached.data;
+    if(!refresh && cached && !cached.data.indexing && !(this.g.features.sharedArchive && !cached.data.shared) && !(this.g.features.randomAlbums && !cached.data.randomized) && Date.now()-cached.time<60000 && !this.refreshKeys.has(key))return cached.data;
     if(this.pending.has(cacheKey))return this.pending.get(cacheKey);
     const current=()=>this.g.connected&&this.g.client.origin===origin;
     const work=(async()=>{
       if(this.g.features.sharedArchive) {
         const force=this.refreshKeys.delete(key);
-        const data=await this.g.client.sharedAlbum(key,year,force);
+        const data=await this.g.client.sharedAlbum(key,year,force,this.g.features.randomAlbums?this.visitSeed:'');
         return {...data,origin};
       }
       if(binding?.type==='name') {
@@ -78,9 +78,14 @@ export class NasAlbums {
     }
   }
   indexStatus(data) {
-    if(!data.indexing)return `가족 공통 목록 · ${data.total??0}장 · 같은 순서로 표시해요.`;
+    if(!data.indexing)return `가족 공통 목록 · ${data.total??0}장 · ${data.randomized?'방문할 때마다 새로운 사진을 골라 보여줘요.':'고정 순서 · 방문마다 랜덤 표시하려면 NAS 코드를 업데이트해 주세요.'}`;
     const p=data.progress;
     return '가족 공통 목록을 모으는 중이에요. '+(p?`${p.scanned}개 목록 확인 · 사진 ${p.found}장 발견 · 남은 목록 ${p.pending}개. `:'')+'찾은 사진부터 표시하고, 기존 완료 목록은 유지해요.';
+  }
+  beginVisit(page) {
+    if(this.visitPage===page)return;
+    this.visitPage=page;this.visitSeed=crypto.randomUUID().replaceAll('-','');
+    this.cache.clear();this.pending.clear();
   }
   release() {this.lastSignature=null;this.version++;for(const url of this.urls)URL.revokeObjectURL(url);this.urls=[];this.host=null;}
   mount(host,key='home') {this.release();this.host=host;this.key=key;void this.paint();}
@@ -100,7 +105,7 @@ export class NasAlbums {
       host.innerHTML=`<div class="section-head nas-album-heading"><div><span class="eyebrow">AUTOMATIC PHOTO ALBUM</span><h2>${title}</h2></div><div class="nas-album-controls"><button data-album-picker>사진 폴더 ${path===undefined && key!=='home'?'연결':'변경'}</button><button data-album-refresh>새로 불러오기</button></div></div>${data.unbound?'<div class="nas-album-empty"><h3>사진마다 고르지 않아도 괜찮아요.</h3><p>사진이 있는 폴더를 한 번 연결하면 하위 폴더의 사진까지 자동으로 보여드려요.</p><button class="primary" data-album-picker>사진 폴더 연결</button></div>':`<p class="fine nas-album-source">${named?'모으는 기준':'연결 폴더'}: ${esc(source)} · 하위 사진 포함</p>${yearSelect}${data.shared?`<p class="fine" data-index-status role="status">${esc(this.indexStatus(data))}</p>`:'<p class="fine">이 서버는 기기별 탐색 모드예요. 가족 공통 목록을 사용하려면 NAS 서버를 업데이트해 주세요.</p>'}${data.search?.limited?`<div class="nas-search-note" role="status">일부 범위까지 검색했어요. ${data.search.canContinue?'<button data-name-more>남은 폴더 이어서 찾기</button>':'검색 범위를 더 가까운 폴더로 좁혀 주세요.'}</div>`:''}${data.items.length?`<div class="${key==='home'?'nas-album-grid':'nas-album-spread'}">${data.items.slice(0,key==='home'?8:12).map((item,i)=>`<button class="nas-album-photo ${i===0?'nas-album-lead':''}" data-album-photo="${i}"><span class="nas-auto-image">${'<span class="nas-skeleton"></span>'}</span><span>${esc(item.folderYear?item.folderYear+' · '+item.name:item.name)}</span></button>`).join('')}</div>`:'<div class="nas-album-empty"><p>이 범위에서 표시할 사진을 찾지 못했어요. 공통 목록 준비 중이면 잠시 기다려 주세요. 폴더 이름과 검색 범위도 확인해 주세요.</p></div>'}<div class="nas-album-foot"><p class="fine">${data.limited?'미리보기 일부를 골라 표시했어요. 전체 사진은 보관함에서 볼 수 있어요.':'사진 파일과 여행·성장 이야기는 따로 보관돼요.'}${data.issues?' 읽지 못한 하위 폴더가 있어요.':''}</p><button data-album-all>${named?'모은 폴더 전체 보기':'이 폴더의 전체 사진 보기'}</button></div>`}`;
       host.onclick=e=>{
         if(e.target.closest('[data-album-picker]'))void this.pick(key);
-        if(e.target.closest('[data-album-refresh]')){this.refreshKeys.add(key);this.cache.clear();this.pending.clear();if(named)this.searches.clear();void this.paint();this.onChange(false);}
+        if(e.target.closest('[data-album-refresh]')){this.visitSeed=crypto.randomUUID().replaceAll('-','');this.refreshKeys.add(key);this.cache.clear();this.pending.clear();if(named)this.searches.clear();void this.paint();this.onChange(false);}
         if(e.target.closest('[data-album-all]')){if(named)this.showMatches(data);else this.onBrowse(data.path??'');}
         if(e.target.closest('[data-name-more]')){const v=this.version;host.querySelector('[data-name-more]').disabled=true;void this.nameIndex(data.rule,{more:true}).then(()=>{if(v===this.version){this.cache.clear();void this.paint();}}).catch(err=>this.notify(err.message));}
         const photo=e.target.closest('[data-album-photo]');if(photo)void this.g.openImage(data.items[Number(photo.dataset.albumPhoto)]);

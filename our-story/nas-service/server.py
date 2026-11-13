@@ -288,7 +288,7 @@ class SharedArchive:
         text=unicodedata.normalize('NFC',rule['text']).strip().casefold()
         return (text in name if rule['mode']=='contains' else name==text or
                 (rule['mode']=='numbered' and name.startswith(text) and bool(re.fullmatch(r'\s*[0-9]+',name[len(text):]))))
-    def collection(self, key, binding, year='', refresh=False, budget=20):
+    def collection(self, key, binding, year='', refresh=False, budget=20, seed=''):
         ident=hashlib.sha256(json.dumps([key,binding],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
         named=isinstance(binding,dict)
         root=binding['root'] if named else binding
@@ -337,12 +337,15 @@ class SharedArchive:
             if year:
                 where+=' AND year=?';args.append('' if year=='other' else year)
             total=db.execute('SELECT count(*) FROM photos WHERE '+where,args).fetchone()[0]
-            rows=db.execute('SELECT path,name,revision,year,folder FROM photos WHERE '+where+' ORDER BY year DESC,path COLLATE BINARY LIMIT 12',args).fetchall()
+            if seed:
+                db.create_function('visit_rank',1,lambda path:hashlib.sha256((seed+'\0'+path).encode()).hexdigest(),deterministic=True)
+            order='visit_rank(path),path' if seed else 'year DESC,path COLLATE BINARY'
+            rows=db.execute('SELECT path,name,revision,year,folder FROM photos WHERE '+where+' ORDER BY '+order+' LIMIT 12',args).fetchall()
             matches=sorted(state.get('activeMatches',[]) if state['active'] is not None else state.get('matches',[]),key=lambda m:(m['year'],m['path']),reverse=True)
             return {'items':[{'path':p,'name':n,'revision':r,'dir':False,'folderYear':y,'albumFolder':f} for p,n,r,y,f in rows],
                 'matchedFolders':matches,'selectedYear':year,'rule':binding if named else None,'path':root,
                 'total':total,'limited':total>12,'issues':state['issues'],'indexing':bool(state['queue']),
-                'shared':True,'snapshot':generation,'progress':{'scanned':state.get('scanned',0),'pending':len(state['queue']),'found':db.execute('SELECT count(*) FROM photos WHERE collection=? AND generation=?',(ident,state['generation'])).fetchone()[0]},'search':{'limited':False,'canContinue':False,'folders':len(matches)}}
+                'shared':True,'randomized':bool(seed),'snapshot':generation,'progress':{'scanned':state.get('scanned',0),'pending':len(state['queue']),'found':db.execute('SELECT count(*) FROM photos WHERE collection=? AND generation=?',(ident,state['generation'])).fetchone()[0]},'search':{'limited':False,'canContinue':False,'folders':len(matches)}}
     def thumbnail(self, fd, st):
         # Revision changes on source edits, so stale thumbnails are never reused.
         cache=self.root/'thumbnails';cache.mkdir(mode=0o700,exist_ok=True)
@@ -402,7 +405,7 @@ class Handler(BaseHTTPRequestHandler):
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable,'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash': self.reply(200,store.trash_list()); return
@@ -414,14 +417,15 @@ class Handler(BaseHTTPRequestHandler):
                 if route.path=='/api/album-index' and self.server.archive is not None:
                     if length<=0 or length>1024 or self.headers.get_content_type()!='application/json': raise APIError(400)
                     data=json.loads(self.rfile.read(length))
-                    if not isinstance(data,dict) or set(data)-{'key','year','refresh'}: raise APIError(400)
-                    key=data.get('key');year=data.get('year','');refresh=data.get('refresh',False)
+                    if not isinstance(data,dict) or set(data)-{'key','year','refresh','seed'}: raise APIError(400)
+                    key=data.get('key');year=data.get('year','');refresh=data.get('refresh',False);seed=data.get('seed','')
+                    if not isinstance(seed,str) or (seed and not re.fullmatch(r'[a-f0-9]{32}',seed)): raise APIError(400)
                     if not isinstance(key,str) or key not in ALBUM_KEYS or not isinstance(year,str) or (year and year!='other' and not re.fullmatch(r'(19|20)[0-9]{2}',year)) or type(refresh) is not bool: raise APIError(400)
                     settings=self.server.settings.read()
                     if key!='home' and key not in settings['albums']:
                         self.reply(200,{'items':[],'unbound':True,'shared':True});return
                     binding=album_binding(settings['albums'].get(key,''))
-                    self.reply(200,self.server.archive.collection(key,binding,year,refresh));return
+                    self.reply(200,self.server.archive.collection(key,binding,year,refresh,seed=seed));return
                 if route.path=='/api/settings' and self.server.settings is not None:
                     if length<=0 or length>32768 or self.headers.get_content_type()!='application/json': raise APIError(400)
                     self.reply(200,self.server.settings.patch(json.loads(self.rfile.read(length)))); return

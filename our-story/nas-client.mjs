@@ -360,16 +360,16 @@ export class NasClient {
     try { return await this.#request("/api/settings", patch === undefined ? {} : {body: patch}); }
     catch(e) {if(e.code==="HTTP_409")throw fail(e.code,"가족 설정이 다른 기기에서 변경됐어요. 다시 시도해 주세요.");throw e;}
   }
-  async sharedAlbum(key, year='', refresh=false) {
+  async sharedAlbum(key, year='', refresh=false, seed='') {
     this.#assertAuth();
-    return validateSharedAlbum(await this.#request('/api/album-index',{body:{key,year,refresh},timeoutMs:30000}));
+    return validateSharedAlbum(await this.#request('/api/album-index',{body:{key,year,refresh,...(seed?{seed}:{})},timeoutMs:30000}));
   }
   async capabilities() {
     this.#assertAuth();
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
