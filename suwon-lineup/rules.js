@@ -10,7 +10,7 @@ function normalize(data,players,formations){
  if(!Array.isArray(bench)||bench.length!==BENCH||!Number.isInteger(callups)||callups<0||callups>2)return null;
  const ids=[...data.lineup,...bench].filter(id=>id!==null);
  if(ids.some(id=>!players.some(p=>p.id===id))||new Set(ids).size!==ids.length)return null;
- return {formation:data.formation,lineup:[...data.lineup],bench:[...bench],callups};
+ return {formation:data.formation,lineup:[...data.lineup],bench:[...bench],callups,captain:data.captain!=null&&data.lineup.includes(data.captain)?data.captain:null};
 }
 function at(state,index){return index<STARTERS?state.lineup[index]:state.bench[index-STARTERS];}
 function set(state,index,id){if(index<STARTERS)state.lineup[index]=id;else state.bench[index-STARTERS]=id;}
