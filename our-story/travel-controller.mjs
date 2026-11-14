@@ -1,4 +1,4 @@
-import {icon} from './icons.js?v=20261114-travel1';
+import {icon} from './icons.js?v=20261114-friendly1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const family=['아빠','엄마','다온','라온'];
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date());
@@ -26,8 +26,8 @@ export class TravelController{
   this.dialog.addEventListener('close',()=>{this.detailVersion++;this.formMap?.remove();this.formMap=null;this.form=null;this.dirty=false;this.busy=false;this.detailURLs.forEach(URL.revokeObjectURL);this.detailURLs=[];this.dialog.replaceChildren();});
   this.dialog.addEventListener('click',e=>{if(e.target.closest('[data-travel-close]')&&this.canClose())this.dialog.close();});
   window.addEventListener('beforeunload',e=>{if(this.dirty){e.preventDefault();e.returnValue='';}});
-  this.timer=setInterval(()=>{if(this.host?.isConnected&&this.g.connected&&!this.dialog.open&&!this.loading&&document.visibilityState==='visible'&&!this.host.contains(document.activeElement))void this.load(false);},30000);
-  window.addEventListener('focus',()=>{if(this.host?.isConnected&&this.g.connected&&!this.dialog.open&&!this.loading&&!this.host.contains(document.activeElement))void this.load(false);});
+  this.timer=setInterval(()=>{if(this.view!=='photos'&&this.host?.isConnected&&this.g.connected&&!this.dialog.open&&!this.loading&&document.visibilityState==='visible'&&!this.host.contains(document.activeElement))void this.load(false);},30000);
+  window.addEventListener('focus',()=>{if(this.view!=='photos'&&this.host?.isConnected&&this.g.connected&&!this.dialog.open&&!this.loading&&!this.host.contains(document.activeElement))void this.load(false);});
  }
  canClose(){if(this.busy){this.notify('저장 중이에요. 잠시 기다려 주세요.');return false;}return !this.dirty||window.confirm('저장하지 않은 여행 이야기가 있어요. 닫을까요?');}
  clearImages(){this.urls.forEach(URL.revokeObjectURL);this.urls=[];}
@@ -44,7 +44,7 @@ export class TravelController{
    const data=await this.g.client.travelList({kind:this.view==='wish'?'wish':'trip',...this.filters,scope:this.view==='korea'?'domestic':this.filters.scope,offset:more?this.next:0});
    if(version!==this.version||host!==this.host||!host.isConnected||!this.g.connected)return;
    if(!more)this.items.clear();data.items.forEach(item=>this.items.set(item.id,item));this.next=data.next;this.data=data;this.paint();
-  }catch(error){if(version!==this.version||host!==this.host)return;const box=host.querySelector('[data-travel-content]');if(reset)box.innerHTML=`<div class="nas-album-empty" role="alert"><h2>여행 기록을 연결해 주세요</h2><p>${esc(['HTTP_404','HTTP_409'].includes(error.code)?'NAS에 여행 저장 업데이트를 적용하면 지도와 여행기를 가족이 함께 사용할 수 있어요.':error.message)}</p><a href="downloads/our-story-travel.zip" download>여행 업데이트 받기</a><button data-trip-retry>다시 불러오기</button></div>`;else this.notify(error.message);box.querySelector('[data-trip-retry]')?.addEventListener('click',()=>void this.load(true));}
+  }catch(error){if(version!==this.version||host!==this.host)return;const box=host.querySelector('[data-travel-content]');if(reset)box.innerHTML=`<div class="nas-album-empty" role="alert"><h2>먼저, 여행 사진을 만나 보세요</h2><p>${esc(['HTTP_404','HTTP_409'].includes(error.code)?'연결해 둔 사진은 지금도 볼 수 있어요. 여행기 저장은 서버 업데이트 후 열려요.':error.message)}</p>${this.photos?'<button class="primary" data-trip-photos>여행 사진 보기</button>':''}<button data-trip-retry>다시 확인</button><details class="travel-setup-note"><summary>여행기 저장 준비하기</summary><p>집에서 기존 server.py를 교체하고 API를 다시 시작해 주세요. 사진과 기존 설정은 그대로 유지해요.</p><a href="downloads/our-story-travel.zip" download>업데이트 파일 받기</a></details></div>`;else this.notify(error.message);box.querySelector('[data-trip-retry]')?.addEventListener('click',()=>void this.load(true));box.querySelector('[data-trip-photos]')?.addEventListener('click',()=>{this.view='photos';void this.load(true);});}
   finally{if(version===this.version)this.loading=false;}
  }
  tabs(){return `<div class="tabs travel-tabs">${[['world','세계지도'],['korea','국내지도'],['list','여행기록'],['wish','버킷리스트'],...(this.photos?[['photos','여행 사진 모아보기']]:[])].map(([key,label])=>`<button data-trip-view="${key}" aria-pressed="${this.view===key}" class="${this.view===key?'selected':''}">${label}</button>`).join('')}</div>`;}

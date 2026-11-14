@@ -6,10 +6,10 @@ export function growthTabs(child){return `<div class="chips" aria-label="성장�
 export function childJournal(child,examples){
  if(!['다온','라온'].includes(child))throw new TypeError('기록 대상을 확인해 주세요.');
  return `<div class="page-title"><div><span class="eyebrow">WORDS WE KEEP, DAYS YOU GROW</span><h1><span class="title-emblem">${icon('sprout')}</span>너희의 모든 계절</h1><p>함께한 사진은 함께에, 너만의 이야기는 이곳에.</p></div></div>${growthTabs(child)}
- <section class="journal-intro"><div class="journal-copy"><span class="eyebrow">${child==='다온'?'DAON':'RAON'}’S STORYBOOK</span><h2>${child}의 기록장</h2><p>좋아하는 것이 바뀐 날도,<br>새로운 세상을 만난 날도.<br>사진 없이도 오래 남겨 두고 싶은 이야기.</p><button class="primary" data-action="journal-new" data-value="diary">기록 남기기</button><p class="fine">로그인 후 NAS에 기록을 남기고 가족과 함께 볼 수 있어요.</p></div><div class="journal-notebook" aria-label="성장 기록 구성"><span class="journal-label">오늘의 한 페이지</span><h3>오늘의 ${child}에게</h3><div class="journal-rule"></div><div class="journal-rule"></div><p>아이의 말 한마디<br>부모가 기억하고 싶은 마음</p><div class="journal-rule"></div><span class="hand muted">너의 속도로, 천천히 ♡</span></div></section>
+ <section class="journal-intro"><div class="journal-copy"><span class="eyebrow">${child==='다온'?'DAON':'RAON'}’S STORYBOOK</span><h2>${child}의 기록장</h2><p>좋아하는 것이 바뀐 날도,<br>새로운 세상을 만난 날도.<br>사진 없이도 오래 남겨 두고 싶은 이야기.</p><button class="primary" data-action="journal-new" data-value="diary">기록 남기기</button><p class="fine">남긴 이야기는 가족 기록장에 함께 보관돼요.</p></div><div class="journal-notebook" aria-label="성장 기록 구성"><span class="journal-label">오늘의 한 페이지</span><h3>오늘의 ${child}에게</h3><div class="journal-rule"></div><div class="journal-rule"></div><p>아이의 말 한마디<br>부모가 기억하고 싶은 마음</p><div class="journal-rule"></div><span class="hand muted">너의 속도로, 천천히 ♡</span></div></section>
  <section class="journal-kinds" aria-label="기록 종류">${kinds.map(([key,title,sub])=>`<button data-action="journal-new" data-value="${key}"><span class="eyebrow">${key==='words'?'A LITTLE VOICE':key==='letter'?'DEAR YOU':key==='measure'?'GROWING DAYS':'DEAR DIARY'}</span><h3>${title}</h3><p>${sub}</p></button>`).join('')}</section>
  <section class="journal-record-section"><div id="journal-real-records" role="region" aria-label="저장한 성장 기록"><p role="status">기록 보관함을 확인하고 있어요…</p></div></section>
- <details class="sample-stories"><summary>${child}의 성장 기록 예시 살펴보기</summary><p class="fine">아래는 예시 데이터예요. 입력 체험도 새로고침하면 초기화돼요.</p><button data-action="add" data-type="growth">예시 기록 입력 체험</button>${examples}</details>`;
+`;
 }
 
 export const JOURNAL_KINDS=Object.fromEntries(kinds.map(([key,label])=>[key,label]));
