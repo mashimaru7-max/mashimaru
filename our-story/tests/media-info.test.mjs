@@ -12,3 +12,7 @@ test('folder period is visibly distinct from an actual EXIF date and filenames a
 test('region names are labeled as linked trip data, text escaped and GPS only opens by explicit link',()=>{
  const html=infoHTML('a.jpg',{capturedAt:null,gps:{lat:37.5,lng:127},trips:[{country:'대한민국',city:'<img src=x>'}]});assert(!html.includes('<img src=x>'));assert.match(html,/연결한 여행의 지역/);assert.match(html,/openstreetmap.org/);assert.match(html,/noopener noreferrer/);
 });
+
+test('filtered select-all keeps folder subtrees out of a photo/video-only selection',async()=>{
+ const {selectLoaded}=await import('../nas-selection.mjs');const items=[{path:'folder',dir:true},{path:'a.jpg',dir:false},{path:'b.mp4',dir:false}];const selected=new Map();selectLoaded(selected,mediaEntries(items,'video').map(({item})=>item),{folders:false});assert.deepEqual([...selected.keys()],['b.mp4']);
+});
