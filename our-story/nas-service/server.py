@@ -847,6 +847,33 @@ class FileManager:
             plan={'kind':'restore','trashId':ident,'old':meta['path'],'new':meta['path'],'sourceRevision':revision(st),'inode':[st.st_dev,st.st_ino],'settings':None,'records':records,'at':datetime.datetime.now(datetime.timezone.utc).isoformat()}
             return self.execute(opid,plan)
 
+class VideoDownloads:
+    """Two-minute, single-file, one-GET grants; never expose the family bearer session in URLs."""
+    def __init__(self,store,auth):self.store=store;self.auth=auth;self.grants={};self.lock=threading.Lock()
+    def session_valid(self,digest):
+        if not self.auth:return False
+        with self.auth.db() as db:return db.execute('SELECT 1 FROM sessions WHERE digest=? AND expires>?',(digest,time.time())).fetchone() is not None
+    def issue(self,path,expected,session):
+        if not VIDEO.search(path) or not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
+        digest=hashlib.sha256(session.encode()).hexdigest()
+        if not self.session_valid(digest):raise APIError(401)
+        with self.store.photo(path,media=True) as (fd,st):
+            if revision(st)!=expected:raise APIError(409)
+        with self.lock:
+            self.grants={k:v for k,v in self.grants.items() if v['expires']>time.time()}
+            if len(self.grants)>=128:raise APIError(429)
+            ticket=secrets.token_urlsafe(32);self.grants[hashlib.sha256(ticket.encode()).hexdigest()]={'path':path,'revision':expected,'session':digest,'expires':time.time()+120}
+        return {'ticket':ticket,'expiresIn':120}
+    def claim(self,ticket,head=False):
+        if not re.fullmatch(r'[A-Za-z0-9_-]{43}',ticket):raise APIError(404)
+        key=hashlib.sha256(ticket.encode()).hexdigest()
+        with self.lock:
+            value=self.grants.get(key)
+            if not value or value['expires']<=time.time():self.grants.pop(key,None);raise APIError(410)
+            if not self.session_valid(value['session']):self.grants.pop(key,None);raise APIError(401)
+            if not head:self.grants.pop(key,None)
+            return value.copy()
+
 class VideoThumbnails:
     """One software decoder at a time; source videos stay read-only and JPEGs persist separately."""
     def __init__(self,settings):
@@ -1198,16 +1225,18 @@ class Handler(BaseHTTPRequestHandler):
     def setup(self):
         super().setup(); self.connection.settimeout(120)
     def log_message(self, *args): pass  # No paths, credentials, or private metadata in logs.
-    def cors(self):
+    def cors(self,download=False):
         self.send_header('Access-Control-Allow-Origin',self.server.origin)
         self.send_header('Vary','Origin')
         self.send_header('Access-Control-Expose-Headers','Content-Length, Content-Range, Accept-Ranges, Content-Disposition, ETag')
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
-        self.send_header('Content-Security-Policy',"default-src 'none'; sandbox")
+        self.send_header('Content-Security-Policy',"default-src 'none'; sandbox"+(" allow-downloads" if download else ""))
+        self.send_header('Referrer-Policy','no-referrer')
     def reply(self,status,data):
         raw=json.dumps(data,ensure_ascii=False).encode()
-        self.send_response(status); self.cors(); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(raw))); self.end_headers(); self.wfile.write(raw)
+        self.send_response(status); self.cors(); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(raw))); self.end_headers()
+        if self.command!='HEAD':self.wfile.write(raw)
     def authorized(self):
         if self.headers.get('Origin')!=self.server.origin: raise APIError(403)
         value=self.headers.get('Authorization','')
@@ -1217,6 +1246,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         if self.headers.get('Origin')!=self.server.origin: self.reply(403,{'error':'forbidden'}); return
         self.send_response(204); self.cors(); self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers','Authorization, Content-Type, Range'); self.end_headers()
+    def do_HEAD(self):
+        if urlsplit(self.path).path.startswith('/api/video-file/'):self.run_request(False)
+        else:self.reply(405,{'error':'method_not_allowed'})
     def do_GET(self): self.run_request(False)
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
@@ -1249,6 +1281,10 @@ class Handler(BaseHTTPRequestHandler):
             if post and route.path=='/api/login' and self.server.auth is not None:
                 if self.headers.get('Origin')!=self.server.origin: raise APIError(403)
                 self.reply(200,self.server.auth.login(self.read_auth_body()));return
+            if route.path.startswith('/api/video-file/'):
+                if post or route.query or self.headers.get('Origin') not in (None,self.server.origin):raise APIError(403)
+                grant=self.server.video_downloads.claim(route.path.removeprefix('/api/video-file/'),self.command=='HEAD')
+                self.send_video(grant['path'],grant['revision'],True,grant);return
             self.authorized()
             if post and route.path=='/api/account' and self.server.auth is not None:
                 self.server.auth.setup(self.read_auth_body());self.reply(201,{'username':FamilyAuth.USERNAME});return
@@ -1276,6 +1312,13 @@ class Handler(BaseHTTPRequestHandler):
                     if self.server.files is not None:self.server.files.invalidate()
                 else:raise APIError(400)
                 self.reply(200,result);return
+            if route.path=='/api/video-download-ticket':
+                if not post or self.server.auth is None or not self.server.auth.configured() or self.headers.get('Transfer-Encoding'):raise APIError(400)
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=8192 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                data=json.loads(self.rfile.read(length))
+                if not isinstance(data,dict) or set(data)!={'path','revision'}:raise APIError(400)
+                self.reply(200,self.server.video_downloads.issue(data['path'],data['revision'],self.headers.get('Authorization','')[7:]));return
             if route.path=='/api/video-thumbnail':
                 if post or set(query)!={'path','revision'}:raise APIError(400)
                 if self.server.video_thumbs is None:raise APIError(501)
@@ -1398,11 +1441,11 @@ class Handler(BaseHTTPRequestHandler):
         length=int(self.headers.get('Content-Length','0'))
         if length<=0 or length>2048 or self.headers.get_content_type()!='application/json': raise APIError(400)
         return json.loads(self.rfile.read(length))
-    def send_video(self,path,expected,download=False):
+    def send_video(self,path,expected,download=False,grant=None):
         if not VIDEO.search(path) or not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
         with self.server.store.photo(path,media=True) as (fd,st):
             if revision(st)!=expected:raise APIError(409)
-            size=st.st_size;start=0;end=size-1;ranged=self.headers.get('Range')
+            size=st.st_size;start=0;end=size-1;ranged=None if grant else self.headers.get('Range')
             if ranged:
                 match=re.fullmatch(r'bytes=([0-9]{0,20})-([0-9]{0,20})',ranged)
                 if not match or not any(match.groups()) or not size:
@@ -1412,14 +1455,19 @@ class Handler(BaseHTTPRequestHandler):
                 else:start=max(0,size-int(last))
                 if start>=size or end<start:
                     self.send_response(416);self.cors();self.send_header('Content-Range',f'bytes */{size}');self.send_header('Content-Length','0');self.end_headers();return
-            self.send_response(206 if ranged else 200);self.cors()
+            self.send_response(206 if ranged else 200);self.cors(download=download)
             mime={'mp4':'video/mp4','m4v':'video/mp4','mov':'video/quicktime','webm':'video/webm'}[path.rsplit('.',1)[-1].lower()]
-            self.send_header('Content-Type','application/octet-stream' if download else mime);self.send_header('Accept-Ranges','bytes');self.send_header('ETag','"'+expected+'"')
+            self.send_header('Content-Type','application/octet-stream' if download else mime);self.send_header('Accept-Ranges','none' if grant else 'bytes');self.send_header('ETag','"'+expected+'"')
             if ranged:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
             self.send_header('Content-Length',str(max(0,end-start+1)))
             if download:self.send_header('Content-Disposition',"attachment; filename=video; filename*=UTF-8''"+quote(path.split('/')[-1]))
-            self.end_headers();os.lseek(fd,start,os.SEEK_SET);remaining=end-start+1
+            self.end_headers()
+            if self.command=='HEAD':return
+            os.lseek(fd,start,os.SEEK_SET);remaining=end-start+1;checked=time.monotonic()
             while remaining>0:
+                if grant and time.monotonic()-checked>=10:
+                    if not self.server.video_downloads.session_valid(grant['session']):self.close_connection=True;break
+                    checked=time.monotonic()
                 if revision(os.fstat(fd))!=expected:self.close_connection=True;break
                 chunk=os.read(fd,min(65536,remaining))
                 if not chunk:break
@@ -1476,6 +1524,7 @@ class Server(ThreadingHTTPServer):
         self.store=store; self.token=token; self.origin=origin; self.settings=settings
         self.archive=SharedArchive(settings,store) if settings is not None else None
         self.auth=FamilyAuth(settings.root) if settings is not None else None
+        self.video_downloads=VideoDownloads(store,self.auth)
         self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.metadata_lock=threading.RLock()
         self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None

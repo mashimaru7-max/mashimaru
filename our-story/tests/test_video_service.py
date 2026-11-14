@@ -33,6 +33,27 @@ class VideoTests(unittest.TestCase):
         self.settings.patch({'revision':0,'albums':{'growth:함께':''}})
         album=self.server.archive.collection('growth:함께','','',False)
         self.assertNotIn('film.mp4',[i['name'] for i in album['items']]);self.assertEqual(album['total'],1)
+    def native(self,route,method='GET',headers=None):
+        import http.client
+        connection=http.client.HTTPConnection(*self.server.server_address,timeout=4);connection.request(method,route,headers=headers or {});response=connection.getresponse();result=(response.status,response.read(),dict(response.getheaders()));connection.close();return result
+    def ticket(self,rev):
+        session=self.server.auth.login({'username':'오니둥이','password':'fixture-password'})['session']
+        status,raw,_=self.request('/api/video-download-ticket','POST',{'path':'film.mp4','revision':rev},{'Authorization':'Bearer '+session});self.assertEqual(status,200)
+        return '/api/video-file/'+json.loads(raw)['ticket'],session
+    def test_native_download_without_origin_or_bearer_is_single_use_and_allows_downloads(self):
+        raw,rev=self.video();self.server.auth.setup({'username':'오니둥이','password':'fixture-password'});route,session=self.ticket(rev)
+        self.assertNotIn(session,route)
+        status,body,h=self.native(route,'HEAD');self.assertEqual(status,200);self.assertEqual(body,b'');self.assertEqual(int(h['Content-Length']),len(raw))
+        status,body,h=self.native(route,headers={'Range':'bytes=0-3'});self.assertEqual(status,200);self.assertEqual(body,raw);self.assertEqual(h['Accept-Ranges'],'none');self.assertIn('allow-downloads',h['Content-Security-Policy']);self.assertIn('attachment;',h['Content-Disposition']);self.assertEqual(h['Referrer-Policy'],'no-referrer')
+        self.assertEqual(self.native(route)[0],410)
+    def test_native_download_denies_expiry_logout_changed_file_and_untrusted_issuance(self):
+        raw,rev=self.video();self.server.auth.setup({'username':'오니둥이','password':'fixture-password'})
+        self.assertEqual(self.request('/api/video-download-ticket','POST',{'path':'film.mp4','revision':rev})[0],401)
+        route,session=self.ticket(rev)
+        with patch.object(api.time,'time',return_value=api.time.time()+121):self.assertEqual(self.native(route)[0],410)
+        route,session=self.ticket(rev);self.server.auth.logout(session);self.assertEqual(self.native(route)[0],401)
+        route,session=self.ticket(rev);(self.root/'film.mp4').write_bytes(b'changed');self.assertEqual(self.native(route)[0],409)
+        self.assertEqual(self.native('/api/video-file/invalid')[0],404)
     def begin(self,name='upload.mp4',raw=None,owner='fixture-owner'):
         raw=raw or self.data();return self.server.videos.start({'action':'init','path':'','name':name,'size':len(raw),'fingerprint':hashlib.sha256(raw).hexdigest()},owner)
     def send(self,state,raw,owner='fixture-owner'):

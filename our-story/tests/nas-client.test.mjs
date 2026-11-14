@@ -191,3 +191,14 @@ test('server video poster uses authenticated JPEG endpoint without browser playb
  const blob=await client.videoPoster('film.mp4','a'.repeat(64),new AbortController().signal,true);assert.equal(blob.type,'image/jpeg');
  const call=calls.at(-1);assert.match(call.url,/\/api\/video-thumbnail\?/);assert.equal(call.init.headers.Authorization,'Bearer '+token);assert(!call.url.includes(token));
 });
+
+test('video download uses a direct NAS one-use URL rather than a service worker handle',async()=>{
+ const ticket='d'.repeat(43),anchors=[];const previous=globalThis.document;
+ globalThis.document={createElement:()=>({click(){this.clicked=true;},remove(){}}),body:{append:a=>anchors.push(a)}};
+ try{
+  const {client,calls}=fixture(u=>u.pathname==='/api/video-download-ticket'?json({ticket,expiresIn:120}):json(root));await connect(client);
+  await client.downloadVideo({path:'film.mp4',name:'film.mp4',revision:'a'.repeat(64)});
+  const request=calls.at(-1);assert.equal(new URL(request.url).pathname,'/api/video-download-ticket');assert.equal(request.init.method,'POST');assert.equal(request.init.headers.Authorization,'Bearer '+token);assert(!request.url.includes(token));
+  assert.equal(anchors[0].href,base+'/api/video-file/'+ticket);assert.equal(anchors[0].referrerPolicy,'no-referrer');assert(anchors[0].clicked);assert(!anchors[0].href.includes('nas-private-media'));
+ }finally{globalThis.document=previous;}
+});

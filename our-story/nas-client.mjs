@@ -1,4 +1,4 @@
-import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-thumb1';
+import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-downloadfix1';
 // Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
 export const isVideo=path=>/\.(mp4|m4v|mov|webm)$/i.test(path);
@@ -460,9 +460,12 @@ export class NasClient {
     return this.#request('/api/video-thumbnail',{params:{path,revision},image:true,timeoutMs:60000});
   }
   async downloadVideo(item){
-    const handle=await this.videoHandle(item.path,item.revision,true),a=document.createElement('a');a.href=handle.url;a.download=item.name;document.body.append(a);a.click();a.remove();
-    // Keep the stream grant alive for a long download. Logout revokes it immediately.
-    const timer=setTimeout(()=>void handle.release(),6*3600000);timer.unref?.();
+    this.#assertAuth();safePath(item.path);if(!isVideo(item.path)||!/^[a-f0-9]{64}$/.test(item.revision||''))throw fail('VIDEO','영상 목록을 새로 불러와 주세요.');
+    let data;
+    try{data=await this.#request('/api/video-download-ticket',{body:{path:item.path,revision:item.revision}});}
+    catch(error){if(['HTTP_404','HTTP_405'].includes(error.code))throw fail(error.code,'영상 다운로드 수정 파일로 NAS server.py를 교체하고 API를 다시 시작해 주세요.');throw error;}
+    if(!/^[A-Za-z0-9_-]{43}$/.test(data?.ticket||''))throw fail('FORMAT','다운로드 링크를 확인할 수 없어요.');
+    const a=document.createElement('a');a.href=this.#base+'/api/video-file/'+data.ticket;a.download=item.name;a.rel='noreferrer';a.referrerPolicy='no-referrer';document.body.append(a);a.click();a.remove();
   }
   async uploadVideo(folder,file,{progress=()=>{},active=()=>true}={}){
     this.#assertAuth();safePath(folder);safePath(file.name);const epoch=this.#epoch;
