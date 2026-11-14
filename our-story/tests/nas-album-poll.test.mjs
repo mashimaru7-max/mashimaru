@@ -23,3 +23,19 @@ test('new page gets a new random visit while same-page renders retain selection'
  NasAlbums.prototype.beginVisit.call(fake,'home');assert.notEqual(fake.visitSeed,first);
  assert.match(fake.visitSeed,/^[a-f0-9]{32}$/);
 });
+
+test('home album covers use existing family photos when section folders are unbound',async()=>{
+ const previous=globalThis.document,hosts={travel:{isConnected:true,replaceChildren(image){this.image=image;}},growth:{isConnected:true,replaceChildren(image){this.image=image;}}},paths=[];
+ globalThis.document={querySelector:s=>hosts[s.includes('travel')?'travel':'growth'],createElement:()=>({})};
+ const home={items:[{path:'hero.jpg'},{path:'family-one.jpg'},{path:'family-two.jpg'}]};
+ const fake={version:1,ready:Promise.resolve(),urls:[],g:{connected:true,features:{thumbnails:true},client:{origin:'https://fixture.trycloudflare.com',thumbnail:async path=>{paths.push(path);return new Blob(['fixture']);}}},collection:async()=>({items:[],unbound:true})};
+ try{await NasAlbums.prototype.paintCovers.call(fake,home);assert.deepEqual(paths,['family-one.jpg','family-two.jpg']);assert.match(hosts.travel.image.alt,/가족 사진/);assert(hosts.growth.image.src.startsWith('blob:'));}
+ finally{fake.urls.forEach(URL.revokeObjectURL);globalThis.document=previous;}
+});
+test('registered trip photos and a configured growth album take priority over generic home photos',async()=>{
+ const previous=globalThis.document,paths=[];
+ globalThis.document={querySelector:()=>({isConnected:true,replaceChildren(){}}),createElement:()=>({})};
+ const fake={version:1,visitSeed:'a'.repeat(32),ready:Promise.resolve(),urls:[],g:{connected:true,features:{thumbnails:true,travelRecords:true},client:{origin:'https://fixture.trycloudflare.com',travelList:async()=>({items:[{id:'trip',revision:2,record:{folder:'여행'}}]}),travelAlbum:async()=>({items:[{path:'여행/sea.jpg'}]}),thumbnail:async path=>{paths.push(path);return new Blob(['fixture']);}}},collection:async key=>({items:key==='growth:함께'?[{path:'아이들/day.jpg'}]:[]})};
+ try{await NasAlbums.prototype.paintCovers.call(fake,{items:[{path:'home.jpg'}]});assert.deepEqual(paths,['여행/sea.jpg','아이들/day.jpg']);}
+ finally{fake.urls.forEach(URL.revokeObjectURL);globalThis.document=previous;}
+});

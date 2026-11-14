@@ -98,6 +98,7 @@ export class NasAlbums {
       const data=await this.collection(key,{onProgress:p=>{if(version===this.version && host.isConnected){const el=host.querySelector('.nas-album-loading');if(el)el.textContent=`폴더 이름을 찾는 중 · ${p.folders}개 폴더 확인 · ${p.matches}개 일치`;}}});
       if(version!==this.version || !host.isConnected || !this.g.connected)return;
       this.lastSignature=this.signature(data);
+      if(key==='home')void this.paintCovers(data);
       const path=this.folder(key),title=key==='home'?'NAS에서 꺼낸 우리 순간들':`${labels[key]} 사진앨범`;
       const named=!!data.rule,source=named?`${data.rule.text}${data.rule.mode==='numbered'?' + 숫자(없어도 포함)':data.rule.mode==='exact'?' · 이름 일치':' · 이름 포함'} · ${data.matchedFolders.length}개 폴더`:(path===undefined?'/photo 전체':path||'/photo');
       const years=named?[...new Set(data.matchedFolders.map(f=>f.year))].sort().reverse():[];
@@ -127,7 +128,7 @@ export class NasAlbums {
         }
       };
       await Promise.all([worker(),worker()]);
-      if(key==='home' && version===this.version)void this.paintCovers();
+
     } catch(e) {
       if(version!==this.version || !host.isConnected)return;
       host.innerHTML=`<div class="nas-album-empty" role="alert"><p>${esc(e.message||'사진을 불러오지 못했어요.')}</p><button>다시 불러오기</button><button data-error-picker>사진 폴더 변경</button></div>`;
@@ -188,19 +189,36 @@ export class NasAlbums {
     if(!this.dialog.open)this.dialog.showModal();
     this.dialog.onclick=e=>{if(e.target.closest('.close'))this.dialog.close();const b=e.target.closest('[data-match]');if(b){this.dialog.close();this.onBrowse(data.matchedFolders[Number(b.dataset.match)].path);}};
   }
-  async paintCovers() {
+  async paintCovers(homeData=null) {
     const version=this.version,origin=this.g.client.origin;
     await this.ready;
-    const growthKey='growth:함께';
-    for(const [key,selector] of [['travel','[data-album-cover=travel]'],[growthKey,'[data-album-cover=growth]']]) {
+    let home=homeData;
+    for(const [key,selector,index] of [['travel','[data-album-cover=travel]',1],['growth:함께','[data-album-cover=growth]',2]]) {
       const host=document.querySelector(selector);if(!host)continue;
+      const current=()=>host.isConnected&&version===this.version&&this.g.connected&&origin===this.g.client.origin;
       try {
-        const data=await this.collection(key),item=data.items[0];
-        if(!item || !host.isConnected || version!==this.version || !this.g.connected || origin!==this.g.client.origin)continue;
-        const blob=await (this.g.features.thumbnails?this.g.client.thumbnail(item.path):this.g.client.image(item.path));
-        if(!host.isConnected || version!==this.version || !this.g.connected)continue;
-        const url=URL.createObjectURL(blob);this.urls.push(url);const img=document.createElement('img');img.src=url;img.alt=`${labels[key]} 앨범에서 자동으로 고른 사진`;host.replaceChildren(img);
-      } catch { /* Unavailable covers keep their explicit folder-connection placeholder. */ }
+        let item=null,source='album';
+        try{item=(await this.collection(key)).items[0];}catch{}
+        if(!current())return;
+        if(!item&&key==='travel'&&this.g.features.travelRecords){
+          try{
+            const trips=await this.g.client.travelList();
+            for(const trip of trips.items.filter(t=>t.record.folder!==null).slice(0,3)){
+              if(!current())return;
+              const album=await this.g.client.travelAlbum(trip.id,{seed:this.visitSeed,revision:trip.revision});item=album.items[0];if(item)break;
+            }
+          }catch{}
+        }
+        if(!item){
+          if(!home?.items?.length)home=await this.collection('home');
+          item=home.items[index%home.items.length];source='family';
+        }
+        if(!current())return;
+        if(!item){host.textContent='우리 사진이 모이면 표지가 채워져요';continue;}
+        const blob=await (this.g.features.thumbnails?this.g.client.thumbnail(item.path,item.revision):this.g.client.image(item.path,item.revision));
+        if(!current())return;
+        const url=URL.createObjectURL(blob);this.urls.push(url);const image=document.createElement('img');image.src=url;image.alt=source==='family'?'가족 사진으로 꾸민 앨범 표지':`${labels[key]} 앨범에서 고른 사진`;host.replaceChildren(image);
+      } catch {if(current()&&!host.querySelector('img'))host.textContent='표지 사진을 다시 불러오는 중이에요';}
     }
   }
 }
