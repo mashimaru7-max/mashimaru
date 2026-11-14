@@ -13,3 +13,22 @@
 .journal-attachments [hidden]{display:none!important}
 #journal-detail-photos .journal-attached-photo img{height:auto;max-height:65vh;object-fit:contain;background:#f6f0e5}
 @media(max-width:640px){.journal-attachments{padding:15px}.journal-attachments>[data-journal-upload]{width:100%}}
+
+/* Saved journal forms share the same layout inside and outside the grid. */
+#family-journal-form{display:grid;gap:20px;min-width:0}
+#family-journal-form label{display:flex;flex-direction:column;align-items:stretch;gap:9px;min-width:0;font-size:13px}
+#family-journal-form input:not([type=checkbox]):not([type=radio]),#family-journal-form select,#family-journal-form textarea{display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;font-size:16px}
+#family-journal-form textarea{resize:vertical;line-height:1.8}
+#family-journal-form>.form-grid{gap:16px}
+#family-journal-form .journal-quote-sheet,#family-journal-form .journal-letter-paper{margin:0;min-width:0}
+#family-journal-form .journal-quote-sheet textarea{min-height:140px;font-size:26px;line-height:1.6}
+#family-journal-form .journal-letter-paper textarea{min-height:260px;line-height:36px;resize:vertical}
+#family-journal-form .journal-salutation{margin:0 0 18px}
+#family-journal-form .journal-signature{margin:15px 0 0}
+#family-journal-form .journal-measure-pair{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+#family-journal-form .journal-number{display:flex;align-items:center;gap:8px}
+#family-journal-form .journal-number input{flex:1;min-width:0;font-size:36px}
+#family-journal-form .journal-number>span{flex-shrink:0}
+#family-journal-form .journal-attachments{margin:0}
+#family-journal-form .journal-preview-save{margin:0}
+@media(max-width:640px){#family-journal-form{gap:18px}#family-journal-form .journal-letter-paper{padding:18px 15px}#family-journal-form .journal-quote-sheet{padding:18px 15px}#family-journal-form .journal-measure-pair{gap:12px}#family-journal-form .journal-number input{font-size:28px!important}#family-journal-form .journal-quote-sheet textarea{font-size:22px!important}}
