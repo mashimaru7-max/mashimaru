@@ -1,11 +1,13 @@
+import {writeLetter,bindPaperPicker} from './letter-paper.mjs?v=20261114-paper1';
 import {uploadJournalPhoto,journalUploadFile} from './journal-upload.mjs?v=20261114-jattach1';
-import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-jattach1';
+import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-paper1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function recordFromFields(target,kind,fields,attachments){
  const record={target,kind,date:fields.date,author:fields.author,attachments:attachments.map(r=>({path:r.path,revision:r.revision}))};
  const keys={diary:['title','topic','body','feeling'],words:['quote','listener','context'],letter:['body','readOn'],measure:['height','weight','note']}[kind];
  if(!keys)throw Error('기록 종류를 확인해 주세요.');
  for(const key of keys)record[key]=kind==='measure'&&['height','weight'].includes(key)?(fields[key]===''||fields[key]==null?null:Number(fields[key])):String(fields[key]??'');
+ if(kind==='letter')record.body=writeLetter(record.body,fields.paper||'classic');
  if(kind==='measure' && (record.height===null&&record.weight===null || ['height','weight'].some(k=>record[k]!==null&&!Number.isFinite(record[k]))))throw Error('키 또는 몸무게를 하나 이상 올바르게 입력해 주세요.');
  return record;
 }
@@ -60,6 +62,7 @@ export class JournalController {
   this.modal(journalForm(target,kind,item));this.form=this.dialog.querySelector('#family-journal-form');
   const form=this.form,id=item?.id||crypto.randomUUID(),revision=item?.revision||0;
   this.attachments=(item?.record.attachments||[]).map(ref=>({...ref}));this.browserPath='';
+  if(kind==='letter')bindPaperPicker(form,()=>{this.dirty=true;});
   form.addEventListener('input',()=>{this.dirty=true;});form.addEventListener('change',()=>{this.dirty=true;});
   form.onsubmit=async e=>{
    e.preventDefault();if(this.busy)return;
