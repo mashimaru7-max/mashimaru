@@ -1,11 +1,12 @@
-import {JournalController} from './journal-controller.mjs?v=20261114-downloadfix1';
-import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-downloadfix1';
-import {icon} from "./icons.js?v=20261114-downloadfix1";
-import { FamilySettings } from './nas-shared.mjs?v=20261114-downloadfix1';
-import { NasAlbums } from "./nas-albums.js?v=20261114-downloadfix1";
-import { NasHome } from "./nas-home.js?v=20261114-downloadfix1";
+import {TravelController} from './travel-controller.mjs?v=20261114-travel1';
+import {JournalController} from './journal-controller.mjs?v=20261114-travel1';
+import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-travel1';
+import {icon} from "./icons.js?v=20261114-travel1";
+import { FamilySettings } from './nas-shared.mjs?v=20261114-travel1';
+import { NasAlbums } from "./nas-albums.js?v=20261114-travel1";
+import { NasHome } from "./nas-home.js?v=20261114-travel1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261114-downloadfix1";
+import { NasGallery } from "./nas-gallery.js?v=20261114-travel1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");
@@ -71,6 +72,7 @@ const albums = new NasAlbums(nas, {
 });
 const homePhoto = new NasHome(nas, notify, {vault:familySettings.homeVault,automatic:()=>albums.collection('home')});
 const journal = new JournalController(nas,{dialog,modal,notify});
+const travelPage=new TravelController(nas,{notify,photos:host=>albums.mount(host,'travel'),releasePhotos:()=>albums.release(),browse:path=>{nas.pendingAlbumPath=path;state.galleryView='nas';if(state.page==='gallery')render();else location.hash='nas';}});
 let liveConnection=false;
 function syncNasChrome() {
   familySettings.sync();
@@ -125,10 +127,11 @@ function sampleHome() {
 }
 function home() {
   if(!nas.connected){sampleHome();return;}
-  main.innerHTML=`<section class="hero"><img hidden alt="NAS에서 자동으로 불러오는 우리 사진"><div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<span class="title-space"> </span><br class="title-break">이야기<span class="hand">${icon("heart")}</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#nas">우리 사진 둘러보기</a></div><span class="photo-note">우리 사진을 불러오는 중</span></section><section class="nas-home-shelf"><div><span class="eyebrow">OUR CONNECTED ALBUM</span><h2>우리 사진, 차곡차곡</h2><p>NAS에서 불러온 사진으로 앨범을 채우고 있어요.</p></div><button data-home-folder>홈 사진 설정</button></section><section><div class="section-head"><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">${icon("sprout")}</span></h2></div><div class="gateway"><a href="#travel" class="album-card"><span class="album-seal">${icon("plane")}</span><div class="nas-cover" data-album-cover="travel"><span>여행 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>폴더 하나로 이어지는 우리 여행</p></div></div></a><a href="#growth" class="album-card"><span class="album-seal">${icon("sprout")}</span><div class="nas-cover" data-album-cover="growth"><span>성장 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div></div></a></div></section><section id="home-nas-album"></section>`;
+  main.innerHTML=`<section class="hero"><img hidden alt="NAS에서 자동으로 불러오는 우리 사진"><div class="hero-copy"><span class="eyebrow">THE DAYS WE KEEP, TOGETHER</span><h1>우리라는<span class="title-space"> </span><br class="title-break">이야기<span class="hand">${icon("heart")}</span></h1><p>우리가 함께 걸어온 길, 함께 자라온 시간</p><a href="#nas">우리 사진 둘러보기</a></div><span class="photo-note">우리 사진을 불러오는 중</span></section><section class="nas-home-shelf"><div><span class="eyebrow">OUR CONNECTED ALBUM</span><h2>우리 사진, 차곡차곡</h2><p>NAS에서 불러온 사진으로 앨범을 채우고 있어요.</p></div><button data-home-folder>홈 사진 설정</button></section><section><div class="section-head"><h2>우리의 이야기가 쌓이는 곳 <span class="leaf">${icon("sprout")}</span></h2></div><div class="gateway"><a href="#travel" class="album-card"><span class="album-seal">${icon("plane")}</span><div class="nas-cover" data-album-cover="travel"><span>여행 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">01 / TRAVEL DIARY</span><h2>발자국 수집</h2><p>폴더 하나로 이어지는 우리 여행</p></div></div></a><a href="#growth" class="album-card"><span class="album-seal">${icon("sprout")}</span><div class="nas-cover" data-album-cover="growth"><span>성장 사진 폴더를 연결해 주세요</span></div><div class="album-caption"><div><span class="eyebrow">02 / GROWING TOGETHER</span><h2>너희의 모든 계절</h2><p>다온과 라온, 나란히 자라는 시간</p></div></div></a></div></section><section id="home-travel-records"></section><section id="home-nas-album"></section>`;
   main.querySelector('.gateway').closest('section').classList.add('album-gateways');
   main.querySelector('.gateway').closest('section').after(main.querySelector('.nas-home-shelf'));
   main.querySelector('[data-home-folder]').onclick=()=>void albums.pick('home');
+  void travelPage.home(main.querySelector('#home-travel-records'));
   albums.mount(main.querySelector('#home-nas-album'),'home');
   void homePhoto.paint();
 }
@@ -171,6 +174,7 @@ function filteredTrips() {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 function travel() {
+  if(nas.connected){travelPage.mount(main);return;}
   main.innerHTML =
     title(
       "OUR LITTLE ATLAS",
@@ -372,6 +376,7 @@ function form(type, id) {
   );
 }
 function render() {
+  travelPage.release();
   journal.release();
   albums.beginVisit(state.page+(state.page==='growth'?':'+state.child:''));
   albums.release();
@@ -465,7 +470,7 @@ document.addEventListener("click", (e) => {
   }
   if (a === "about")
     modal(
-      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>여행·성장 기록은 예시입니다. 갤러리에서는 기존 사진 API에 연결하여 NAS 원본을 읽기 전용으로 볼 수 있어요. 가족 공용 로그인과 개인 성장 기록의 NAS 저장을 지원해요. 초대·가족별 권한과 여행 이야기 영구 저장은 아직 준비 중입니다.</p>',
+      '<span class="eyebrow">WELCOME HOME</span><h2>우리 가족을 위한 작은 서랍</h2><p>아빠, 엄마, 다온, 라온이 함께 채워 갈 여행과 성장의 기록입니다.</p><p>로그인 전에는 디자인 예시를 보고, 로그인 후에는 NAS의 사진·영상과 가족 공통 여행·성장 기록을 함께 사용해요. 가족 공용 로그인, 여행지도·여행기·버킷리스트·개인 성장 기록의 NAS 저장을 지원해요. 초대·가족별 권한은 아직 준비 중입니다.</p>',
     );
   if (a === "credits")
     modal(

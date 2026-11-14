@@ -1,4 +1,4 @@
-const workerURL=new URL('./nas-media-worker.js?v=20261114-downloadfix1',import.meta.url);
+const workerURL=new URL('./nas-media-worker.js?v=20261114-travel1',import.meta.url);
 let preparing;
 const pageGrants=new Map();
 globalThis.navigator?.serviceWorker?.addEventListener('message',event=>{

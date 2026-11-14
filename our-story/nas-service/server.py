@@ -569,6 +569,113 @@ class JournalStore:
         except Exception:
             Path(path).unlink(missing_ok=True);raise
 
+class TravelStore(JournalStore):
+    """Private family trips and wishes, kept separately from photos and growth journals."""
+    MEMBERS={'아빠','엄마','다온','라온'}
+    @contextlib.contextmanager
+    def db(self):
+        with self.lock,contextlib.closing(sqlite3.connect(self.root/'travel.sqlite3',timeout=10)) as db:
+            os.chmod(self.root/'travel.sqlite3',0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY,revision INTEGER,payload TEXT,deleted INTEGER,created TEXT,updated TEXT)');db.commit()
+            with db:yield db
+    def validate(self,value):
+        if not isinstance(value,dict):raise APIError(400)
+        kind=value.get('kind');common={'kind','title','country','city','scope','author'}
+        fields={'trip':{'start','end','lat','lng','members','story','folder','reviews'},'wish':{'month','note','done'}}
+        if kind not in fields or set(value)!=common|fields[kind]:raise APIError(400)
+        if value['scope'] not in ('domestic','international') or value['author'] not in self.MEMBERS:raise APIError(400)
+        out={k:value[k] for k in ('kind','scope','author')}
+        for name,limit in [('title',120),('country',80),('city',120)]:out[name]=self.text(value[name],limit,True)
+        if out['scope']=='domestic':out['country']='대한민국'
+        if kind=='wish':
+            month=value['month']
+            if not isinstance(month,str) or month and (not re.fullmatch(r'[0-9]{4}-[0-9]{2}',month) or not 1<=int(month[5:])<=12 or int(month[:4])<1):raise APIError(400)
+            if type(value['done']) is not bool:raise APIError(400)
+            out.update(month=month,note=self.text(value['note'],4000),done=value['done']);return out
+        out['start']=self.date(value['start']);out['end']=self.date(value['end'])
+        if out['end']<out['start']:raise APIError(400)
+        for name,limit in [('lat',90),('lng',180)]:
+            n=value[name]
+            if type(n) not in (int,float) or not math.isfinite(n) or not -limit<=n<=limit:raise APIError(400)
+            out[name]=n
+        members=value['members']
+        if not isinstance(members,list) or not members or len(members)>4 or any(type(m) is not str or m not in self.MEMBERS for m in members) or len(set(members))!=len(members):raise APIError(400)
+        out['members']=members;out['story']=self.text(value['story'],8000)
+        folder=value['folder']
+        if folder is not None:parts(folder)
+        out['folder']=folder
+        reviews=value['reviews']
+        if not isinstance(reviews,dict) or set(reviews)-self.MEMBERS:raise APIError(400)
+        out['reviews']={m:self.text(text,2000) for m,text in reviews.items()}
+        return out
+    def mutate(self,data):
+        if not isinstance(data,dict) or set(data)-{'action','id','revision','record'}:raise APIError(400)
+        action=data.get('action');ident=self.ident(data.get('id'));expected=data.get('revision')
+        if action not in ('save','trash','restore') or type(expected) is not int or expected<0:raise APIError(400)
+        record=self.validate(data.get('record')) if action=='save' else None
+        if action!='save' and 'record' in data:raise APIError(400)
+        now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE');row=db.execute('SELECT * FROM records WHERE id=?',(ident,)).fetchone()
+            if row is None:
+                if action!='save' or expected!=0:raise APIError(404)
+                if db.execute('SELECT count(*) FROM records').fetchone()[0]>=10000:raise APIError(413)
+            else:
+                if action=='save' and expected==0 and row[1]==1 and not row[3] and json.loads(row[2])==record:return self.unpack(row)
+                if row[1]!=expected or (action=='restore')!=bool(row[3]):raise APIError(409)
+                if action=='save' and record['kind']!=json.loads(row[2])['kind']:raise APIError(400)
+            if record and record['kind']=='trip' and record['folder'] is not None and (row is None or record['folder']!=json.loads(row[2]).get('folder')):
+                with self.photos.directory(record['folder']):pass
+            payload=json.dumps(record,ensure_ascii=False) if record else row[2]
+            if row is None:db.execute('INSERT INTO records VALUES (?,?,?,?,?,?)',(ident,1,payload,0,now,now))
+            else:db.execute('UPDATE records SET revision=?,payload=?,deleted=?,updated=? WHERE id=?',(expected+1,payload,int(action=='trash'),now,ident))
+            return self.unpack(db.execute('SELECT * FROM records WHERE id=?',(ident,)).fetchone())
+    def listing(self,kind='trip',year='',query='',scope='',trash=False,offset=0):
+        if kind not in ('trip','wish') or not isinstance(query,str) or len(query)>100 or scope not in ('','domestic','international') or year and not re.fullmatch(r'[0-9]{4}',year) or offset<0 or offset>100000:raise APIError(400)
+        with self.db() as db:
+            where="deleted=? AND json_extract(payload,'$.kind')=?";args=[int(trash),kind]
+            date="json_extract(payload,'$.start')" if kind=='trip' else "json_extract(payload,'$.month')"
+            years=[r[0] for r in db.execute('SELECT DISTINCT substr('+date+',1,4) FROM records WHERE '+where+' AND '+date+"!='' ORDER BY 1 DESC",args)]
+            if year:where+=' AND substr('+date+',1,4)=?';args.append(year)
+            if scope:where+=" AND json_extract(payload,'$.scope')=?";args.append(scope)
+            if query:where+=' AND instr(lower(payload),lower(?))>0';args.append(query)
+            total=db.execute('SELECT count(*) FROM records WHERE '+where,args).fetchone()[0]
+            rows=db.execute('SELECT * FROM records WHERE '+where+' ORDER BY '+date+' DESC,created DESC,id LIMIT 20 OFFSET ?',args+[offset]).fetchall()
+            pins=[]
+            if kind=='trip':
+                pinrows=db.execute('SELECT id,payload FROM records WHERE '+where+' ORDER BY '+date+' DESC,id LIMIT 2000',args)
+                for ident,raw in pinrows:
+                    r=json.loads(raw);pins.append({'id':ident,**{k:r[k] for k in ('title','country','city','lat','lng','start')}})
+            countries=set();cities=set();trips=0;wishes=0
+            for raw, in db.execute('SELECT payload FROM records WHERE deleted=0'):
+                r=json.loads(raw)
+                if r['kind']=='wish':wishes+=int(not r['done']);continue
+                trips+=1;country=r['country'].casefold();countries.add(country);cities.add((country,r['city'].casefold()))
+            end=offset+len(rows)
+            return {'items':[self.unpack(r) for r in rows],'total':total,'next':end if end<total else None,'years':years,'pins':pins,'pinsLimited':kind=='trip' and total>2000,'stats':{'trips':trips,'countries':len(countries),'cities':len(cities),'wishes':wishes}}
+    def move_refs(self,old,new):
+        if not (self.root/'travel.sqlite3').exists():return []
+        refs=[]
+        with self.db() as db:
+            for ident,rev,raw in db.execute('SELECT id,revision,payload FROM records'):
+                r=json.loads(raw);folder=r.get('folder')
+                if folder is None or not (folder==old or folder.startswith(old+'/')):continue
+                after=new+folder[len(old):];parts(after);r['folder']=after
+                refs.append({'id':ident,'revision':rev,'before':folder,'after':after,'beforeHash':hashlib.sha256(raw.encode()).hexdigest(),'afterHash':hashlib.sha256(json.dumps(r,ensure_ascii=False).encode()).hexdigest()})
+                if len(refs)>1000:raise APIError(413)
+        return refs
+    def apply_moves(self,refs,at):
+        if not refs:return
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for ref in refs:
+                row=db.execute('SELECT revision,payload FROM records WHERE id=?',(ref['id'],)).fetchone()
+                if not row:raise APIError(503)
+                digest=hashlib.sha256(row[1].encode()).hexdigest()
+                if row[0]==ref['revision']+1 and digest==ref['afterHash']:continue
+                if row[0]!=ref['revision'] or digest!=ref['beforeHash']:raise APIError(503)
+                r=json.loads(row[1]);r['folder']=ref['after'];db.execute('UPDATE records SET revision=?,payload=?,updated=? WHERE id=?',(row[0]+1,json.dumps(r,ensure_ascii=False),at,ref['id']))
+
 def rename_no_replace(src_fd,src_name,dst_fd,dst_name):
     """Atomic no-clobber rename. Unsupported NAS kernels fail without a fallback."""
     libc=ctypes.CDLL(None,use_errno=True)
@@ -712,6 +819,7 @@ class FileManager:
                     if row and row[0]==item['revision']+1 and row[1]==item['payload'] and row[2]==item['deleted']:continue
                     if not row or row[0]!=item['revision'] or hashlib.sha256(row[1].encode()).hexdigest()!=item['beforeHash'] or row[2]!=item['deleted']:raise APIError(503)
                     db.execute('UPDATE records SET revision=?,payload=?,updated=? WHERE id=?',(item['revision']+1,item['payload'],plan['at'],item['id']))
+        TravelStore(self.settings.root,self.store).apply_moves(plan.get('travelRefs',[]),plan['at'])
         self.invalidate();self.write_op(ident,'done',self.compact(plan))
         if plan['kind']=='restore':
             try:
@@ -746,6 +854,7 @@ class FileManager:
         except Exception:
             self.blocked=True;raise APIError(503)
     def execute(self,ident,plan):
+        if plan['kind']=='move':plan['travelRefs']=TravelStore(self.settings.root,self.store).move_refs(plan['old'],plan['new'])
         self.write_op(ident,'prepared',plan)
         p=parts(plan['new'])
         try:
@@ -1253,7 +1362,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
         route=urlsplit(self.path).path
-        metadata={'/api/video-upload', '/api/video-upload-chunk', '/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
+        metadata={'/api/travel','/api/travel-album','/api/video-upload', '/api/video-upload-chunk', '/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
         if route=='/api/upload':
             # Long transfers serialize file writes without holding up record reads/writes.
             with self.server.store.lock:
@@ -1294,6 +1403,32 @@ class Handler(BaseHTTPRequestHandler):
             if any(len(v)!=1 for v in query.values()): raise APIError(400)
             q=lambda k,default='':query.get(k,[default])[0]
             store=self.server.store
+            if route.path in ('/api/travel','/api/travel-album'):
+                if self.server.travel is None or not self.server.auth.configured():raise APIError(409)
+                if route.path=='/api/travel-album':
+                    if not post or self.headers.get('Transfer-Encoding'):raise APIError(400)
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=2048 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                    data=json.loads(self.rfile.read(length))
+                    if not isinstance(data,dict) or set(data)-{'id','refresh','seed','revision'} or type(data.get('refresh',False)) is not bool:raise APIError(400)
+                    seed=data.get('seed','')
+                    if not isinstance(seed,str) or seed and not re.fullmatch(r'[a-f0-9]{32}',seed):raise APIError(400)
+                    item=self.server.travel.get(data.get('id'));r=item['record']
+                    if 'revision' in data and (type(data['revision']) is not int or data['revision']!=item['revision']):raise APIError(409)
+                    if item['deleted'] or r['kind']!='trip':raise APIError(404)
+                    if r['folder'] is None:self.reply(200,{'shared':True,'items':[],'unbound':True});return
+                    self.reply(200,self.server.archive.collection('trip:'+item['id'],r['folder'],refresh=data.get('refresh',False),seed=seed));return
+                if post:
+                    if self.headers.get('Transfer-Encoding'):raise APIError(400)
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0<length<=65536 or self.headers.get_content_type()!='application/json':raise APIError(400)
+                    self.reply(200,self.server.travel.mutate(json.loads(self.rfile.read(length))));return
+                if set(query)-{'id','kind','year','q','scope','trash','offset'}:raise APIError(400)
+                if 'id' in query:
+                    if len(query)!=1:raise APIError(400)
+                    self.reply(200,self.server.travel.get(q('id')));return
+                if q('trash','0') not in ('0','1'):raise APIError(400)
+                self.reply(200,self.server.travel.listing(q('kind','trip'),q('year'),q('q'),q('scope'),q('trash','0')=='1',int(q('offset','0'))));return
             if route.path in ('/api/video-upload','/api/video-upload-chunk'):
                 if self.server.videos is None or not self.server.auth.configured():raise APIError(409)
                 owner=hashlib.sha256(self.headers.get('Authorization','')[7:].encode()).hexdigest()
@@ -1368,7 +1503,7 @@ class Handler(BaseHTTPRequestHandler):
                 if q('trash','0') not in ('0','1'): raise APIError(400)
                 self.reply(200,self.server.journal.listing(q('target'),q('kind'),q('year'),q('q'),q('trash','0')=='1',int(q('offset','0'))));return
             if not post:
-                if route.path=='/api/capabilities': self.reply(200,{'version':2,'video':True,'videoThumbnails':self.server.video_thumbs is not None and self.server.video_thumbs.available(),'videoUpload':store.writable and self.server.videos is not None and self.server.auth.configured(),'maxVideo':MAX_VIDEO,'videoChunk':VIDEO_CHUNK,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
+                if route.path=='/api/capabilities': self.reply(200,{'version':2,'travelRecords':self.server.travel is not None and self.server.auth.configured(),'video':True,'videoThumbnails':self.server.video_thumbs is not None and self.server.video_thumbs.available(),'videoUpload':store.writable and self.server.videos is not None and self.server.auth.configured(),'maxVideo':MAX_VIDEO,'videoChunk':VIDEO_CHUNK,'thumbnails':bool(Image),'upload':store.writable,'trash':store.writable and (self.server.files is None or self.server.files.safe_moves()),'download':True,'maxUpload':MAX_UPLOAD,'sharedSettings':self.server.settings is not None,'sharedArchive':self.server.archive is not None,'randomAlbums':self.server.archive is not None,'familyLogin':self.server.auth is not None,'accountSetup':self.server.auth is not None and not self.server.auth.configured(),'journalRecords':self.server.journal is not None and self.server.auth.configured(),'fileManagement':self.server.files is not None and store.writable and self.server.auth.configured(),'fileOperationsBlocked':self.server.files is not None and self.server.files.blocked,'safeMoves':self.server.files is not None and self.server.files.safe_moves(),'folderTrash':self.server.files is not None and store.writable and self.server.auth.configured() and self.server.files.safe_moves(),'permanentTrash':self.server.permanent is not None and store.writable and self.server.auth.configured() and self.server.permanent.supported()}); return
                 if route.path=='/api/settings' and self.server.settings is not None: self.reply(200,self.server.settings.read()); return
                 if route.path=='/api/list': self.reply(200,store.listing(q('path'),int(q('offset','0')))); return
                 if route.path=='/api/trash':
@@ -1525,6 +1660,7 @@ class Server(ThreadingHTTPServer):
         self.archive=SharedArchive(settings,store) if settings is not None else None
         self.auth=FamilyAuth(settings.root) if settings is not None else None
         self.video_downloads=VideoDownloads(store,self.auth)
+        self.travel=TravelStore(settings.root,store) if settings is not None else None
         self.journal=JournalStore(settings.root,store) if settings is not None else None
         self.metadata_lock=threading.RLock()
         self.files=FileManager(store,settings,self.journal,self.archive) if settings is not None else None

@@ -1,4 +1,4 @@
-import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-downloadfix1';
+import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-travel1';
 // Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
 export const isVideo=path=>/\.(mp4|m4v|mov|webm)$/i.test(path);
@@ -138,6 +138,12 @@ export function validateJournalItem(item) {
   return item;
 }
 
+export function validateTravelItem(item){
+ const r=item?.record;
+ if(!item||!/^[-a-f0-9]{36}$/.test(item.id)||!Number.isSafeInteger(item.revision)||item.revision<1||typeof item.deleted!=='boolean'||!r||!['trip','wish'].includes(r.kind)||typeof r.title!=='string'||typeof r.country!=='string'||typeof r.city!=='string')throw fail('FORMAT','여행 기록 응답을 확인할 수 없어요.');
+ if(r.kind==='trip'&&(!Number.isFinite(r.lat)||!Number.isFinite(r.lng)||Math.abs(r.lat)>90||Math.abs(r.lng)>180||!Array.isArray(r.members)||typeof r.start!=='string'||typeof r.end!=='string'||!r.reviews||r.folder!==null&&typeof r.folder!=='string'))throw fail('FORMAT','여행 위치나 사진 폴더를 확인할 수 없어요.');
+ if(r.folder!=null)safePath(r.folder);return item;
+}
 export class NasClient {
   #fetch;
   #timeout;
@@ -382,6 +388,19 @@ export class NasClient {
       throw error;
     }
   }
+  async travelList({kind='trip',year='',q='',scope='',trash=false,offset=0}={}){
+    this.#assertAuth();const data=await this.#request('/api/travel',{params:{kind,year,q,scope,trash:trash?'1':'0',offset},maxBytes:8*1024*1024});
+    if(!data||!Array.isArray(data.items)||data.items.length>20||!Array.isArray(data.pins)||data.pins.length>2000||!Number.isSafeInteger(data.total)||data.total<0||!(data.next===null||Number.isSafeInteger(data.next)&&data.next>offset)||!Array.isArray(data.years)||!data.stats||Object.values(data.stats).some(n=>!Number.isSafeInteger(n)||n<0))throw fail('FORMAT','여행 목록을 확인할 수 없어요.');
+    data.items.forEach(validateTravelItem);
+    for(const p of data.pins)if(!/^[-a-f0-9]{36}$/.test(p.id)||!Number.isFinite(p.lat)||!Number.isFinite(p.lng)||typeof p.title!=='string')throw fail('FORMAT','여행 지도 위치를 확인할 수 없어요.');
+    return data;
+  }
+  async travelGet(id){this.#assertAuth();return validateTravelItem(await this.#request('/api/travel',{params:{id}}));}
+  async travelWrite(data){
+    this.#assertAuth();try{return validateTravelItem(await this.#request('/api/travel',{body:data,timeoutMs:30000}));}
+    catch(error){if(error.code==='HTTP_409')throw fail(error.code,'다른 기기에서 바뀐 기록이에요. 입력 내용은 유지했으니 최신 기록을 확인해 주세요.');if(error.code==='HTTP_400')throw fail(error.code,'제목·날짜·지도 위치·동행 가족과 폴더를 확인해 주세요.');if(error.code==='HTTP_404')throw fail(error.code,'기록 또는 연결할 폴더가 없어요. 폴더를 다시 선택해 주세요.');throw error;}
+  }
+  async travelAlbum(id,{refresh=false,seed='',revision}={}){this.#assertAuth();try{return validateSharedAlbum(await this.#request('/api/travel-album',{body:{id,refresh,seed,...(revision===undefined?{}:{revision})},timeoutMs:30000}));}catch(error){if(error.code==='HTTP_409')throw fail(error.code,'여행 기록이나 연결 폴더가 바뀌었어요. 상세 화면을 다시 열어 주세요.');throw error;}}
   async journalList({target,kind='',year='',q='',trash=false,offset=0}) {
     this.#assertAuth();
     const data=await this.#request('/api/journal',{params:{target,kind,year,q,trash:trash?'1':'0',offset}});
@@ -423,7 +442,7 @@ export class NasClient {
     try {
       const d = await this.#request("/api/capabilities");
       if (d?.version !== 2) return {};
-      return { ...(d.video===true?{video:true,videoThumbnails:d.videoThumbnails===true,videoUpload:d.videoUpload===true,maxVideo:Math.min(4*1024**3,Number(d.maxVideo)||0)}:{}), ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
+      return { ...(d.travelRecords===true?{travelRecords:true}:{}), ...(d.video===true?{video:true,videoThumbnails:d.videoThumbnails===true,videoUpload:d.videoUpload===true,maxVideo:Math.min(4*1024**3,Number(d.maxVideo)||0)}:{}), ...(d.sharedArchive===true?{sharedArchive:true}:{}), ...(d.randomAlbums===true?{randomAlbums:true}:{}), ...(d.familyLogin===true?{familyLogin:true,accountSetup:d.accountSetup===true}:{}), ...(d.journalRecords===true?{journalRecords:true}:{}), ...(d.fileManagement===true?{fileManagement:true}:{}), ...(d.folderTrash===true?{folderTrash:true}:{}), ...(d.permanentTrash===true?{permanentTrash:true}:{}), ...(d.fileOperationsBlocked===true?{fileOperationsBlocked:true}:{}), ...(typeof d.safeMoves==='boolean'?{safeMoves:d.safeMoves}:{}), thumbnails: d.thumbnails === true, upload: d.upload === true,
         trash: d.trash === true, download: d.download === true,
         maxUpload: Math.min(64 * 1024 * 1024, Number(d.maxUpload) || 0) };
     } catch (e) {
