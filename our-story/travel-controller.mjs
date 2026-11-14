@@ -5,11 +5,11 @@ const family=['아빠','엄마','다온','라온'];
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date());
 const field=(label,name,value='',extra='')=>`<label>${label}<input name="${name}" value="${esc(value)}" ${extra}></label>`;
 const pinIcon=()=>L.divIcon({className:'pin',html:'<svg viewBox="0 0 36 46" aria-hidden="true"><path class="pin-shape" d="M18 44C15 39 2 27 2 18a16 16 0 1 1 32 0c0 9-13 21-16 26Z"/><path class="pin-heart" d="m18 25-6.5-6.2a4 4 0 0 1 5.6-5.7l.9.9.9-.9a4 4 0 0 1 5.6 5.7Z"/></svg>',iconSize:[34,44],iconAnchor:[17,44]});
-function makeMap(element,view=[36.4,127.8],zoom=3){
+export function makeMap(element,view=[36.4,127.8],zoom=3){
  if(!globalThis.L){element.innerHTML='<p class="empty">지도를 불러오지 못했어요. 여행 목록은 이용할 수 있어요.</p>';return null;}
  const map=L.map(element,{scrollWheelZoom:false,minZoom:1}).setView(view,zoom);
  const fallback=()=>{if(!map._container?.isConnected)return;L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);const note=document.createElement('p');note.className='fine';note.textContent='영문 지도를 불러오지 못해 기본 지도로 표시해요.';element.after(note);map.once('unload',()=>note.remove());};
- try{if(!L.maplibreGL||!globalThis.maplibregl?.supported())throw Error('WebGL unavailable');const layer=L.maplibreGL({style:new URL('./map-style-en.json',import.meta.url).href,attribution:'<a href="https://openfreemap.org/">OpenFreeMap</a> · © <a href="https://openmaptiles.org/">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);let failed=false;layer.getMaplibreMap().on('error',()=>{if(failed)return;failed=true;map.removeLayer(layer);fallback();});}catch{fallback();}
+ try{if(!L.maplibreGL||!globalThis.maplibregl?.Map)throw Error('WebGL unavailable');const layer=L.maplibreGL({style:new URL('./map-style-en.json',import.meta.url).href,attribution:'<a href="https://openfreemap.org/">OpenFreeMap</a> · © <a href="https://openmaptiles.org/">OpenMapTiles</a> · © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);let failed=false;layer.getMaplibreMap().on('error',()=>{if(failed)return;failed=true;map.removeLayer(layer);fallback();});}catch{fallback();}
  setTimeout(()=>map.invalidateSize(),50);return map;
 }
 export function tripFromFields(kind,fields,folder,members,reviews){
