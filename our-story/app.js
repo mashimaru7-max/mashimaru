@@ -1,12 +1,12 @@
-import {TravelController} from './travel-controller.mjs?v=20261114-friendly1';
-import {JournalController} from './journal-controller.mjs?v=20261114-friendly1';
-import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-friendly1';
-import {icon} from "./icons.js?v=20261114-friendly1";
-import { FamilySettings } from './nas-shared.mjs?v=20261114-friendly1';
-import { NasAlbums } from "./nas-albums.js?v=20261114-coverfix1";
-import { NasHome } from "./nas-home.js?v=20261114-friendly1";
+import {TravelController} from './travel-controller.mjs?v=20261114-media1';
+import {JournalController} from './journal-controller.mjs?v=20261114-media1';
+import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-media1';
+import {icon} from "./icons.js?v=20261114-media1";
+import { FamilySettings } from './nas-shared.mjs?v=20261114-media1';
+import { NasAlbums } from "./nas-albums.js?v=20261114-media1";
+import { NasHome } from "./nas-home.js?v=20261114-media1";
 import { trips, growth, wishes } from "./data.js";
-import { NasGallery } from "./nas-gallery.js?v=20261114-friendly1";
+import { NasGallery } from "./nas-gallery.js?v=20261114-media1";
 const $ = (s) => document.querySelector(s),
   main = $("#main"),
   dialog = $("#dialog");

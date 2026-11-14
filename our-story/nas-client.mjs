@@ -1,4 +1,4 @@
-import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-friendly1';
+import {workerMessage,clearVideoAccess,firstFrame,videoFingerprint,sendVideoChunks} from './nas-video.mjs?v=20261114-media1';
 // Authenticated NAS client; legacy servers stay read-only. Credentials never enter request URLs.
 // Remembered credentials use the separate encrypted device vault.
 export const isVideo=path=>/\.(mp4|m4v|mov|webm)$/i.test(path);
@@ -464,6 +464,12 @@ export class NasClient {
       this.#request("/api/thumbnail",{params:{path:task.path,...(task.expectedRevision?{revision:task.expectedRevision}:{})},image:true})
         .then(task.resolve,task.reject).finally(()=>{this.#thumbActive--;this.#drainThumbnails();});
     }
+  }
+  async mediaInfo(path,revision){
+    this.#assertAuth();safePath(path);if(!/^[a-f0-9]{64}$/.test(revision||''))throw fail('REVISION','파일 목록을 새로 불러와 주세요.');
+    const data=await this.#request('/api/media-info',{params:{path,revision}});
+    if(!data||data.path!==path||data.revision!==revision||!(data.capturedAt===null||typeof data.capturedAt==='string'&&/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}$/.test(data.capturedAt))||!Array.isArray(data.trips)||data.trips.length>3||data.gps!==null&&(!Number.isFinite(data.gps?.lat)||!Number.isFinite(data.gps?.lng)||Math.abs(data.gps.lat)>90||Math.abs(data.gps.lng)>180))throw fail('FORMAT','촬영 정보를 확인할 수 없어요.');
+    return data;
   }
   async videoHandle(path,revision,download=false) {
     this.#assertAuth();safePath(path);if(!isVideo(path)||!/^[a-f0-9]{64}$/.test(revision||''))throw fail('VIDEO','영상 목록을 새로 불러와 주세요.');

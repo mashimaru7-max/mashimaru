@@ -69,6 +69,32 @@ def photo_magic(name, data):
         return data[4:8] == b'ftyp' and any(b in brands for b in (b'heic', b'heix', b'hevc', b'mif1', b'avif', b'avis'))
     return False
 
+def photo_details(fd,st,path):
+    result={'capturedAt':None,'gps':None}
+    if not Image or not PHOTO.search(path) or st.st_size>MAX_DOWNLOAD:return result
+    try:
+        with os.fdopen(os.dup(fd),'rb') as source,Image.open(source) as image:
+            exif=image.getexif()
+            original=exif.get_ifd(34665).get(36867) or exif.get(36867)
+            if isinstance(original,str):
+                match=re.fullmatch(r'([0-9]{4}):([0-9]{2}):([0-9]{2})[ T]([0-9]{2}):([0-9]{2}):([0-9]{2})',original.strip().rstrip('\x00'))
+                if match:
+                    try:result['capturedAt']=datetime.datetime(*map(int,match.groups())).isoformat()
+                    except ValueError:pass
+            gps=exif.get_ifd(34853)
+            def coordinate(value,reference,positive,negative,limit):
+                if not isinstance(value,(tuple,list)) or len(value)!=3:return None
+                numbers=[float(n) for n in value]
+                if any(not math.isfinite(n) or n<0 for n in numbers) or numbers[1]>=60 or numbers[2]>=60:return None
+                number=numbers[0]+numbers[1]/60+numbers[2]/3600
+                if isinstance(reference,bytes):reference=reference.decode('ascii','ignore')
+                if reference not in (positive,negative) or number>limit:return None
+                return round(number*(-1 if reference==negative else 1),6)
+            lat=coordinate(gps.get(2),gps.get(1),'N','S',90);lng=coordinate(gps.get(4),gps.get(3),'E','W',180)
+            if lat is not None and lng is not None:result['gps']={'lat':lat,'lng':lng}
+    except Exception:pass # Stripped, corrupt or unsupported EXIF does not become a guessed date/location.
+    return result
+
 class PhotoStore:
     def __init__(self, root, writable=False):
         self.root = os.open(root, DIR_FLAGS)
@@ -1362,7 +1388,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self): self.run_request(True)
     def run_request(self,post):
         route=urlsplit(self.path).path
-        metadata={'/api/travel','/api/travel-album','/api/video-upload', '/api/video-upload-chunk', '/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
+        metadata={'/api/media-info','/api/travel','/api/travel-album','/api/video-upload', '/api/video-upload-chunk', '/api/list','/api/settings','/api/album-index','/api/journal','/api/journal-backup','/api/trash','/api/restore','/api/files','/api/trash-purge/prepare','/api/trash-purge/commit'}
         if route=='/api/upload':
             # Long transfers serialize file writes without holding up record reads/writes.
             with self.server.store.lock:
@@ -1447,6 +1473,23 @@ class Handler(BaseHTTPRequestHandler):
                     if self.server.files is not None:self.server.files.invalidate()
                 else:raise APIError(400)
                 self.reply(200,result);return
+            if route.path=='/api/media-info':
+                if post or set(query)!={'path','revision'}:raise APIError(400)
+                path=q('path');expected=q('revision')
+                if not re.fullmatch(r'[a-f0-9]{64}',expected):raise APIError(400)
+                with store.photo(path,media=True) as (fd,st):
+                    if revision(st)!=expected:raise APIError(409)
+                    info=photo_details(fd,st,path)
+                    if revision(os.fstat(fd))!=expected:raise APIError(409)
+                related=[];length=-1
+                if self.server.travel is not None and (self.server.travel.root/'travel.sqlite3').exists():
+                    with self.server.travel.db() as db:
+                        for ident,raw in db.execute("SELECT id,payload FROM records WHERE deleted=0 AND json_extract(payload,'$.kind')='trip'"):
+                            r=json.loads(raw);folder=r.get('folder')
+                            if folder is None or not (folder=='' or path.startswith(folder+'/')):continue
+                            if len(folder)>length:related=[];length=len(folder)
+                            if len(folder)==length and len(related)<3:related.append({'id':ident,'title':r['title'],'country':r['country'],'city':r['city']})
+                self.reply(200,{'path':path,'revision':expected,**info,'trips':related});return
             if route.path=='/api/video-download-ticket':
                 if not post or self.server.auth is None or not self.server.auth.configured() or self.headers.get('Transfer-Encoding'):raise APIError(400)
                 length=int(self.headers.get('Content-Length','0'))

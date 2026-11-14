@@ -1,4 +1,4 @@
-import {icon} from './icons.js?v=20261114-friendly1';
+import {icon} from './icons.js?v=20261114-media1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const family=['아빠','엄마','다온','라온'];
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date());
