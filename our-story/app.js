@@ -1,4 +1,4 @@
-import {TravelController} from './travel-controller.mjs?v=20261114-media1';
+import {TravelController} from './travel-controller.mjs?v=20261114-place1';
 import {JournalController} from './journal-controller.mjs?v=20261114-media1';
 import {growthTabs,childJournal} from './growth-journal.mjs?v=20261114-media1';
 import {icon} from "./icons.js?v=20261114-media1";
