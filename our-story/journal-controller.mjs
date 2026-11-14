@@ -1,4 +1,5 @@
-import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-media1';
+import {uploadJournalPhoto,journalUploadFile} from './journal-upload.mjs?v=20261114-jattach1';
+import {journalForm,journalDetails,journalRow,JOURNAL_KINDS} from './growth-journal.mjs?v=20261114-jattach1';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function recordFromFields(target,kind,fields,attachments){
  const record={target,kind,date:fields.date,author:fields.author,attachments:attachments.map(r=>({path:r.path,revision:r.revision}))};
@@ -73,6 +74,20 @@ export class JournalController {
     this.filters={kind:'',year:'',q:'',trash:false};void this.load(true);
    }catch(err){if(form===this.form){error.textContent=err.message+' 입력 내용은 지우지 않았어요.';controls.forEach(([el,disabled])=>{el.disabled=disabled;});}}
    finally{this.busy=false;}
+  };
+  const uploadButton=form.querySelector('[data-journal-upload]'),filesInput=form.querySelector('[data-journal-files]'),uploadStatus=form.querySelector('[data-journal-upload-status]');
+  const writable=this.g.features?.upload&&this.g.features?.fileManagement&&!this.g.features?.fileOperationsBlocked;
+  if(!writable){uploadButton.disabled=true;uploadStatus.textContent='현재 NAS에서 사진 업로드를 사용할 수 없어요. 아래에서 NAS 사진을 연결할 수 있어요.';}
+  uploadButton.onclick=()=>{if(!this.busy)filesInput.click();};
+  filesInput.onchange=async()=>{
+   if(this.busy)return;const files=[...filesInput.files];filesInput.value='';if(!files.length)return;
+   const remaining=6-this.attachments.length;if(files.length>remaining){uploadStatus.textContent=`사진은 최대 6장이에요. 지금은 ${remaining}장 더 첨부할 수 있어요.`;return;}
+   const maxBytes=this.g.features.maxUpload||64*1024*1024;
+   try{for(const file of files)journalUploadFile(file,maxBytes);}catch(error){uploadStatus.textContent=error.message;return;}
+   this.busy=true;this.dirty=true;const controls=[...form.querySelectorAll('input,textarea,select,button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>{el.disabled=true;});let completed=0;
+   try{for(const file of files){uploadStatus.textContent=`사진 ${completed+1}/${files.length}장을 NAS에 올리는 중이에요…`;const ref=await uploadJournalPhoto(this.g.client,{target,id,file,maxBytes});if(this.form!==form||!this.g.connected)return;this.attachments.push(ref);completed++;void this.paintSelected();}uploadStatus.textContent=`${completed}장을 첨부했어요. 아래 ‘기록 저장’을 눌러 마무리해 주세요.`;}
+   catch(error){if(this.form===form)uploadStatus.textContent=`${completed}장 첨부 완료. ${error.message} 성공한 사진과 작성 내용은 유지했어요.`;}
+   finally{this.busy=false;if(this.form===form)controls.forEach(([el,disabled])=>{el.disabled=disabled;});}
   };
   const picker=form.querySelector('.journal-attach-picker');picker.ontoggle=()=>{if(picker.open&&!this.browserLoadedFor?.isSameNode(form)){this.browserLoadedFor=form;void this.browse('',0);}};
   await this.paintSelected();
