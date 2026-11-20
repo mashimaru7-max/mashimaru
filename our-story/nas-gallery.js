@@ -1,6 +1,6 @@
 import {mediaEntries,infoHTML} from './media-info.mjs?v=20261114-media1';
 import {selectLoaded} from './nas-selection.mjs?v=20261114-media1';
-import {FAMILY_API,FAMILY_USERNAME} from './family-config.mjs?v=20261113-login1';
+import { FAMILY_USERNAME, loadFamilyApi } from './family-config.mjs?v=20261120-shared-url';
 import {icon} from "./icons.js?v=20261114-media1";
 import { NasActions } from "./nas-actions.js?v=20261114-media1";
 import { NasClient } from "./nas-client.mjs?v=20261114-media1";
@@ -35,7 +35,8 @@ export class NasGallery {
     this.remembered = false;
     this.restoring = false;
     this.persistMessage = "";
-    this.savedBase = FAMILY_API;
+    this.sharedBase = "";
+    this.savedBase = "";
     this.savedMode = "login";
     this.onState = onState;
     this.onConnected = onConnected;
@@ -109,7 +110,7 @@ export class NasGallery {
         if (!(await this.client.remember(this.vault))) return false;
       } else await this.vault.clear();
       this.remembered = remember;
-      this.savedBase = remember ? this.client.origin : "";
+      this.savedBase = remember ? this.client.origin : this.sharedBase;
       this.savedMode = remember ? this.client.mode : "token";
       return true;
     } catch (error) {
@@ -120,13 +121,21 @@ export class NasGallery {
       return false;
     }
   }
-  async restoreRemembered({ base=FAMILY_API, navigate = false } = {}) {
+  async restoreRemembered({ navigate = false } = {}) {
     const attempt = ++this.connectVersion;
     this.restoring = true;
     this.error = "";
     this.onState();
     this.render();
     try {
+      const base = await loadFamilyApi();
+      if (attempt !== this.connectVersion) return;
+      this.sharedBase = base;
+      if (base) {
+        const baseField = this.dialog.querySelector("#nas-connect-form [name=base]");
+        if (baseField?.value === this.savedBase) baseField.value = base;
+        this.savedBase = base;
+      }
       const listing = await this.client.restore(this.vault, { base });
       if (attempt !== this.connectVersion) return;
       this.remembered = !!listing;
@@ -145,8 +154,8 @@ export class NasGallery {
     } catch (error) {
       if (attempt !== this.connectVersion) return;
       this.remembered = await this.vault.has().catch(() => false);
-      this.savedBase = this.client.origin;
-      this.savedMode = this.client.mode || "token";
+      this.savedBase = this.client.origin || this.savedBase;
+      this.savedMode = this.client.mode || this.savedMode;
       if (error.code !== "ABORT") this.error = error.message;
     } finally {
       if (attempt === this.connectVersion) {
@@ -357,7 +366,7 @@ export class NasGallery {
     let removed = true;
     if (forget) {
       this.remembered = false;
-      this.savedBase = FAMILY_API;
+      this.savedBase = this.sharedBase;
       this.savedMode = "login";
       try {
         await this.vault.clear();
@@ -378,7 +387,7 @@ export class NasGallery {
     this.actions.cancel();
     if (this.actions.dialog.open) this.actions.dialog.close();
     this.remembered = false;
-    this.savedBase = FAMILY_API;
+    this.savedBase = this.sharedBase;
     this.savedMode = "login";
     void this.vault.clear().catch(() => {
       this.persistMessage =
