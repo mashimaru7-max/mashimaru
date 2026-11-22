@@ -50,6 +50,15 @@
     details[open] .portrait{grid-column:1/-1;width:min(100%,320px);justify-self:center}
     details[open] .animal-name{padding-left:6px}
     details p{padding-left:13px}
+
+    .animal-details{padding:2px 15px 14px}
+    .animal-details p{padding:0}
+    .animal-details .overview{margin:0 0 12px;color:var(--ink)}
+    .observations{margin:0;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr))}
+    .observations > div{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#182a23}
+    .observations dt{font-weight:700;font-size:.86rem;color:var(--gold);margin-bottom:4px}
+    .observations dd{margin:0;font-size:.94rem;line-height:1.7}
+    .reference{display:inline-block;margin-top:10px;font-size:.82rem}
   </style>
 </head>
 <body>
@@ -66,109 +75,111 @@
   <div id="results"></div>
   <noscript>동물을 검색하려면 브라우저에서 JavaScript를 켜줘.</noscript>
   <footer>
-    <p>2017년 개정판의 동물 항목을 바탕으로 짧게 정리했어. 삽화는 동물의 특징을 바탕으로 새로 그린 상상화야. 일부 한글 이름은 검색을 돕기 위한 표기야.</p>
+    <p>2017년 개정판의 동물 목록을 바탕으로 마법 세계의 생김새, 생활, 능력과 이야기를 정리했어. 삽화는 동물의 특징을 바탕으로 새로 그린 상상화야. 일부 한글 이름은 검색을 돕기 위한 표기야.</p>
     <a href="https://www.jkrowling.com/book/fantastic-beasts-find/">개정판 소개</a> ·
     <a href="https://harrypotter.fandom.com/wiki/Fantastic_Beasts_and_Where_to_Find_Them_(companion_book)#Fantastic_Beasts_featured_(2017_edition)">등장 동물 목록</a>
   </footer>
 </main>
 <script>
-  const entries = [["애크로맨툴라","Acromantula","사람 말을 할 줄 아는 거대한 거미야."],
-    ["애시윈더","Ashwinder","마법의 불에서 태어나는 뱀이야. 뜨거운 알을 남겨."],
-    ["오그레이","Augurey","슬프게 우는 새야. 그 울음은 비가 다가온다는 신호야."],
-    ["바실리스크","Basilisk","눈을 마주치면 목숨을 잃을 만큼 위험한 거대한 뱀이야."],
-    ["빌리위그","Billywig","호주에 사는 파란 곤충이야. 쏘이면 몸이 공중에 뜰 수 있어."],
-    ["보우트러클","Bowtruckle","잔가지처럼 생긴 작은 동물이야. 지팡이 재료가 되는 나무를 지켜.","보우트러클 보우트럭클"],
-    ["번디문","Bundimun","습한 곳에 숨어 사는 생물이야. 가만히 있으면 초록 곰팡이처럼 보여."],
-    ["켄타우로스","Centaur","사람의 상체와 말의 몸을 가졌어. 별을 관찰하는 데 능해.","켄타우르스 센타우르"],
-    ["키메라","Chimaera","사자의 머리, 염소의 몸, 용의 꼬리가 한 몸에 모였어.","Chimera 카이메라"],
-    ["치즈퍼플","Chizpurfle","집게가 달린 작은 기생 생물이야. 마법이 깃든 물건에 꼬이기도 해."],
-    ["클래버트","Clabbert","나무에서 사는 동물이야. 위험이 닥치면 이마의 돌기가 빨갛게 빛나."],
-    ["크럽","Crup","작은 테리어를 닮은 개야. 꼬리 끝이 둘로 갈라져 있어."],
-    ["데미가이즈","Demiguise","위험을 느끼면 투명해질 수 있는, 털이 복슬복슬한 동물이야."],
-    ["디리콜","Diricawl","날지는 못해도 눈앞에서 사라졌다가 다른 곳에 나타날 수 있어.","도도새"],
-    ["독시","Doxy","온몸에 털이 덮인 요정 같은 생물이야. 물리면 독이 퍼질 수 있어."],
-    ["드래곤","Dragon","불을 뿜는 거대한 용이야. 뿔과 비늘 모양은 종류마다 달라.","용"],
-    ["앤티포디언 오팔아이","Antipodean Opaleye","반짝이는 비늘과 오팔처럼 빛나는 눈을 가진 용이야.","드래곤 용"],
-    ["중국 파이어볼","Chinese Fireball","붉은 비늘이 눈에 띄는 용이야. 불덩이를 뿜어.","차이니즈 파이어볼 드래곤 용"],
-    ["커먼 웰시 그린","Common Welsh Green","초록색 비늘을 가진 웨일스의 용이야. 울음소리가 독특해.","웨일스 초록 용 드래곤"],
-    ["헤브리디스 블랙","Hebridean Black","헤브리디스 제도의 검은 용이야. 보라색 눈을 가졌어.","드래곤 용"],
-    ["헝가리 혼테일","Hungarian Horntail","가시가 솟은 꼬리를 가졌어. 불을 아주 멀리까지 뿜는 용이야.","헝가리안 혼테일 드래곤 용"],
-    ["노르웨이 리지백","Norwegian Ridgeback","등에 검은 돌기가 줄지어 있어. 어린 개체도 일찍 불을 뿜기 시작해.","노르웨이산 리지백 드래곤 용"],
-    ["페루 바이퍼투스","Peruvian Vipertooth","몸집이 비교적 작은 용이지만, 날아가는 속도가 빠르고 송곳니에 독이 있어.","드래곤 용"],
-    ["루마니아 롱혼","Romanian Longhorn","길고 금빛이 나는 뿔이 특징인 용이야.","루마니안 롱혼 드래곤 용"],
-    ["우크라이나 아이언벨리","Ukrainian Ironbelly","몸집이 아주 큰 용이야. 쇠처럼 보이는 회색 비늘이 특징이야.","우크라이나 철갑용 드래곤 용"],
-    ["스웨덴 쇼트스나우트","Swedish Short-Snout","은빛이 도는 푸른 용이야. 푸른 불을 뿜어.","스웨덴 쇼트스노트 드래곤 용"],
-    ["더그보그","Dugbog","늪지에 숨어 사는 동물이야. 움직이지 않으면 떠다니는 나뭇조각처럼 보여."],
-    ["어클링","Erkling","숲에 사는 작은 생물이야. 높은 웃음소리로 아이들을 꾀어내.","얼클링"],
-    ["에럼펀트","Erumpent","코뿔소를 닮은 거대한 동물이야. 뿔에는 폭발을 일으키는 액체가 들어 있어.","에럼펜트"],
-    ["요정","Fairy","곤충처럼 날개가 달린 작은 생물이야.","페어리"],
-    ["파이어 크랩","Fire Crab","등껍질에 보석 같은 무늬가 있는 생물이야. 위협을 느끼면 뒤에서 불을 뿜어.","불게"],
-    ["플로버웜","Flobberworm","축축한 곳을 좋아하는 통통한 벌레야. 채소 잎을 먹어.","플로버벌레"],
-    ["푸우퍼","Fwooper","깃털 색이 화려한 새야. 노랫소리를 오래 들으면 정신이 혼란스러워질 수 있어.","푸퍼 프우퍼"],
-    ["구울","Ghoul","다락이나 헛간에 숨어 살며 덜컹거리는 소리를 내는 생물이야."],
-    ["글럼범블","Glumbumble","털이 많은 날벌레야. 이 곤충이 만드는 즙에는 기분을 가라앉히는 힘이 있어."],
-    ["노움","Gnome","감자 같은 머리를 한 생물이야. 마법사 집 정원에 숨어들곤 해.","정원 노움"],
-    ["그래폰","Graphorn","길게 굽은 뿔 두 개와 마법에 잘 견디는 질긴 가죽을 가진 동물이야.","그래프혼"],
-    ["그리핀","Griffin","독수리의 머리와 앞쪽 몸, 사자의 뒷다리를 가진 생물이야."],
-    ["그린딜로","Grindylow","호수에 사는 뿔 달린 생물이야. 길고 가는 손가락으로 꽉 붙잡아.","그린딜로우"],
-    ["하이드비하인드","Hidebehind","숲에서 자취를 숨기는 데 능해. 나무 뒤로 잽싸게 몸을 감춰.","하이드비하인드"],
-    ["히포캄푸스","Hippocampus","몸의 앞쪽은 말, 뒤쪽은 물고기를 닮은 바다 생물이야.","히포캄퍼스 바다말"],
-    ["히포그리프","Hippogriff","독수리와 말이 합쳐진 듯한 동물이야. 다가가기 전에 예의를 갖추는 게 중요해."],
-    ["호닥","Hodag","북아메리카에 사는 생물이야. 머리에 뿔이 있고 눈은 붉어."],
-    ["호크럼프","Horklump","분홍 버섯처럼 보이지만 동물이야. 땅속의 지렁이를 잡아먹어.","호클럼프"],
-    ["뿔 달린 뱀","Horned Serpent","머리에 뿔이 달린 뱀이야. 이마에 보석이 빛나는 개체도 있어.","혼드 서펀트"],
-    ["임프","Imp","작고 장난기 많은 생물이야. 지나가는 사람을 걸어 넘어뜨리기도 해."],
-    ["자비","Jarvey","큰 페럿을 닮았어. 사람 말처럼 들리는 짧은 말을 쉴 새 없이 내뱉어.","자비이"],
-    ["조버놀","Jobberknoll","살아 있을 때는 조용한 새야. 죽기 직전에 여태 들었던 소리를 거꾸로 내."],
-    ["카파","Kappa","일본의 물에 사는 생물이야. 머리 위 움푹 팬 곳에 물을 담고 있어.","갓파"],
-    ["켈피","Kelpie","모습을 바꿀 수 있는 물속 생물이야. 갈기에 물풀이 엉킨 말처럼 보이기도 해."],
-    ["날","Knarl","고슴도치와 아주 비슷해. 사람이 먹이를 주면 함정이라고 의심해.","나를 크날"],
-    ["니즐","Kneazle","고양이를 닮았고, 수상한 사람을 알아채는 눈치가 뛰어나.","크니즐"],
-    ["레프러콘","Leprechaun","아일랜드에 사는 작은 생물이야. 만들어 낸 금화는 시간이 지나면 사라져.","레프리콘 레프러칸"],
-    ["레시폴드","Lethifold","검은 천처럼 납작해. 밤에 바닥을 미끄러지듯 움직여.","레티폴드"],
-    ["로발러그","Lobalug","바닷속에 살며, 위험할 때 주머니에 든 독을 내뿜어.","로발러그"],
-    ["매클드 맬러클로","Mackled Malaclaw","바닷가에 사는 갑각류야. 물리면 한동안 일이 자꾸 꼬인다고 해.","매클드 말라클로"],
-    ["만티코어","Manticore","사람 얼굴, 사자 몸, 전갈 꼬리가 한데 모인 동물이야."],
-    ["인어","Merpeople","물속에 마을을 이루고 살아. 모습과 이름은 사는 곳에 따라 달라.","머피플"],
-    ["모크","Moke","위험할 때 몸집을 줄일 수 있는 작은 도마뱀이야."],
-    ["문카프","Mooncalf","보름달이 뜨면 숨어 있다가 밖으로 나와 춤을 춰.","문칼프"],
-    ["머트랩","Murtlap","쥐처럼 보이는 바닷가 동물이야. 등에 말미잘 같은 돌기가 자라."],
-    ["니플러","Niffler","반짝이는 금화나 보석을 발견하면 배에 달린 주머니에 쏙 숨겨."],
-    ["노그테일","Nogtail","새끼 돼지 틈에 섞여드는 생물이야. 오래 머물면 농장에 불운이 찾아온다고 해."],
-    ["눈두","Nundu","표범을 닮은 거대한 동물이야. 숨결만으로도 병을 옮길 수 있어.","눈두"],
-    ["오캐미","Occamy","날개와 깃털이 달린 뱀처럼 생겼어. 들어간 공간에 맞춰 몸집을 바꿔.","오카미"],
-    ["불사조","Phoenix","수명이 다하면 불꽃 속에서 재가 되고, 그 재 속에서 다시 태어나는 새야.","피닉스"],
-    ["픽시","Pixie","작고 파란 장난꾸러기야. 사람이나 물건을 들어 올려 말썽을 피워."],
-    ["플림피","Plimpy","둥근 물고기 몸에 길쭉한 다리 두 개가 달려 있어. 물 밑을 걸어 다녀."],
-    ["포그레빈","Pogrebin","웅크리면 돌과 구별하기 어려워. 사람을 몰래 따라다니며 기운을 빠지게 해."],
-    ["폴록","Porlock","말을 돌보는 데 익숙한 작은 생물이야. 낯선 사람이 오면 몸을 숨겨."],
-    ["퍼프스케인","Puffskein","둥근 솜뭉치처럼 생겼어. 기분이 좋으면 작은 콧노래를 내.","퍼프스킨"],
-    ["퀸타페드","Quintaped","다리가 다섯 개인 털북숭이야. 스코틀랜드 근처의 섬에 산다고 해."],
-    ["라모라","Ramora","인도양의 은빛 물고기야. 큰 배도 한자리에 붙들어 둘 만큼 힘이 세."],
-    ["레드캡","Red Cap","오래된 전쟁터나 성 아랫길에 숨어드는 작은 생물이야.","붉은 모자"],
-    ["리엠","Re'em","황금빛 털을 가진 거대한 소처럼 생겼어. 피를 마시면 잠시 힘이 세진다고 해.","리임 렘"],
-    ["룬스푸어","Runespoor","머리가 셋인 뱀이야. 각 머리가 맡은 역할이 달라.","룬스포어"],
-    ["불도롱뇽","Fire Dwelling Salamander","불꽃 속에서 지내는 작은 도롱뇽이야.","살라맨더 샐러맨더 불 도롱뇽"],
-    ["바다뱀","Sea Serpent","바다를 헤엄치는 거대한 뱀이야. 물 밖으로 머리를 내밀면 말을 닮아 보여.","바다 뱀 시 서펀트"],
-    ["슈레이크","Shrake","온몸에 뾰족한 가시가 돋은 물고기야. 어망을 찢어 놓기도 해.","슈레이크 슈레이크"],
-    ["스낼리개스터","Snallygaster","북아메리카에서 발견되는 날개 달린 생물이야. 새와 파충류를 함께 떠올리게 해.","스낼리개스터 스낼리게스터"],
-    ["골든 스니젯","Golden Snidget","빠르게 방향을 바꾸며 날아다니는 금빛 새야. 퀴디치의 골든 스니치가 이 새를 본떠 만들어졌어.","스니젯 스니지트"],
-    ["스핑크스","Sphinx","사람의 머리에 사자의 몸을 가졌어. 지나가려는 사람에게 수수께끼를 내기도 해."],
-    ["스트릴러","Streeler","몸 색이 바뀌는 거대한 달팽이야. 지나간 자리에 남긴 점액은 식물에 해로워.","스트리러"],
-    ["테보","Tebo","멧돼지를 닮은 동물이야. 투명해질 수 있어서 찾기가 어려워."],
-    ["천둥새","Thunderbird","날개를 퍼덕이면 폭풍을 일으킬 수 있는 거대한 새야.","썬더버드 선더버드 천둥 새"],
-    ["트롤","Troll","덩치가 크고 힘이 세. 산, 숲, 강을 터전으로 삼는 종류가 있어."],
-    ["유니콘","Unicorn","이마에 뿔 하나가 달린 말이야. 어린 개체는 금빛을 띠고 자라면 하얘져."],
-    ["왐퍼스 고양이","Wampus Cat","퓨마처럼 생긴 빠른 고양잇과 동물이야. 눈에는 특별한 힘이 있다고 해.","왐퍼스 캣 웜퍼스 고양이"],
-    ["늑대인간","Werewolf","보름달이 뜨면 늑대의 모습으로 변하는 사람이야.","웨어울프 늑대 인간"],
-    ["날개 달린 말","Winged Horse","날개를 달고 하늘을 나는 말이야. 아브락산과 세스트랄 같은 종류가 있어.","날개 달린 말 아브락산 에톤 그라니안 세스트랄 테스트랄"],
-    ["예티","Yeti","히말라야에 산다고 알려진, 흰 털이 덮인 큰 생물이야.","설인"]];
+  const entries = [
+    ["애크로맨툴라","Acromantula","사람 말을 할 줄 아는 거대한 거미야.","","보르네오에서 처음 알려진 검은 거미야. 다리를 쫙 펴면 폭이 4m를 넘을 수 있어.","독이 있는 이빨을 가졌어. 해그리드가 돌보던 아라고그는 호그와트 금지된 숲에 무리를 이루고 살았어.","https://www.hp-lexicon.org/creature/insects/acromantula/"],
+    ["애시윈더","Ashwinder","마법의 불에서 태어나는 뱀이야. 뜨거운 알을 남겨.","","회색 몸에 불씨처럼 붉게 빛나는 눈을 가졌어. 마법으로 피운 불을 오래 내버려 두면 재 속에서 기어 나온다고 해.","태어난 뒤 어둡고 외진 곳에 알을 낳아. 알의 열기 때문에 주변에 불이 번질 수 있어.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/snake/ashwinder/"],
+    ["오그레이","Augurey","슬프게 우는 새야. 그 울음은 비가 다가온다는 신호야.","","녹색이 섞인 검은 깃털과 날카로운 부리 때문에 작은 대머리수리처럼 보여. 아일랜드 불사조라는 별명도 있어.","옛날 마법사들은 울음소리가 죽음을 알린다고 오해했어. 알고 보니 비를 앞두고 우는 온순한 새였지.","https://www.harrypotter.com/fact-file/creatures/augurey"],
+    ["바실리스크","Basilisk","눈을 마주치면 목숨을 잃을 만큼 위험한 거대한 뱀이야.","","몸집이 거대하고 이빨에도 독이 있어. 직접 눈을 본 경우뿐 아니라 거울이나 물에 비친 눈을 봐도 위험해.","반사된 눈을 보면 몸이 돌처럼 굳어. 호그와트의 비밀의 방에 숨어 있던 생물이 바로 바실리스크야.","https://www.harrypotter.com/fact-file/creatures/basilisk"],
+    ["빌리위그","Billywig","호주에 사는 파란 곤충이야. 쏘이면 몸이 공중에 뜰 수 있어.","","호주에서 사는 작은 곤충으로 몸빛이 아주 선명한 파란색이야. 침에 쏘이면 어지럽고 발이 바닥에서 떨어질 수도 있어.","말린 침은 마법 물약의 재료로 쓰여. 뉴트의 가방에서 빠져나와 뉴욕을 날아다닌 적도 있어.","https://www.hp-lexicon.org/creature/insects/billywig/"],
+    ["보우트러클","Bowtruckle","잔가지처럼 생긴 작은 동물이야. 지팡이 재료가 되는 나무를 지켜.","보우트러클 보우트럭클","나뭇가지와 색이 비슷해 잎 사이에서는 찾기 어려워. 가는 손가락이 유난히 길고 뾰족해.","지키는 나무가 다칠 것 같으면 달려들지만 쥐며느리나 요정 알을 좋아해. 뉴트가 데리고 다닌 친구의 이름은 피켓이야.","https://www.harrypotter.com/fact-file/creatures/bowtruckle"],
+    ["번디문","Bundimun","습한 곳에 숨어 사는 생물이야. 가만히 있으면 초록 곰팡이처럼 보여.","","눈이 달린 초록색 곰팡이처럼 보이지만 다리가 있어. 놀라면 가느다란 다리로 잽싸게 도망가.","집 안의 더러운 것을 먹어. 너무 많이 퍼지면 분비물이 건물의 기초를 썩게 할 수 있어서 골칫거리야.","https://www.hp-lexicon.org/creature/magical-pests/bundimun/"],
+    ["켄타우로스","Centaur","사람의 상체와 말의 몸을 가졌어. 별을 관찰하는 데 능해.","켄타우르스 센타우르","사람의 상체와 말의 몸을 가진 지적인 종족이야. 숲에 무리를 이루고 살아가며 저마다 공동체의 규칙을 지켜.","별의 움직임으로 앞일을 짐작하고, 치료와 활쏘기에도 능해. 피렌체는 호그와트에서 점술을 가르친 켄타우로스야.","https://www.harrypotter.com/fact-file/creatures/centaur"],
+    ["키메라","Chimaera","사자의 머리, 염소의 몸, 용의 꼬리가 한 몸에 모였어.","Chimera 카이메라","그리스에서 알려진 맹수야. 사자 머리와 염소 몸에 용의 꼬리가 붙어 있어 세 동물을 한 번에 보는 것 같아.","성질이 사나워 가까이 가기 어려워. 알도 마법 세계에서 거래를 금지할 정도로 위험하게 다뤄.","https://www.hp-lexicon.org/creature/large-magical-beasts/chimaera/"],
+    ["치즈퍼플","Chizpurfle","집게가 달린 작은 기생 생물이야. 마법이 깃든 물건에 꼬이기도 해.","","집게가 있는 작은 게처럼 생겼어. 마법 동물의 털이나 깃털 사이에 들어가 살기도 해.","마법사의 집에서는 냄비에 남은 물약을 먹고, 머글의 집에서는 전기 기구에 들어가 고장을 일으킬 수 있어.","https://www.hp-lexicon.org/creature/magical-pests/chizpurfle/"],
+    ["클래버트","Clabbert","나무에서 사는 동물이야. 위험이 닥치면 이마의 돌기가 빨갛게 빛나.","","초록색 얼룩 피부와 넓은 입이 있어 개구리와 원숭이를 섞은 것 같아. 긴 팔과 물갈퀴 달린 손발로 나뭇가지를 타.","이마의 돌기가 붉게 빛나면 주변에 위험이 있다는 뜻이야. 나뭇잎 속에 숨어 있어도 이 빛 때문에 눈에 띌 때가 있어.","https://www.hp-lexicon.org/creature/small-magical-creatures/clabbert/"],
+    ["크럽","Crup","작은 테리어를 닮은 개야. 꼬리 끝이 둘로 갈라져 있어.","","잭 러셀 테리어처럼 생겼지만 꼬리 끝이 두 갈래야. 마법사들이 길러 낸 개라 평범한 강아지와 닮은 점이 많아.","주인을 잘 따르지만 낯선 머글에게는 사납게 굴 수 있어. 먹이 가리는 일이 거의 없다고 알려져 있어.","https://www.hp-lexicon.org/creature/dogs/crup/"],
+    ["데미가이즈","Demiguise","위험을 느끼면 투명해질 수 있는, 털이 복슬복슬한 동물이야.","","동아시아에서 알려진 동물이야. 큰 검은 눈과 길고 부드러운 은빛 털 때문에 나무늘보와 유인원을 같이 떠올리게 해.","위험이 닥치기 전에 알아채고 투명해질 수 있어. 은빛 털은 투명 망토를 짜는 데도 쓰여.","https://www.harrypotter.com/fact-file/creatures/demiguise"],
+    ["디리콜","Diricawl","날지는 못해도 눈앞에서 사라졌다가 다른 곳에 나타날 수 있어.","도도새","통통한 몸에 날개가 있지만 날지는 못해. 위험을 느끼면 깃털을 흩날리며 눈앞에서 사라져.","머글은 이 새를 도도라고 불렀어. 마법 세계에서는 사라지는 재주 때문에 멸종한 줄 알았다는 이야기가 전해져.","https://www.hp-lexicon.org/creature/birds/diricawl/"],
+    ["독시","Doxy","온몸에 털이 덮인 요정 같은 생물이야. 물리면 독이 퍼질 수 있어.","","작은 요정처럼 보이지만 몸에 검은 털이 나고 이빨에 독이 있어. 북유럽과 북아메리카에서 알려졌어.","집 안으로 들어오면 커튼 주름에 숨어 지내기도 해. 커튼이 움직인다고 함부로 손을 넣었다간 물릴 수 있어.","https://www.hp-lexicon.org/creature/fairies/doxy/"],
+    ["드래곤","Dragon","불을 뿜는 거대한 용이야. 뿔과 비늘 모양은 종류마다 달라.","용","큰 날개와 비늘을 가진 파충류야. 마법 세계에선 넓은 산악 지대에 보호 구역을 두어 돌봐.","종류를 구별하려면 불꽃의 색, 등과 꼬리의 가시, 뿔의 모양을 함께 살펴봐. 이 도감에서 대표 품종 10개를 따로 볼 수 있어.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/dragon/"],
+    ["앤티포디언 오팔아이","Antipodean Opaleye","반짝이는 비늘과 오팔처럼 빛나는 눈을 가진 용이야.","드래곤 용","뉴질랜드 출신이야. 진주처럼 빛나는 비늘과 여러 색이 섞인 오팔빛 눈을 가졌어.","연한 회색 알은 돌이나 화석처럼 보여. 붉은 불을 뿜지만 용 중에서는 비교적 온순한 편이야.","https://www.harrypotter.com/fact-file/creatures/antipodean-opaleye"],
+    ["중국 파이어볼","Chinese Fireball","붉은 비늘이 눈에 띄는 용이야. 불덩이를 뿜어.","차이니즈 파이어볼 드래곤 용","중국에서 알려진 용이야. 붉은 얼굴 둘레를 금빛 돌기들이 둘러싸서 사자용이라는 별명도 있어.","콧구멍에서 버섯처럼 둥글게 퍼지는 불덩이를 내뿜어. 빅터 크룸이 트리위저드 시합에서 만난 용이야.","https://www.harrypotter.com/fact-file/creatures/chinese-fireball"],
+    ["커먼 웰시 그린","Common Welsh Green","초록색 비늘을 가진 웨일스의 용이야. 울음소리가 독특해.","웨일스 초록 용 드래곤","웨일스 산지에 사는 초록 용이야. 풀빛 비늘 덕분에 멀리서 보면 산비탈에 섞여 잘 드러나지 않아.","주로 양을 먹으며 사람을 피하는 편이야. 플뢰르 델라쿠르가 트리위저드 시합에서 상대했어.","https://www.harrypotter.com/fact-file/creatures/common-welsh-green"],
+    ["헤브리디스 블랙","Hebridean Black","헤브리디스 제도의 검은 용이야. 보라색 눈을 가졌어.","드래곤 용","스코틀랜드 헤브리디스 제도에 사는 용이야. 거친 검은 비늘에 보라색 눈이 있고, 꼬리 끝은 화살촉을 닮았어.","같은 영국 제도의 웰시 그린보다 성질이 거칠어. 한 마리마다 아주 넓은 영역이 필요해.","https://www.harrypotter.com/fact-file/creatures/hebridean-black"],
+    ["헝가리 혼테일","Hungarian Horntail","가시가 솟은 꼬리를 가졌어. 불을 아주 멀리까지 뿜는 용이야.","헝가리안 혼테일 드래곤 용","헝가리에서 알려진 용이야. 검은 비늘과 노란 눈, 청동색 뿔에다가 꼬리까지 가시로 덮여 있어.","멀리까지 불을 뿜는 데다 알을 지킬 때 특히 사나워. 해리가 트리위저드 시합 첫 과제에서 상대했어.","https://www.harrypotter.com/fact-file/creatures/hungarian-horntail"],
+    ["노르웨이 리지백","Norwegian Ridgeback","등에 검은 돌기가 줄지어 있어. 어린 개체도 일찍 불을 뿜기 시작해.","노르웨이산 리지백 드래곤 용","노르웨이 산지에 사는 용이야. 헝가리 혼테일과 비슷하지만 등 위에 솟은 검은 능선이 구별점이야.","독이 있는 송곳니로 물속 동물도 사냥해. 해그리드가 알에서 부화시킨 용 노버트가 이 종류야.","https://www.harrypotter.com/fact-file/creatures/norwegian-ridgeback"],
+    ["페루 바이퍼투스","Peruvian Vipertooth","몸집이 비교적 작은 용이지만, 날아가는 속도가 빠르고 송곳니에 독이 있어.","드래곤 용","페루 동부와 북동부 출신이야. 구릿빛 비늘에 검은 무늬가 있고, 다른 용보다 비교적 몸집이 작아.","작은 몸으로 아주 빠르게 날아. 송곳니에 독도 있어서 덩치만 보고 덜 위험하다고 생각하면 안 돼.","https://www.harrypotter.com/fact-file/creatures/peruvian-vipertooth"],
+    ["루마니아 롱혼","Romanian Longhorn","길고 금빛이 나는 뿔이 특징인 용이야.","루마니안 롱혼 드래곤 용","루마니아에서 알려진 용이야. 짙은 녹색 비늘 위로 길게 뻗은 금빛 뿔이 눈에 띄어.","루마니아에는 용을 연구하고 돌보는 보호 구역이 있어. 그곳에는 롱혼과 함께 다른 종류의 용도 살아.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/dragon/romanian-longhorn/"],
+    ["우크라이나 아이언벨리","Ukrainian Ironbelly","몸집이 아주 큰 용이야. 쇠처럼 보이는 회색 비늘이 특징이야.","우크라이나 철갑용 드래곤 용","쇠처럼 회색빛이 나는 비늘과 짙은 붉은 눈이 특징이야. 알려진 용 품종 가운데 몸집이 가장 큰 편이야.","발톱이 길고 몸무게가 몇 톤까지 나갈 수 있어. 작품에서는 그린고트 지하 금고를 지키는 용이 이 종류야.","https://www.harrypotter.com/de/fact-file/creatures/ukrainian-ironbelly"],
+    ["스웨덴 쇼트스나우트","Swedish Short-Snout","은빛이 도는 푸른 용이야. 푸른 불을 뿜어.","스웨덴 쇼트스노트 드래곤 용","스칸디나비아의 외진 곳에 사는 은빛 푸른 용이야. 사람과 마주치는 일이 드물어.","불꽃도 비늘처럼 푸르고 열기가 매우 강해. 마법 세계에선 가죽을 보호 장갑이나 방패 재료로 써.","https://www.harrypotter.com/fact-file/creatures/swedish-short-snout"],
+    ["더그보그","Dugbog","늪지에 숨어 사는 동물이야. 움직이지 않으면 떠다니는 나뭇조각처럼 보여.","","늪에 떠 있는 나무토막처럼 보여도 지느러미가 달린 발과 날카로운 이가 있어.","작은 동물을 사냥하지만 특히 맨드레이크를 좋아해. 약초밭에 숨어들면 뿌리부터 피해를 볼 수 있어.","https://www.hp-lexicon.org/creature/fish/dugbog/"],
+    ["어클링","Erkling","숲에 사는 작은 생물이야. 높은 웃음소리로 아이들을 꾀어내.","얼클링","독일에서 알려진 작은 숲 생물이야. 뾰족한 귀와 높은 웃음소리가 특징이야.","그 웃음소리에 아이들이 홀려 따라갈 수 있다고 해. 마법 당국이 오랫동안 주의를 기울여 온 이유야.","https://www.hp-lexicon.org/creature/gnomes-and-other-small-human-like-creatures/erkling/"],
+    ["에럼펀트","Erumpent","코뿔소를 닮은 거대한 동물이야. 뿔에는 폭발을 일으키는 액체가 들어 있어.","에럼펜트","아프리카에서 알려진 회색 동물이야. 멀리서 보면 코뿔소 같고, 질긴 가죽은 여러 마법 주문도 튕겨 내.","커다란 뿔 안의 액체는 뿔에 찔린 것을 폭발시킬 수 있어. 덩치 못지않게 뿔을 조심해야 하는 동물이야.","https://www.harrypotter.com/fact-file/creatures/erumpent"],
+    ["요정","Fairy","곤충처럼 날개가 달린 작은 생물이야.","페어리","작은 사람처럼 보이면서 등에 곤충 같은 날개가 달렸어. 다른 동물의 눈에 띄지 않으려 약한 마법을 쓰기도 해.","서로 나누는 소리를 사람이 알아듣기 어려워. 픽시와는 다른 생물이라 작은 몸과 날개만으로 헷갈리기 쉬워.","https://www.hp-lexicon.org/creature/fairies/fairy/"],
+    ["파이어 크랩","Fire Crab","등껍질에 보석 같은 무늬가 있는 생물이야. 위협을 느끼면 뒤에서 불을 뿜어.","불게","피지 해안에서 알려진 생물이야. 이름은 게지만 몸은 보석 박힌 거북처럼 보여.","곁으로 다가오는 적을 놀라게 하려고 뒤쪽으로 불을 쏘아. 등껍질을 노리는 사냥꾼 때문에 보호 구역이 있어.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/fire-crab/"],
+    ["플로버웜","Flobberworm","축축한 곳을 좋아하는 통통한 벌레야. 채소 잎을 먹어.","플로버벌레","이빨이 없는 갈색 벌레야. 축축한 곳의 식물을 먹고, 잎채소 가운데 상추를 특히 좋아해.","몸에서 나오는 점액은 묽은 마법 물약을 걸쭉하게 만들 때 써. 조용하지만 물약 교실에서는 제법 쓸모가 있어.","https://www.hp-lexicon.org/creature/worms-and-worm-like-creatures/flobberworm/"],
+    ["푸우퍼","Fwooper","깃털 색이 화려한 새야. 노랫소리를 오래 들으면 정신이 혼란스러워질 수 있어.","푸퍼 프우퍼","아프리카의 마법 새야. 분홍, 주황, 노랑, 연두처럼 선명한 깃털색이 눈에 띄어.","노래를 오래 들으면 정신이 흐려질 수 있어. 마법 세계에서 기를 때는 소리를 막는 주문을 사용해.","https://www.hp-lexicon.org/creature/birds/fwooper/"],
+    ["구울","Ghoul","다락이나 헛간에 숨어 살며 덜컹거리는 소리를 내는 생물이야.","","툭 튀어나온 이와 미끈한 몸이 특징이야. 다락이나 헛간에서 거미와 나방을 찾아 먹으며 지내.","가끔 물건을 던지거나 소란을 피워도 대체로 큰 해는 끼치지 않아. 론의 집 다락에도 구울 한 마리가 살아.","https://www.hp-lexicon.org/creature/large-magical-beasts/ghoul/"],
+    ["글럼범블","Glumbumble","털이 많은 날벌레야. 이 곤충이 만드는 즙에는 기분을 가라앉히는 힘이 있어.","","북유럽에서 알려진 털북숭이 날벌레야. 털로 뒤덮인 몸만 보면 평범한 곤충과 혼동할 수 있어.","이 곤충의 분비물은 기분을 가라앉혀. 마법 약초인 알리호치의 효과를 누그러뜨리는 데도 쓰여.","https://www.hp-lexicon.org/creature/insects/glumbumble/"],
+    ["노움","Gnome","감자 같은 머리를 한 생물이야. 마법사 집 정원에 숨어들곤 해.","정원 노움","머리는 감자를 닮았고 발은 단단하고 큼직해. 마법사 집 정원에 굴을 파고 들어와 골칫거리가 되기도 해.","땅속 생물인 호크럼프를 즐겨 먹어. 작은 정원에도 서로 먹고 먹히는 마법 생물의 관계가 있는 셈이야.","https://www.harrypotter.com/fact-file/creatures/gnome"],
+    ["그래폰","Graphorn","길게 굽은 뿔 두 개와 마법에 잘 견디는 질긴 가죽을 가진 동물이야.","그래프혼","유럽 산지에서 알려진 회보라색 짐승이야. 등이 불룩 솟아 있고 뿔이 앞으로 길게 굽어 있어.","가죽이 질겨 여러 주문에 잘 견뎌. 뿔을 갈아 만든 가루는 귀한 물약 재료로 쓰여.","https://www.harrypotter.com/fact-file/creatures/graphorn"],
+    ["그리핀","Griffin","독수리의 머리와 앞쪽 몸, 사자의 뒷다리를 가진 생물이야.","","독수리의 머리와 앞몸에 사자의 뒷몸이 붙은 동물이야. 생고기를 먹으며 힘과 눈썰미가 뛰어난 수호자로 알려져 있어.","마법사들은 귀한 물건을 지키는 데 그리핀을 두기도 해. 사자 뒷다리가 말의 뒷다리를 가진 히포그리프와 구별점이야.","https://www.hp-lexicon.org/creature/large-magical-beasts/griffin/"],
+    ["그린딜로","Grindylow","호수에 사는 뿔 달린 생물이야. 길고 가는 손가락으로 꽉 붙잡아.","그린딜로우","영국 제도의 호수에서 알려진 연녹색 생물이야. 머리에는 작은 뿔이 있고 손가락은 가늘고 길어.","물속에서 다가오는 것을 움켜쥐지만 긴 손가락은 부러지기 쉬워. 인어가 길들여 키우는 경우도 있다고 해.","https://www.harrypotter.com/fact-file/creatures/grindylow"],
+    ["하이드비하인드","Hidebehind","숲에서 자취를 숨기는 데 능해. 나무 뒤로 잽싸게 몸을 감춰.","하이드비하인드","북아메리카 숲의 생물이야. 마르고 키 큰 곰을 닮았다는 이야기가 있어.","몸을 비틀어 가느다란 나무나 물체 뒤에도 숨을 수 있어. 투명해지기도 해서 눈으로 따라잡기가 어려워.","https://www.hp-lexicon.org/creature/hidebehind/"],
+    ["히포캄푸스","Hippocampus","몸의 앞쪽은 말, 뒤쪽은 물고기를 닮은 바다 생물이야.","히포캄퍼스 바다말","말의 머리와 앞다리, 큰 물고기의 몸통과 꼬리가 한데 붙은 바다 생물이야.","커다랗고 반투명한 알을 낳아. 새끼도 올챙이와 망아지를 함께 떠올리게 하는 이름으로 불려.","https://www.hp-lexicon.org/creature/horse/hippocampus/"],
+    ["히포그리프","Hippogriff","독수리와 말이 합쳐진 듯한 동물이야. 다가가기 전에 예의를 갖추는 게 중요해.","","독수리의 부리와 발톱, 날개에 말의 뒷몸이 이어져 있어. 발톱이 크고 자존심이 강해서 먼저 예의를 보여야 해.","고개를 숙여 인사한 뒤 상대도 고개를 숙일 때까지 기다린다고 해. 해리가 타고 날았던 벅빅도 히포그리프야.","https://www.harrypotter.com/fact-file/creatures/hippogriff"],
+    ["호닥","Hodag","북아메리카에 사는 생물이야. 머리에 뿔이 있고 눈은 붉어.","","북아메리카의 큰 개 정도 크기인 동물이야. 개구리 같은 머리에 뿔과 송곳니가 나고 눈이 붉게 빛나.","좋아하는 먹이는 문카프야. 문카프를 쫓다가 마법을 모르는 사람들의 농장 근처에서 발견되기도 해.","https://www.hp-lexicon.org/creature/hodag/"],
+    ["호크럼프","Horklump","분홍 버섯처럼 보이지만 동물이야. 땅속의 지렁이를 잡아먹어.","호클럼프","스칸디나비아에서 처음 알려져 북유럽 정원에 퍼졌어. 분홍 버섯처럼 보여도 털과 촉수가 있는 동물이야.","땅속으로 촉수를 뻗어 지렁이를 잡아먹어. 정원 노움이 이 생물을 즐겨 먹어.","https://www.hp-lexicon.org/creature/magical-pests/horklump/"],
+    ["뿔 달린 뱀","Horned Serpent","머리에 뿔이 달린 뱀이야. 이마에 보석이 빛나는 개체도 있어.","혼드 서펀트","북아메리카 마법 세계의 전설에도 나오는 뱀이야. 머리의 뿔과 빛나는 보석이 눈에 띄어.","뿔은 지팡이 속 재료로 쓰인 적이 있어. 일버르모니 마법 학교의 한 기숙사도 이 생물에서 이름을 따왔어.","https://www.harrypotter.com/features/care-of-magical-creatures-illustrations-introducing-new-fantastic-beasts"],
+    ["임프","Imp","작고 장난기 많은 생물이야. 지나가는 사람을 걸어 넘어뜨리기도 해.","","작은 몸과 장난기 때문에 픽시와 헷갈리기 쉬워. 다만 임프는 픽시처럼 날 수 없어.","물가에서 사람의 발을 걸어 넘어뜨리는 장난을 친다고 해. 날개 유무보다 날 수 있는지를 보면 둘을 구별하기 쉬워.","https://www.hp-lexicon.org/creature/fairies/imp/"],
+    ["자비","Jarvey","큰 페럿을 닮았어. 사람 말처럼 들리는 짧은 말을 쉴 새 없이 내뱉어.","자비이","덩치 큰 페럿처럼 생겼어. 마법 동물 가운데 드물게 사람 말을 할 수 있어.","긴 대화를 나누기보다는 짧고 거친 말을 쉴 새 없이 내뱉어. 말을 할 줄 안다고 해서 사람처럼 대화하는 건 아니야.","https://www.hp-lexicon.org/creature/small-magical-creatures/jarvey/"],
+    ["조버놀","Jobberknoll","살아 있을 때는 조용한 새야. 죽기 직전에 여태 들었던 소리를 거꾸로 내.","","북유럽과 아메리카에서 알려진 작은 새야. 푸른 몸에 점이 있고 작은 곤충을 잡아먹어.","살아 있는 동안에는 아주 조용해. 마지막 순간에 평생 들었던 소리를 시간 순서의 반대로 한꺼번에 내보내.","https://www.hp-lexicon.org/creature/birds/jobberknoll/"],
+    ["카파","Kappa","일본의 물에 사는 생물이야. 머리 위 움푹 팬 곳에 물을 담고 있어.","갓파","일본의 강이나 연못에 사는 생물이야. 물갈퀴가 있고, 머리 꼭대기는 접시처럼 오목해.","머리에 고인 물 덕분에 힘을 낸다고 해. 고개를 깊게 숙여 물을 쏟으면 힘이 약해진다는 이야기도 있어.","https://www.hp-lexicon.org/creature/fish/kappa/"],
+    ["켈피","Kelpie","모습을 바꿀 수 있는 물속 생물이야. 갈기에 물풀이 엉킨 말처럼 보이기도 해.","","물가에서 물풀 갈기를 가진 말로 나타날 수 있어. 켈피는 모습을 바꾸는 재주도 있어서 늘 말처럼 보이지는 않아.","등에 타려는 사람을 물속으로 끌고 간다고 해. 도감에서는 네스호에 사는 아주 큰 켈피 이야기도 전해져.","https://www.hp-lexicon.org/creature/fish/kelpie/"],
+    ["날","Knarl","고슴도치와 아주 비슷해. 사람이 먹이를 주면 함정이라고 의심해.","나를 크날","겉모습만으로는 보통 고슴도치와 구별하기 어려워. 마법 세계에서는 먹이를 발견했을 때 보이는 행동을 단서로 삼아.","누군가 준 먹이를 덫이라고 여기면 정원의 식물이나 장식품을 망가뜨려. 이 차이는 호그와트 시험에 나온 적도 있어.","https://www.hp-lexicon.org/creature/small-magical-creatures/knarl/"],
+    ["니즐","Kneazle","고양이를 닮았고, 수상한 사람을 알아채는 눈치가 뛰어나.","크니즐","점박이 털에 큰 귀와 사자 같은 꼬리가 달린 고양잇과 동물이야. 믿을 만한 주인과 가까워지면 좋은 반려동물이 돼.","수상한 사람을 알아차리는 눈치가 비상해. 헤르미온느의 고양이 크룩생크는 니즐의 피가 섞였어.","https://www.harrypotter.com/fact-file/creatures/kneazle"],
+    ["레프러콘","Leprechaun","아일랜드에 사는 작은 생물이야. 만들어 낸 금화는 시간이 지나면 사라져.","레프리콘 레프러칸","몸집이 아주 작은 초록빛 사람처럼 보이는 아일랜드 생물이야. 사람 말을 할 수 있어.","금화처럼 보이는 물건을 만들지만 한두 시간이 지나면 사라져. 아일랜드 퀴디치 대표팀의 마스코트이기도 해.","https://www.hp-lexicon.org/creature/gnomes-and-other-small-human-like-creatures/leprechaun/"],
+    ["레시폴드","Lethifold","검은 천처럼 납작해. 밤에 바닥을 미끄러지듯 움직여.","레티폴드","열대 지방에서 드물게 발견돼. 검은 망토처럼 납작해서 어두운 바닥 위를 스르르 지나갈 때 눈에 잘 띄지 않아.","잠든 사람에게 접근하는 위험한 생물이야. 마법 세계에서 알려진 방어법은 패트로누스 주문이야.","https://www.hp-lexicon.org/creature/large-magical-beasts/lethifold/"],
+    ["로발러그","Lobalug","바닷속에 살며, 위험할 때 주머니에 든 독을 내뿜어.","로발러그","바닷속에 사는 작은 생물이야. 몸 한쪽에는 독을 담는 주머니, 다른 쪽에는 물총처럼 분비물을 내보내는 관이 달렸어.","위험하면 관으로 독을 내뿜어 자신을 지켜. 도감에는 인어가 이 능력을 이용한다는 기록도 있어.","https://www.hp-lexicon.org/creature/fish/lobalug/"],
+    ["매클드 맬러클로","Mackled Malaclaw","바닷가에 사는 갑각류야. 물리면 한동안 일이 자꾸 꼬인다고 해.","매클드 말라클로","유럽의 바위 해안에 사는 작은 갑각류야. 회색 껍데기에 녹색 점이 있고 작은 바닷가재처럼 보여.","물린 사람은 길게는 일주일 동안 불운이 따른다고 해. 보기엔 먹음직스러워도 먹으면 열과 발진을 일으켜.","https://www.hp-lexicon.org/creature/fish/mackled-malaclaw/"],
+    ["만티코어","Manticore","사람 얼굴, 사자 몸, 전갈 꼬리가 한데 모인 동물이야.","","사람을 닮은 얼굴에 사자 몸과 전갈 꼬리가 붙어 있어. 사람 얼굴만 보고 가까이 가기엔 매우 위험한 생물이야.","마법 세계의 기록에도 공격을 당한 사례가 나와. 그리스 전설의 사자 머리 키메라와 비교하면 얼굴과 꼬리가 달라.","https://www.hp-lexicon.org/creature/large-magical-beasts/manticore/"],
+    ["인어","Merpeople","물속에 마을을 이루고 살아. 모습과 이름은 사는 곳에 따라 달라.","머피플","바다와 호수에 마을을 이루고 사는 지적인 종족이야. 호그와트 근처 호수에도 인어 공동체가 살아.","음악을 좋아하고 인어말을 써. 물 밖에서 귀에 거슬리는 소리도 물속에서는 알아들을 수 있는 말이나 노래가 돼.","https://www.hp-lexicon.org/creature/sentient/merpeople/"],
+    ["모크","Moke","위험할 때 몸집을 줄일 수 있는 작은 도마뱀이야.","","영국과 아일랜드에서 알려진 은녹색 도마뱀이야. 누가 다가오면 몸을 작게 줄여 눈에 띄지 않기도 해.","마법사들은 가죽을 돈주머니에 이용해. 낯선 사람이 가까이 오면 주머니 겉이 오그라드는 성질이 생겨.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/moke/"],
+    ["문카프","Mooncalf","보름달이 뜨면 숨어 있다가 밖으로 나와 춤을 춰.","문칼프","연회색의 매끈한 피부, 커다란 눈, 납작하고 넓은 발을 가졌어. 평소에는 겁이 많아 굴속에 숨어 지내.","보름달이 뜨면 뒷발로 서서 춤을 춰. 은빛 배설물에는 마법 식물을 더 빨리 자라게 하는 힘이 있어.","https://www.harrypotter.com/fact-file/creatures/mooncalf"],
+    ["머트랩","Murtlap","쥐처럼 보이는 바닷가 동물이야. 등에 말미잘 같은 돌기가 자라.","","쥐처럼 생겼지만 등에 말미잘을 닮은 돌기가 있어. 바닷가 다른 작은 동물과 구분하기 좋은 특징이야.","마법 세계에서는 등 돌기를 재료로 써서 저주에 대한 저항을 높여. 물약 재료로 쓰이는 생물의 한 예야.","https://www.hp-lexicon.org/creature/small-magical-creatures/murtlap/"],
+    ["니플러","Niffler","반짝이는 금화나 보석을 발견하면 배에 달린 주머니에 쏙 숨겨.","","검은 털과 길쭉한 주둥이, 삽처럼 생긴 앞발이 특징이야. 영국에서 볼 수 있고 땅속에 굴을 파고 살아.","보물 찾기에는 선수지만 반짝이는 것을 뒤지다 물건을 어지럽혀 집에서 기르기 어려워. 뉴트가 돌본 니플러 중에는 테디도 있었어.","https://www.harrypotter.com/fact-file/creatures/niffler"],
+    ["노그테일","Nogtail","새끼 돼지 틈에 섞여드는 생물이야. 오래 머물면 농장에 불운이 찾아온다고 해.","","유럽과 미국 등의 농촌에 나타나는 생물이야. 새끼 돼지와 비슷하지만 꼬리가 짧고 다리가 길어.","돼지우리에 슬며시 섞여들어 어미 돼지의 젖을 먹어. 오래 숨어 있을수록 농장에 나쁜 일이 이어진다고 해.","https://www.hp-lexicon.org/creature/dark-creatures/nogtail/"],
+    ["눈두","Nundu","표범을 닮은 거대한 동물이야. 숨결만으로도 병을 옮길 수 있어.","눈두","표범을 닮았지만 몸집이 훨씬 큰 마법 동물이야. 빠르고 위협적인 데다 숨결에 병을 옮기는 힘까지 있어.","마법사 한 사람이 홀로 제압하기 어려워 여러 사람이 힘을 모아야 한다고 해. 이빨과 발톱만 피한다고 안전한 동물이 아니야.","https://www.harrypotter.com/fact-file/creatures/nundu"],
+    ["오캐미","Occamy","날개와 깃털이 달린 뱀처럼 생겼어. 들어간 공간에 맞춰 몸집을 바꿔.","오카미","동아시아와 인도에서 알려진 동물이야. 몸은 뱀처럼 길지만 날개와 두 발이 있고, 쥐나 새를 먹어.","작은 찻주전자에도 들어갈 수 있게 몸을 줄이고 넓은 곳에서는 그만큼 커져. 순은으로 된 알을 낳고 둥지 가까이 다가오면 예민해져.","https://www.harrypotter.com/fact-file/creatures/occamy"],
+    ["불사조","Phoenix","수명이 다하면 불꽃 속에서 재가 되고, 그 재 속에서 다시 태어나는 새야.","피닉스","붉고 금빛이 도는 깃털에 공작처럼 긴 꼬리를 가진 새야. 높은 산에서 발견되며 아주 오랫동안 살 수 있어.","수명이 다하면 불 속의 재에서 다시 태어나. 눈물에는 상처를 낫게 하는 힘이 있고, 덤블도어가 데리고 다닌 포크스가 불사조야.","https://www.harrypotter.com/fact-file/creatures/phoenix"],
+    ["픽시","Pixie","작고 파란 장난꾸러기야. 사람이나 물건을 들어 올려 말썽을 피워.","","영국 콘월에서 알려진 파란 생물이야. 몸은 작고 목소리는 높으며, 날개 없이도 공중에 뜰 수 있어.","물건을 들거나 사람을 매달아 두는 장난을 좋아해. 록하트가 수업에서 풀어놓았다가 교실이 소란스러워졌어.","https://www.hp-lexicon.org/creature/fairies/pixie/"],
+    ["플림피","Plimpy","둥근 물고기 몸에 길쭉한 다리 두 개가 달려 있어. 물 밑을 걸어 다녀.","","공처럼 둥근 물고기에 긴 다리 두 개와 물갈퀴가 달렸어. 깊은 호수 바닥에 사는 종류도 있어.","물밑을 걸으며 달팽이를 잡아먹어. 인어들은 골칫거리로 여겨 긴 다리를 묶어 멀리 떠내려 보내기도 해.","https://www.hp-lexicon.org/creature/fish/plimpy/"],
+    ["포그레빈","Pogrebin","웅크리면 돌과 구별하기 어려워. 사람을 몰래 따라다니며 기운을 빠지게 해.","","러시아에서 알려진 작은 생물이야. 몸에 털이 나 있지만 웅크리면 회색 머리 때문에 바위처럼 보여.","뒤를 밟는 동안 사람의 기분을 가라앉힐 수 있어. 가까이에 있어도 평범한 돌로 착각하기 쉬워.","https://www.hp-lexicon.org/creature/dark-creatures/pogrebin/"],
+    ["폴록","Porlock","말을 돌보는 데 익숙한 작은 생물이야. 낯선 사람이 오면 몸을 숨겨.","","영국 도싯과 아일랜드 남부에서 알려졌어. 털이 덥수룩하고 갈라진 발굽이 두 개라 작은 가축처럼 보이기도 해.","풀을 먹고 말 무리 곁이나 마구간의 짚 속에서 지내. 말을 지키지만 낯선 사람을 보면 얼른 몸을 숨겨.","https://www.hp-lexicon.org/creature/gnomes-and-other-small-human-like-creatures/porlock/"],
+    ["퍼프스케인","Puffskein","둥근 솜뭉치처럼 생겼어. 기분이 좋으면 작은 콧노래를 내.","퍼프스킨","크림빛 털이 나 있어 둥근 솜뭉치처럼 보여. 길게 뻗는 혀와 기분 좋을 때 내는 낮은 콧노래가 특징이야.","마법사 아이들에게 인기 있는 반려동물이야. 위즐리 쌍둥이가 기른 작은 품종은 피그미 퍼프라고 불려.","https://www.harrypotter.com/fact-file/creatures/puffskein"],
+    ["퀸타페드","Quintaped","다리가 다섯 개인 털북숭이야. 스코틀랜드 근처의 섬에 산다고 해.","","스코틀랜드 북쪽 섬에 산다고 알려졌어. 붉은 갈색 털로 뒤덮인 낮은 몸에 다리가 다섯 개야.","사나운 육식 동물이야. 마법사 집안끼리 다투다가 변신 마법으로 생겼다는 이야기가 전해지지만 전설로 남아 있어.","https://www.hp-lexicon.org/creature/large-magical-beasts/quintaped/"],
+    ["라모라","Ramora","인도양의 은빛 물고기야. 큰 배도 한자리에 붙들어 둘 만큼 힘이 세.","","인도양에서 살아가는 은빛 물고기야. 닻을 내린 것처럼 큰 배도 그 자리에 붙들 수 있어.","뱃사람을 지켜 주는 생물로 알려졌어. 그 능력 때문에 함부로 붙잡지 못하도록 마법 세계에서 보호하고 있어.","https://www.hp-lexicon.org/creature/fish/ramora/"],
+    ["레드캡","Red Cap","오래된 전쟁터나 성 아랫길에 숨어드는 작은 생물이야.","붉은 모자","작은 고블린을 닮은 생물이야. 오래된 전쟁터나 성의 지하처럼 과거에 싸움이 있었던 곳에 숨어.","어두운 곳에서 길을 잃은 사람에게 달려든다고 해. 마법을 쓰는 사람은 주문으로 물리칠 수 있어.","https://www.hp-lexicon.org/creature/gnomes-and-other-small-human-like-creatures/red-cap/"],
+    ["리엠","Re'em","황금빛 털을 가진 거대한 소처럼 생겼어. 피를 마시면 잠시 힘이 세진다고 해.","리임 렘","황금빛 털을 두른 거대한 소처럼 생겼어. 마법 세계에서도 만나기 힘들 만큼 드문 동물이야.","이 생물의 피를 마시면 힘이 세진다는 이야기 때문에 찾는 이가 많아. 워낙 희귀해서 구하기도 어렵다고 해.","https://www.hp-lexicon.org/creature/large-magical-beasts/reem/"],
+    ["룬스푸어","Runespoor","머리가 셋인 뱀이야. 각 머리가 맡은 역할이 달라.","룬스포어","서아프리카 부르키나파소에서 알려진 주황색 뱀이야. 검은 줄무늬와 머리 세 개가 눈에 띄어.","머리마다 계획하거나, 꿈꾸거나, 다른 머리를 비판하는 등 역할이 달라. 입으로 알을 낳는다는 점도 독특해.","https://www.harrypotter.com/patronus/runespoor"],
+    ["불도롱뇽","Fire Dwelling Salamander","불꽃 속에서 지내는 작은 도롱뇽이야.","살라맨더 샐러맨더 불 도롱뇽","불꽃을 보금자리 삼아 타오르는 불을 먹고 사는 작은 동물이야. 불꽃이 뜨거운 정도에 따라 몸빛이 달라져.","숲속의 평범한 도롱뇽과 달리 불 속에서 찾아야 해. 그곳에서 작은 몸이 불씨처럼 보일 수 있어.","https://www.harrypotter.com/patronus/firedwellingsalamander"],
+    ["바다뱀","Sea Serpent","바다를 헤엄치는 거대한 뱀이야. 물 밖으로 머리를 내밀면 말을 닮아 보여.","바다 뱀 시 서펀트","대서양과 태평양, 지중해 등에서 알려졌어. 말 같은 머리가 먼저 나타나고 긴 몸이 물결처럼 이어져 보여.","몸이 워낙 커서 바다 괴물로 오해받았지만, 도감에서는 사나운 외모만큼 사람을 해치는 동물은 아니라고 봐.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/snake/sea-serpent/"],
+    ["슈레이크","Shrake","온몸에 뾰족한 가시가 돋은 물고기야. 어망을 찢어 놓기도 해.","슈레이크 슈레이크","온몸에 가시가 솟은 바다 물고기야. 몸이 그물에 걸려도 가시 때문에 그물이 먼저 찢어지기 쉬워.","마법사들이 머글 어부들에게 앙갚음하려고 만들어 냈다는 이야기가 있어. 가시는 생활 터전뿐 아니라 이 생물의 유래를 보여줘.","https://www.hp-lexicon.org/creature/fish/shrake/"],
+    ["스낼리개스터","Snallygaster","북아메리카에서 발견되는 날개 달린 생물이야. 새와 파충류를 함께 떠올리게 해.","스낼리개스터 스낼리게스터","북아메리카 북동부에서 알려진 생물이야. 새처럼 날개가 달렸지만 파충류의 특징도 있어 멀리서는 용처럼 보여.","사실 오캐미의 먼 친척이야. 튼튼한 가죽과 톱니 같은 이빨을 가졌고, 호기심이 많아 사람 가까이 나타나기도 해.","https://www.hp-lexicon.org/creature/reptiles-and-amphibians/snallygaster/"],
+    ["골든 스니젯","Golden Snidget","빠르게 방향을 바꾸며 날아다니는 금빛 새야. 퀴디치의 골든 스니치가 이 새를 본떠 만들어졌어.","스니젯 스니지트","동그란 몸에 금빛 깃털과 보석처럼 붉은 눈을 가졌어. 공중에서 아주 빠르게 속도와 방향을 바꿔.","옛날 퀴디치에서는 이 새를 쫓았지만 개체 수가 급격히 줄었어. 새가 보호받게 되면서 오늘날의 골든 스니치가 그 자리를 대신했어.","https://www.hp-lexicon.org/creature/birds/golden-snidget/"],
+    ["스핑크스","Sphinx","사람의 머리에 사자의 몸을 가졌어. 지나가려는 사람에게 수수께끼를 내기도 해.","","사람의 머리와 사자의 몸을 가진 지적인 생물이야. 수수께끼를 잘 내서 숨겨진 방이나 귀한 물건을 지키는 일을 맡기도 해.","호그와트에서 열린 트리위저드 시합의 마지막 미로에도 나타났어. 그때 해리는 수수께끼를 풀어야 길을 지나갈 수 있었어.","https://www.harrypotter.com/fact-file/creatures/sphinx"],
+    ["스트릴러","Streeler","몸 색이 바뀌는 거대한 달팽이야. 지나간 자리에 남긴 점액은 식물에 해로워.","스트리러","아프리카가 원산지인 큰 달팽이야. 시간이 지나면서 몸빛이 하루에도 여러 번 바뀌어.","지나간 자리에 독이 든 점액이 남아 잎과 줄기를 시들게 해. 호크럼프도 이 분비물에 약해.","https://www.hp-lexicon.org/creature/worms-and-worm-like-creatures/streeler/"],
+    ["테보","Tebo","멧돼지를 닮은 동물이야. 투명해질 수 있어서 찾기가 어려워.","","중앙아프리카에서 알려진 회색 동물이야. 뿔처럼 튀어나온 엄니 때문에 혹멧돼지와 닮아 보여.","스스로 투명해질 수 있어서 커다란 몸이 갑자기 보이지 않을 수 있어. 들키지 않고 움직이는 능력 때문에 붙잡기 어렵다고 해.","https://www.hp-lexicon.org/creature/large-magical-beasts/tebo/"],
+    ["천둥새","Thunderbird","날개를 퍼덕이면 폭풍을 일으킬 수 있는 거대한 새야.","썬더버드 선더버드 천둥 새","북아메리카에 사는 거대한 새야. 애리조나 사막에서 알려져 있고, 깃털은 날 때마다 빛에 따라 색이 달라 보여.","위험을 알아채고 폭풍을 일으킬 수 있어. 뉴트가 돌보던 천둥새에게는 프랭크라는 이름이 있었어.","https://www.harrypotter.com/fact-file/creatures/thunderbird"],
+    ["트롤","Troll","덩치가 크고 힘이 세. 산, 숲, 강을 터전으로 삼는 종류가 있어.","","몸집과 힘이 대단한 생물이야. 산, 숲, 강에 사는 종류가 있으며 거인보다는 작지만 사람에게는 아주 커.","호그와트에 나타난 산 트롤 때문에 해리와 론은 첫해부터 큰 소동에 휘말렸어. 말이 잘 통하지 않아 마주치면 위험할 수 있어.","https://www.harrypotter.com/fact-file/creatures/troll"],
+    ["유니콘","Unicorn","이마에 뿔 하나가 달린 말이야. 어린 개체는 금빛을 띠고 자라면 하얘져.","","이마에 뿔 하나가 달렸어. 어린 때의 금빛 털은 자라며 색이 바뀌고 다 자라면 흔히 흰빛을 띠어.","사람 눈에 잘 띄지 않아 호그와트 금지된 숲에서도 보기 힘들어. 꼬리털은 지팡이 속 재료로 쓰여.","https://www.harrypotter.com/pt/fact-file/creatures/unicorn"],
+    ["왐퍼스 고양이","Wampus Cat","퓨마처럼 생긴 빠른 고양잇과 동물이야. 눈에는 특별한 힘이 있다고 해.","왐퍼스 캣 웜퍼스 고양이","북아메리카 테네시 동쪽의 숲에서 알려졌어. 퓨마와 닮았지만 몸놀림이 아주 빠르고 힘이 세.","털이 마법 지팡이 속 재료로 쓰인 적도 있어. 일버르모니 마법 학교에는 이 동물의 이름을 딴 기숙사가 있어.","https://www.hp-lexicon.org/creature/large-magical-beasts/wampus-cat/"],
+    ["늑대인간","Werewolf","보름달이 뜨면 늑대의 모습으로 변하는 사람이야.","웨어울프 늑대 인간","평소에는 사람으로 지내지만 보름달이 뜨면 몸이 늑대 비슷하게 바뀌어. 변한 동안에는 행동을 제어하기 어려워.","리머스 루핀은 이 변화를 겪는 인물이야. 마법 세계에는 변신을 막지는 못해도 정신을 유지하도록 돕는 물약이 있어.","https://www.harrypotter.com/fact-file/creatures/werewolf"],
+    ["날개 달린 말","Winged Horse","날개를 달고 하늘을 나는 말이야. 아브락산과 세스트랄 같은 종류가 있어.","날개 달린 말 아브락산 에톤 그라니안 세스트랄 테스트랄","날개 달린 말은 한 품종이 아니고 세계 여러 곳에서 알려져 있어. 몸집이 큰 아브락산과 어두운 빛의 세스트랄도 여기에 속해.","보바통 학생들이 호그와트에 타고 온 커다란 마차는 아브락산들이 끌었어. 생김새와 성질은 품종마다 달라.","https://www.hp-lexicon.org/creature/horse/winged/"],
+    ["예티","Yeti","히말라야에 산다고 알려진, 흰 털이 덮인 큰 생물이야.","설인","히말라야의 설산에서 전해지는 키 큰 생물이야. 몸 전체에 두꺼운 흰 털이 나서 눈밭에 섞이면 찾기 어려워.","트롤의 친척일 가능성이 있다고 알려져 있어. 해리가 배운 어둠의 마법 방어술 수업에도 예티 이야기가 나왔어.","https://www.hp-lexicon.org/creature/large-magical-beasts/yeti/"]
+  ];
   const initials = Array.from('ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ');
   const collator = new Intl.Collator('ko');
   const normalize = value => value.normalize('NFKC').toLowerCase().replace(/[\s\p{P}]+/gu, '');
   const firstLetter = name => initials[Math.floor((name.charCodeAt(0) - 0xac00) / 588)];
-  const animals = entries.map(([name, english, summary, aliases = ''], position) => ({
-    name, english, summary, position, initial: firstLetter(name),
+  const animals = entries.map(([name, english, summary, aliases, appearance, behavior, source], position) => ({
+    name, english, summary, appearance, behavior, source, position, initial: firstLetter(name),
     searchable: [name, english, summary, aliases].map(normalize)
   })).sort((left, right) => collator.compare(left.name, right.name));
   const query = document.querySelector('#query');
@@ -188,8 +199,32 @@
     english.className = 'english';
     english.lang = 'en';
     english.textContent = animal.english;
-    const summary = document.createElement('p');
-    summary.textContent = animal.summary;
+    const description = document.createElement('div');
+    description.className = 'animal-details';
+    const overview = document.createElement('p');
+    overview.className = 'overview';
+    overview.textContent = animal.summary;
+    const observations = document.createElement('dl');
+    observations.className = 'observations';
+    for (const [label, value] of [
+      ['생김새와 생활', animal.appearance],
+      ['능력과 이야기', animal.behavior]
+    ]) {
+      const section = document.createElement('div');
+      const term = document.createElement('dt');
+      term.textContent = label;
+      const explanation = document.createElement('dd');
+      explanation.textContent = value;
+      section.append(term, explanation);
+      observations.append(section);
+    }
+    const reference = document.createElement('a');
+    reference.className = 'reference';
+    reference.href = animal.source;
+    reference.textContent = '참고 자료';
+    reference.target = '_blank';
+    reference.rel = 'noopener';
+    description.append(overview, observations, reference);
     const names = document.createElement('span');
     names.className = 'animal-name';
     names.append(name, english);
@@ -205,7 +240,7 @@
     illustration.src = `art/sheet-${Math.floor(animal.position / 12) + 1}.jpg`;
     portrait.append(illustration);
     title.append(portrait, names);
-    detail.append(title, summary);
+    detail.append(title, description);
     return detail;
   }
 
