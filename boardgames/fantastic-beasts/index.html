@@ -37,6 +37,19 @@
     details p{margin:0;padding:0 13px 12px 30px;font-size:.94rem}
     footer{border-top:1px solid var(--line);margin-top:30px;padding-top:14px;font-size:.83rem}
     footer p{margin:0 0 7px}
+
+    summary{display:grid;grid-template-columns:82px minmax(0,1fr) 12px;align-items:center;gap:11px;padding:7px;list-style:none}
+    summary::-webkit-details-marker{display:none}
+    summary::after{content:'▸';color:var(--gold);text-align:center}
+    details[open] summary::after{content:'▾'}
+    .portrait{position:relative;display:block;isolation:isolate;width:100%;aspect-ratio:1;overflow:hidden;border-radius:6px;background:#2c4437}
+    .portrait img{display:block;position:absolute;max-width:none;width:400%;height:300%;top:var(--portrait-top);left:var(--portrait-left)}
+    .animal-name{min-width:0;overflow-wrap:anywhere}
+    .english{padding-left:0}
+    details[open] summary{grid-template-columns:minmax(0,1fr) 12px}
+    details[open] .portrait{grid-column:1/-1;width:min(100%,320px);justify-self:center}
+    details[open] .animal-name{padding-left:6px}
+    details p{padding-left:13px}
   </style>
 </head>
 <body>
@@ -53,7 +66,7 @@
   <div id="results"></div>
   <noscript>동물을 검색하려면 브라우저에서 JavaScript를 켜줘.</noscript>
   <footer>
-    <p>2017년 개정판의 동물 항목을 바탕으로 짧게 정리했어. 한글 이름은 검색을 돕기 위한 한글 표기를 포함해.</p>
+    <p>2017년 개정판의 동물 항목을 바탕으로 짧게 정리했어. 삽화는 동물의 특징을 바탕으로 새로 그린 상상화야. 일부 한글 이름은 검색을 돕기 위한 표기야.</p>
     <a href="https://www.jkrowling.com/book/fantastic-beasts-find/">개정판 소개</a> ·
     <a href="https://harrypotter.fandom.com/wiki/Fantastic_Beasts_and_Where_to_Find_Them_(companion_book)#Fantastic_Beasts_featured_(2017_edition)">등장 동물 목록</a>
   </footer>
@@ -154,8 +167,8 @@
   const collator = new Intl.Collator('ko');
   const normalize = value => value.normalize('NFKC').toLowerCase().replace(/[\s\p{P}]+/gu, '');
   const firstLetter = name => initials[Math.floor((name.charCodeAt(0) - 0xac00) / 588)];
-  const animals = entries.map(([name, english, summary, aliases = '']) => ({
-    name, english, summary, initial: firstLetter(name),
+  const animals = entries.map(([name, english, summary, aliases = ''], position) => ({
+    name, english, summary, position, initial: firstLetter(name),
     searchable: [name, english, summary, aliases].map(normalize)
   })).sort((left, right) => collator.compare(left.name, right.name));
   const query = document.querySelector('#query');
@@ -177,7 +190,21 @@
     english.textContent = animal.english;
     const summary = document.createElement('p');
     summary.textContent = animal.summary;
-    title.append(name, english);
+    const names = document.createElement('span');
+    names.className = 'animal-name';
+    names.append(name, english);
+    const portrait = document.createElement('span');
+    portrait.className = 'portrait';
+    const tile = animal.position % 12;
+    portrait.style.setProperty('--portrait-left', `${-100 * (tile % 4)}%`);
+    portrait.style.setProperty('--portrait-top', `${-100 * Math.floor(tile / 4)}%`);
+    const illustration = document.createElement('img');
+    illustration.alt = animal.name + ' 상상화';
+    illustration.loading = 'lazy';
+    illustration.decoding = 'async';
+    illustration.src = `art/sheet-${Math.floor(animal.position / 12) + 1}.jpg`;
+    portrait.append(illustration);
+    title.append(portrait, names);
     detail.append(title, summary);
     return detail;
   }
