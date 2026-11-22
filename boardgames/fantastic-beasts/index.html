@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#172a23">
+  <meta name="description" content="한글과 영어로 찾아보는 신비한 동물사전.">
+  <title>신비한 동물사전 · 마루 보드게임</title>
+  <link rel="icon" href="../assets/site-icons/icon-32-v1.png">
+  <style>
+    :root{color-scheme:dark;--ink:#f6efdb;--muted:#c6c8b5;--gold:#f1cf88;--line:#536757;--panel:#20332b}
+    *{box-sizing:border-box}
+    body{margin:0;color:var(--ink);background:radial-gradient(ellipse at 85% 0%,#344b38,transparent 35rem),#16241f;font-family:system-ui,"Malgun Gothic",sans-serif;line-height:1.6}
+    main{width:min(100% - 32px,920px);margin:auto;padding:25px 0 46px}
+    a{color:var(--gold);text-underline-offset:4px}
+    button,input,summary{-webkit-tap-highlight-color:transparent}
+    :focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+    .back{display:inline-block;padding:8px 0;font-size:.9rem}
+    header{padding:22px 0 24px;border-bottom:1px solid var(--line);margin-bottom:18px}
+    h1{font-family:Georgia,"Batang",serif;font-size:clamp(2rem,7vw,3.5rem);letter-spacing:-.06em;margin:0;color:var(--gold);overflow-wrap:anywhere}
+    header p,footer,.english,#count{color:var(--muted)}
+    header p{margin:5px 0 0}
+    .search-label{display:block;margin-bottom:6px;font-weight:650}
+    input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+    input::placeholder{color:var(--muted)}
+    .index{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 0}
+    button{min-width:36px;min-height:42px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;cursor:pointer}
+    button[aria-pressed=true]{background:var(--gold);border-color:var(--gold);color:#1e291f;font-weight:750}
+    button:disabled{opacity:.4;cursor:default}
+    #count{margin:12px 0 18px;font-size:.9rem}
+    .group h2{margin:16px 0 8px;color:var(--gold);font-size:1.17rem}
+    .entries{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:8px;align-items:start}
+    details{border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+    summary{min-height:62px;padding:9px 13px;cursor:pointer}
+    summary strong{font-weight:720}
+    .english{display:block;padding-left:17px;font-size:.86rem}
+    details p{margin:0;padding:0 13px 12px 30px;font-size:.94rem}
+    footer{border-top:1px solid var(--line);margin-top:30px;padding-top:14px;font-size:.83rem}
+    footer p{margin:0 0 7px}
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="../">← 마루 보드게임</a>
+  <header>
+    <h1>신비한 동물사전</h1>
+    <p>이름으로 검색하거나 초성을 눌러 마법 동물을 찾아봐.</p>
+  </header>
+  <label class="search-label" for="query">동물 찾기</label>
+  <input id="query" type="search" placeholder="니플러, Niffler, 거미" autocomplete="off">
+  <div class="index" id="index" role="group" aria-label="이름의 첫 글자"></div>
+  <p id="count" role="status"></p>
+  <div id="results"></div>
+  <noscript>동물을 검색하려면 브라우저에서 JavaScript를 켜줘.</noscript>
+  <footer>
+    <p>2017년 개정판의 동물 항목을 바탕으로 짧게 정리했어. 한글 이름은 검색을 돕기 위한 한글 표기를 포함해.</p>
+    <a href="https://www.jkrowling.com/book/fantastic-beasts-find/">개정판 소개</a> ·
+    <a href="https://harrypotter.fandom.com/wiki/Fantastic_Beasts_and_Where_to_Find_Them_(companion_book)#Fantastic_Beasts_featured_(2017_edition)">등장 동물 목록</a>
+  </footer>
+</main>
+<script>
+  const entries = [["애크로맨툴라","Acromantula","사람 말을 할 줄 아는 거대한 거미야."],
+    ["애시윈더","Ashwinder","마법의 불에서 태어나는 뱀이야. 뜨거운 알을 남겨."],
+    ["오그레이","Augurey","슬프게 우는 새야. 그 울음은 비가 다가온다는 신호야."],
+    ["바실리스크","Basilisk","눈을 마주치면 목숨을 잃을 만큼 위험한 거대한 뱀이야."],
+    ["빌리위그","Billywig","호주에 사는 파란 곤충이야. 쏘이면 몸이 공중에 뜰 수 있어."],
+    ["보우트러클","Bowtruckle","잔가지처럼 생긴 작은 동물이야. 지팡이 재료가 되는 나무를 지켜.","보우트러클 보우트럭클"],
+    ["번디문","Bundimun","습한 곳에 숨어 사는 생물이야. 가만히 있으면 초록 곰팡이처럼 보여."],
+    ["켄타우로스","Centaur","사람의 상체와 말의 몸을 가졌어. 별을 관찰하는 데 능해.","켄타우르스 센타우르"],
+    ["키메라","Chimaera","사자의 머리, 염소의 몸, 용의 꼬리가 한 몸에 모였어.","Chimera 카이메라"],
+    ["치즈퍼플","Chizpurfle","집게가 달린 작은 기생 생물이야. 마법이 깃든 물건에 꼬이기도 해."],
+    ["클래버트","Clabbert","나무에서 사는 동물이야. 위험이 닥치면 이마의 돌기가 빨갛게 빛나."],
+    ["크럽","Crup","작은 테리어를 닮은 개야. 꼬리 끝이 둘로 갈라져 있어."],
+    ["데미가이즈","Demiguise","위험을 느끼면 투명해질 수 있는, 털이 복슬복슬한 동물이야."],
+    ["디리콜","Diricawl","날지는 못해도 눈앞에서 사라졌다가 다른 곳에 나타날 수 있어.","도도새"],
+    ["독시","Doxy","온몸에 털이 덮인 요정 같은 생물이야. 물리면 독이 퍼질 수 있어."],
+    ["드래곤","Dragon","불을 뿜는 거대한 용이야. 뿔과 비늘 모양은 종류마다 달라.","용"],
+    ["앤티포디언 오팔아이","Antipodean Opaleye","반짝이는 비늘과 오팔처럼 빛나는 눈을 가진 용이야.","드래곤 용"],
+    ["중국 파이어볼","Chinese Fireball","붉은 비늘이 눈에 띄는 용이야. 불덩이를 뿜어.","차이니즈 파이어볼 드래곤 용"],
+    ["커먼 웰시 그린","Common Welsh Green","초록색 비늘을 가진 웨일스의 용이야. 울음소리가 독특해.","웨일스 초록 용 드래곤"],
+    ["헤브리디스 블랙","Hebridean Black","헤브리디스 제도의 검은 용이야. 보라색 눈을 가졌어.","드래곤 용"],
+    ["헝가리 혼테일","Hungarian Horntail","가시가 솟은 꼬리를 가졌어. 불을 아주 멀리까지 뿜는 용이야.","헝가리안 혼테일 드래곤 용"],
+    ["노르웨이 리지백","Norwegian Ridgeback","등에 검은 돌기가 줄지어 있어. 어린 개체도 일찍 불을 뿜기 시작해.","노르웨이산 리지백 드래곤 용"],
+    ["페루 바이퍼투스","Peruvian Vipertooth","몸집이 비교적 작은 용이지만, 날아가는 속도가 빠르고 송곳니에 독이 있어.","드래곤 용"],
+    ["루마니아 롱혼","Romanian Longhorn","길고 금빛이 나는 뿔이 특징인 용이야.","루마니안 롱혼 드래곤 용"],
+    ["우크라이나 아이언벨리","Ukrainian Ironbelly","몸집이 아주 큰 용이야. 쇠처럼 보이는 회색 비늘이 특징이야.","우크라이나 철갑용 드래곤 용"],
+    ["스웨덴 쇼트스나우트","Swedish Short-Snout","은빛이 도는 푸른 용이야. 푸른 불을 뿜어.","스웨덴 쇼트스노트 드래곤 용"],
+    ["더그보그","Dugbog","늪지에 숨어 사는 동물이야. 움직이지 않으면 떠다니는 나뭇조각처럼 보여."],
+    ["어클링","Erkling","숲에 사는 작은 생물이야. 높은 웃음소리로 아이들을 꾀어내.","얼클링"],
+    ["에럼펀트","Erumpent","코뿔소를 닮은 거대한 동물이야. 뿔에는 폭발을 일으키는 액체가 들어 있어.","에럼펜트"],
+    ["요정","Fairy","곤충처럼 날개가 달린 작은 생물이야.","페어리"],
+    ["파이어 크랩","Fire Crab","등껍질에 보석 같은 무늬가 있는 생물이야. 위협을 느끼면 뒤에서 불을 뿜어.","불게"],
+    ["플로버웜","Flobberworm","축축한 곳을 좋아하는 통통한 벌레야. 채소 잎을 먹어.","플로버벌레"],
+    ["푸우퍼","Fwooper","깃털 색이 화려한 새야. 노랫소리를 오래 들으면 정신이 혼란스러워질 수 있어.","푸퍼 프우퍼"],
+    ["구울","Ghoul","다락이나 헛간에 숨어 살며 덜컹거리는 소리를 내는 생물이야."],
+    ["글럼범블","Glumbumble","털이 많은 날벌레야. 이 곤충이 만드는 즙에는 기분을 가라앉히는 힘이 있어."],
+    ["노움","Gnome","감자 같은 머리를 한 생물이야. 마법사 집 정원에 숨어들곤 해.","정원 노움"],
+    ["그래폰","Graphorn","길게 굽은 뿔 두 개와 마법에 잘 견디는 질긴 가죽을 가진 동물이야.","그래프혼"],
+    ["그리핀","Griffin","독수리의 머리와 앞쪽 몸, 사자의 뒷다리를 가진 생물이야."],
+    ["그린딜로","Grindylow","호수에 사는 뿔 달린 생물이야. 길고 가는 손가락으로 꽉 붙잡아.","그린딜로우"],
+    ["하이드비하인드","Hidebehind","숲에서 자취를 숨기는 데 능해. 나무 뒤로 잽싸게 몸을 감춰.","하이드비하인드"],
+    ["히포캄푸스","Hippocampus","몸의 앞쪽은 말, 뒤쪽은 물고기를 닮은 바다 생물이야.","히포캄퍼스 바다말"],
+    ["히포그리프","Hippogriff","독수리와 말이 합쳐진 듯한 동물이야. 다가가기 전에 예의를 갖추는 게 중요해."],
+    ["호닥","Hodag","북아메리카에 사는 생물이야. 머리에 뿔이 있고 눈은 붉어."],
+    ["호크럼프","Horklump","분홍 버섯처럼 보이지만 동물이야. 땅속의 지렁이를 잡아먹어.","호클럼프"],
+    ["뿔 달린 뱀","Horned Serpent","머리에 뿔이 달린 뱀이야. 이마에 보석이 빛나는 개체도 있어.","혼드 서펀트"],
+    ["임프","Imp","작고 장난기 많은 생물이야. 지나가는 사람을 걸어 넘어뜨리기도 해."],
+    ["자비","Jarvey","큰 페럿을 닮았어. 사람 말처럼 들리는 짧은 말을 쉴 새 없이 내뱉어.","자비이"],
+    ["조버놀","Jobberknoll","살아 있을 때는 조용한 새야. 죽기 직전에 여태 들었던 소리를 거꾸로 내."],
+    ["카파","Kappa","일본의 물에 사는 생물이야. 머리 위 움푹 팬 곳에 물을 담고 있어.","갓파"],
+    ["켈피","Kelpie","모습을 바꿀 수 있는 물속 생물이야. 갈기에 물풀이 엉킨 말처럼 보이기도 해."],
+    ["날","Knarl","고슴도치와 아주 비슷해. 사람이 먹이를 주면 함정이라고 의심해.","나를 크날"],
+    ["니즐","Kneazle","고양이를 닮았고, 수상한 사람을 알아채는 눈치가 뛰어나.","크니즐"],
+    ["레프러콘","Leprechaun","아일랜드에 사는 작은 생물이야. 만들어 낸 금화는 시간이 지나면 사라져.","레프리콘 레프러칸"],
+    ["레시폴드","Lethifold","검은 천처럼 납작해. 밤에 바닥을 미끄러지듯 움직여.","레티폴드"],
+    ["로발러그","Lobalug","바닷속에 살며, 위험할 때 주머니에 든 독을 내뿜어.","로발러그"],
+    ["매클드 맬러클로","Mackled Malaclaw","바닷가에 사는 갑각류야. 물리면 한동안 일이 자꾸 꼬인다고 해.","매클드 말라클로"],
+    ["만티코어","Manticore","사람 얼굴, 사자 몸, 전갈 꼬리가 한데 모인 동물이야."],
+    ["인어","Merpeople","물속에 마을을 이루고 살아. 모습과 이름은 사는 곳에 따라 달라.","머피플"],
+    ["모크","Moke","위험할 때 몸집을 줄일 수 있는 작은 도마뱀이야."],
+    ["문카프","Mooncalf","보름달이 뜨면 숨어 있다가 밖으로 나와 춤을 춰.","문칼프"],
+    ["머트랩","Murtlap","쥐처럼 보이는 바닷가 동물이야. 등에 말미잘 같은 돌기가 자라."],
+    ["니플러","Niffler","반짝이는 금화나 보석을 발견하면 배에 달린 주머니에 쏙 숨겨."],
+    ["노그테일","Nogtail","새끼 돼지 틈에 섞여드는 생물이야. 오래 머물면 농장에 불운이 찾아온다고 해."],
+    ["눈두","Nundu","표범을 닮은 거대한 동물이야. 숨결만으로도 병을 옮길 수 있어.","눈두"],
+    ["오캐미","Occamy","날개와 깃털이 달린 뱀처럼 생겼어. 들어간 공간에 맞춰 몸집을 바꿔.","오카미"],
+    ["불사조","Phoenix","수명이 다하면 불꽃 속에서 재가 되고, 그 재 속에서 다시 태어나는 새야.","피닉스"],
+    ["픽시","Pixie","작고 파란 장난꾸러기야. 사람이나 물건을 들어 올려 말썽을 피워."],
+    ["플림피","Plimpy","둥근 물고기 몸에 길쭉한 다리 두 개가 달려 있어. 물 밑을 걸어 다녀."],
+    ["포그레빈","Pogrebin","웅크리면 돌과 구별하기 어려워. 사람을 몰래 따라다니며 기운을 빠지게 해."],
+    ["폴록","Porlock","말을 돌보는 데 익숙한 작은 생물이야. 낯선 사람이 오면 몸을 숨겨."],
+    ["퍼프스케인","Puffskein","둥근 솜뭉치처럼 생겼어. 기분이 좋으면 작은 콧노래를 내.","퍼프스킨"],
+    ["퀸타페드","Quintaped","다리가 다섯 개인 털북숭이야. 스코틀랜드 근처의 섬에 산다고 해."],
+    ["라모라","Ramora","인도양의 은빛 물고기야. 큰 배도 한자리에 붙들어 둘 만큼 힘이 세."],
+    ["레드캡","Red Cap","오래된 전쟁터나 성 아랫길에 숨어드는 작은 생물이야.","붉은 모자"],
+    ["리엠","Re'em","황금빛 털을 가진 거대한 소처럼 생겼어. 피를 마시면 잠시 힘이 세진다고 해.","리임 렘"],
+    ["룬스푸어","Runespoor","머리가 셋인 뱀이야. 각 머리가 맡은 역할이 달라.","룬스포어"],
+    ["불도롱뇽","Fire Dwelling Salamander","불꽃 속에서 지내는 작은 도롱뇽이야.","살라맨더 샐러맨더 불 도롱뇽"],
+    ["바다뱀","Sea Serpent","바다를 헤엄치는 거대한 뱀이야. 물 밖으로 머리를 내밀면 말을 닮아 보여.","바다 뱀 시 서펀트"],
+    ["슈레이크","Shrake","온몸에 뾰족한 가시가 돋은 물고기야. 어망을 찢어 놓기도 해.","슈레이크 슈레이크"],
+    ["스낼리개스터","Snallygaster","북아메리카에서 발견되는 날개 달린 생물이야. 새와 파충류를 함께 떠올리게 해.","스낼리개스터 스낼리게스터"],
+    ["골든 스니젯","Golden Snidget","빠르게 방향을 바꾸며 날아다니는 금빛 새야. 퀴디치의 골든 스니치가 이 새를 본떠 만들어졌어.","스니젯 스니지트"],
+    ["스핑크스","Sphinx","사람의 머리에 사자의 몸을 가졌어. 지나가려는 사람에게 수수께끼를 내기도 해."],
+    ["스트릴러","Streeler","몸 색이 바뀌는 거대한 달팽이야. 지나간 자리에 남긴 점액은 식물에 해로워.","스트리러"],
+    ["테보","Tebo","멧돼지를 닮은 동물이야. 투명해질 수 있어서 찾기가 어려워."],
+    ["천둥새","Thunderbird","날개를 퍼덕이면 폭풍을 일으킬 수 있는 거대한 새야.","썬더버드 선더버드 천둥 새"],
+    ["트롤","Troll","덩치가 크고 힘이 세. 산, 숲, 강을 터전으로 삼는 종류가 있어."],
+    ["유니콘","Unicorn","이마에 뿔 하나가 달린 말이야. 어린 개체는 금빛을 띠고 자라면 하얘져."],
+    ["왐퍼스 고양이","Wampus Cat","퓨마처럼 생긴 빠른 고양잇과 동물이야. 눈에는 특별한 힘이 있다고 해.","왐퍼스 캣 웜퍼스 고양이"],
+    ["늑대인간","Werewolf","보름달이 뜨면 늑대의 모습으로 변하는 사람이야.","웨어울프 늑대 인간"],
+    ["날개 달린 말","Winged Horse","날개를 달고 하늘을 나는 말이야. 아브락산과 세스트랄 같은 종류가 있어.","날개 달린 말 아브락산 에톤 그라니안 세스트랄 테스트랄"],
+    ["예티","Yeti","히말라야에 산다고 알려진, 흰 털이 덮인 큰 생물이야.","설인"]];
+  const initials = Array.from('ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ');
+  const collator = new Intl.Collator('ko');
+  const normalize = value => value.normalize('NFKC').toLowerCase().replace(/[\s\p{P}]+/gu, '');
+  const firstLetter = name => initials[Math.floor((name.charCodeAt(0) - 0xac00) / 588)];
+  const animals = entries.map(([name, english, summary, aliases = '']) => ({
+    name, english, summary, initial: firstLetter(name),
+    searchable: [name, english, summary, aliases].map(normalize)
+  })).sort((left, right) => collator.compare(left.name, right.name));
+  const query = document.querySelector('#query');
+  const index = document.querySelector('#index');
+  const count = document.querySelector('#count');
+  const results = document.querySelector('#results');
+  const present = new Set(animals.map(animal => animal.initial));
+  let active = '';
+
+  function makeEntry(animal, open) {
+    const detail = document.createElement('details');
+    detail.open = open;
+    const title = document.createElement('summary');
+    const name = document.createElement('strong');
+    name.textContent = animal.name;
+    const english = document.createElement('span');
+    english.className = 'english';
+    english.lang = 'en';
+    english.textContent = animal.english;
+    const summary = document.createElement('p');
+    summary.textContent = animal.summary;
+    title.append(name, english);
+    detail.append(title, summary);
+    return detail;
+  }
+
+  function render() {
+    const term = normalize(query.value);
+    const shown = animals.filter(animal => (!active || animal.initial === active)
+      && (!term || animal.searchable.some(value => value.includes(term))));
+    count.textContent = shown.length ? shown.length + '개 항목' : '찾은 동물이 없어. 다른 이름이나 초성으로 찾아봐.';
+    for (const button of index.children) {
+      button.setAttribute('aria-pressed', String(button.dataset.initial === active));
+    }
+    const groups = new Map();
+    for (const animal of shown) {
+      if (!groups.has(animal.initial)) {
+        const section = document.createElement('section');
+        section.className = 'group';
+        const title = document.createElement('h2');
+        title.textContent = animal.initial;
+        const list = document.createElement('div');
+        list.className = 'entries';
+        section.append(title, list);
+        groups.set(animal.initial, section);
+      }
+      groups.get(animal.initial).lastElementChild.append(makeEntry(animal, Boolean(term) && shown.length === 1));
+    }
+    results.replaceChildren(...groups.values());
+  }
+
+  for (const initial of ['', ...initials.filter(letter => !'ㄲㄸㅃㅆㅉ'.includes(letter) || present.has(letter))]) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.initial = initial;
+    button.textContent = initial || '전체';
+    button.disabled = Boolean(initial) && !present.has(initial);
+    button.addEventListener('click', () => {
+      active = initial;
+      if (!initial) query.value = '';
+      render();
+    });
+    index.append(button);
+  }
+  query.addEventListener('input', () => {
+    active = '';
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

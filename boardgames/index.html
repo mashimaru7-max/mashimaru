@@ -7,7 +7,7 @@
   <meta name="description" content="눈송이와 함께 고르는 마루 보드게임. 원하는 게임을 골라 바로 시작하세요.">
   <title>마루 보드게임 · 오늘은 뭐 할까?</title>
   <link rel="stylesheet" href="shared/theme.css?v=4">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 
     <link rel="apple-touch-icon" sizes="180x180" href="assets/site-icons/icon-180-v1.png">
     <link rel="icon" type="image/png" sizes="192x192" href="assets/site-icons/icon-192-v1.png">
@@ -23,10 +23,10 @@
   </header>
   <main>
     <section class="welcome" aria-labelledby="library-title">
-      <div><h1 id="library-title">오늘은 뭐 하고 <em>놀까?</em></h1><p>마음에 드는 게임을 골라 바로 시작해봐.</p></div>
+      <div><h1 id="library-title">오늘은 뭐 하고 <em>놀까?</em></h1><p>게임을 고르거나 마법 동물 도감을 펼쳐봐.</p></div>
       <img src="assets/nunsongi.webp" width="78" height="84" alt="손을 흔들며 반기는 눈송이" fetchpriority="high">
     </section>
-    <section class="library" aria-label="게임 목록">
+    <section class="library" aria-label="게임과 도감 목록">
       <div class="catalog-controls">
         <div class="filter-group" role="group" aria-label="참가 인원 필터">
           <button class="filter active" data-players="all" aria-pressed="true">전체 <span id="game-count"></span></button>
@@ -37,14 +37,14 @@
           <button class="filter" data-players="5" aria-pressed="false">5명</button>
           <button class="filter" data-players="6" aria-pressed="false">6명</button>
         </div>
-        <label class="search"><span aria-hidden="true">⌕</span><input id="game-search" type="search" placeholder="어떤 게임 찾고 있어?" aria-label="게임 이름 또는 태그 검색"></label>
+        <label class="search"><span aria-hidden="true">⌕</span><input id="game-search" type="search" placeholder="게임이나 도감 찾기" aria-label="이름 또는 태그 검색"></label>
       </div>
       <div id="game-grid" class="game-grid"></div>
-      <p id="empty-state" class="empty-state" role="status" hidden>조건에 맞는 게임이 없어. 다른 이름이나 인원으로 찾아봐!</p>
+      <p id="empty-state" class="empty-state" role="status" hidden>조건에 맞는 항목이 없어. 다른 이름이나 인원으로 찾아봐!</p>
     </section>
   </main>
   <footer><span>눈송이와 함께하는 작은 게임방</span><span>작은 화면, 커다란 웃음.</span></footer>
 </div>
-<script src="shared/ui.js"></script><script src="games.js?v=6"></script><script src="app.js?v=8"></script>
+<script src="shared/ui.js"></script><script src="games.js?v=7"></script><script src="app.js?v=9"></script>
 </body>
 </html>
